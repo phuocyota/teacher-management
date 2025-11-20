@@ -1,11 +1,42 @@
-import { Entity, Column } from 'typeorm';
-import { BaseEntity } from '../common/entities/base.entity';
+import { Injectable, NotFoundException } from '@nestjs/common';
+import { InjectRepository } from '@nestjs/typeorm';
+import { Repository } from 'typeorm';
+import { Lecture } from './lecture.entity';
+import { CreateLectureDto, UpdateLectureDto } from './dto/lecture.dto';
 
-@Entity()
-export class Lecture extends BaseEntity {
-  @Column()
-  title: string;
+@Injectable()
+export class LectureService {
+  constructor(
+    @InjectRepository(Lecture)
+    private readonly lectureRepository: Repository<Lecture>,
+  ) {}
 
-  @Column({ nullable: true })
-  description: string;
+  async create(payload: CreateLectureDto) {
+    const lecture = this.lectureRepository.create(payload);
+    return this.lectureRepository.save(lecture);
+  }
+
+  async findAll(): Promise<Lecture[]> {
+    return this.lectureRepository.find();
+  }
+
+  async findOne(id: number): Promise<Lecture> {
+    const lecture = await this.lectureRepository.findOne({ where: { id } });
+    if (!lecture) {
+      throw new NotFoundException(`Lecture with id ${id} not found`);
+    }
+    return lecture;
+  }
+
+  async update(id: number, payload: UpdateLectureDto) {
+    const lecture = await this.findOne(id);
+    Object.assign(lecture, payload);
+    return this.lectureRepository.save(lecture);
+  }
+
+  async remove(id: number) {
+    const lecture = await this.findOne(id);
+    await this.lectureRepository.remove(lecture);
+    return { deleted: true };
+  }
 }

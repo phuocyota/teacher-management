@@ -1,4 +1,58 @@
-import { Controller } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Post,
+  Put,
+  Delete,
+  Body,
+  Param,
+  ParseIntPipe,
+} from '@nestjs/common';
+import { ApiTags, ApiOperation, ApiResponse } from '@nestjs/swagger';
+import { LectureService } from './lecture.service';
+import type { CreateLectureDto, UpdateLectureDto } from './dto/lecture.dto';
 
+@ApiTags('Lecture')
 @Controller('lecture')
-export class LectureController {}
+export class LectureController {
+  constructor(private readonly lectureService: LectureService) {}
+
+  @Post()
+  @ApiOperation({ summary: 'Create a new lecture' })
+  @ApiResponse({ status: 201, description: 'Lecture created successfully' })
+  @ApiResponse({ status: 400, description: 'Invalid input' })
+  create(@Body() dto: CreateLectureDto) {
+    return this.lectureService.create(dto);
+  }
+
+  @Get()
+  @ApiOperation({ summary: 'Get all lectures' })
+  @ApiResponse({ status: 200, description: 'List of lectures' })
+  findAll() {
+    return this.lectureService.findAll();
+  }
+
+  @Get(':id')
+  @ApiOperation({ summary: 'Get lecture by ID' })
+  @ApiResponse({ status: 200, description: 'Lecture found' })
+  @ApiResponse({ status: 404, description: 'Lecture not found' })
+  findOne(@Param('id', ParseIntPipe) id: number) {
+    return this.lectureService.findOne(id);
+  }
+
+  @Put(':id')
+  @ApiOperation({ summary: 'Update lecture' })
+  @ApiResponse({ status: 200, description: 'Lecture updated successfully' })
+  @ApiResponse({ status: 404, description: 'Lecture not found' })
+  update(@Param('id', ParseIntPipe) id: number, @Body() dto: UpdateLectureDto) {
+    return this.lectureService.update(id, dto);
+  }
+
+  @Delete(':id')
+  @ApiOperation({ summary: 'Delete lecture' })
+  @ApiResponse({ status: 200, description: 'Lecture deleted successfully' })
+  @ApiResponse({ status: 404, description: 'Lecture not found' })
+  remove(@Param('id', ParseIntPipe) id: number) {
+    return this.lectureService.remove(id);
+  }
+}

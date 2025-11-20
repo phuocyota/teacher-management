@@ -2,6 +2,7 @@ import {
   PrimaryGeneratedColumn,
   CreateDateColumn,
   UpdateDateColumn,
+  Column,
 } from 'typeorm';
 
 export abstract class BaseEntity {
@@ -14,6 +15,9 @@ export abstract class BaseEntity {
   @UpdateDateColumn()
   updatedAt: Date;
 
+  @Column()
   updatedBy: string;
+
+  @Column()
   createdBy: string;
 }
