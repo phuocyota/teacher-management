@@ -1,3 +1,4 @@
+import { UserType } from 'src/common/enum/user-type.enum';
 import { BaseEntity } from 'src/common/sql/base.entity';
 import { Entity, Column } from 'typeorm';
 
@@ -13,5 +14,8 @@ export class UserEntity extends BaseEntity {
   name: string;
 
   @Column({ unique: true })
-  email: string;
+  email!: string;
+
+  @Column()
+  userType: UserType;
 }

@@ -20,7 +20,7 @@ export class TeacherService {
     return this.teacherRepository.find();
   }
 
-  async findOne(id: number): Promise<Teacher> {
+  async findOne(id: string): Promise<Teacher> {
     const teacher = await this.teacherRepository.findOne({ where: { id } });
     if (!teacher) {
       throw new NotFoundException(`Teacher with id ${id} not found`);
@@ -28,13 +28,13 @@ export class TeacherService {
     return teacher;
   }
 
-  async update(id: number, payload: UpdateTeacherDto) {
+  async update(id: string, payload: UpdateTeacherDto) {
     const teacher = await this.findOne(id);
     Object.assign(teacher, payload);
     return this.teacherRepository.save(teacher);
   }
 
-  async remove(id: number) {
+  async remove(id: string) {
     const teacher = await this.findOne(id);
     await this.teacherRepository.remove(teacher);
     return { deleted: true };

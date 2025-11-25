@@ -15,7 +15,7 @@ export class UserService {
     return this.userRepo.find();
   }
 
-  async findOne(id: number) {
+  async findOne(id: string) {
     const user = await this.userRepo.findOne({ where: { id } });
     if (!user) throw new NotFoundException('User not found');
     return user;
@@ -26,7 +26,7 @@ export class UserService {
     return this.userRepo.save(user);
   }
 
-  async update(id: number, dto: UpdateUserDto) {
+  async update(id: string, dto: UpdateUserDto) {
     const user = await this.findOne(id);
 
     const updated = Object.assign(user, dto);
@@ -34,7 +34,7 @@ export class UserService {
     return this.userRepo.save(updated);
   }
 
-  async delete(id: number) {
+  async delete(id: string) {
     const user = await this.findOne(id);
     await this.userRepo.remove(user);
     return user;

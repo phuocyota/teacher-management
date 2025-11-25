@@ -6,6 +6,7 @@ import { LectureModule } from './lecture/lecture.module';
 import { Teacher } from './teacher/teacher.entity';
 import { Lecture } from './lecture/lecture.entity';
 import { UserModule } from './user/user.module';
+import { LicenseModule } from './license/license.module';
 
 @Module({
   imports: [
@@ -29,6 +30,7 @@ import { UserModule } from './user/user.module';
     TeacherModule,
     LectureModule,
     UserModule,
+    LicenseModule,
   ],
 })
 export class AppModule {}

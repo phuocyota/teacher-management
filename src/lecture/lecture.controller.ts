@@ -6,7 +6,6 @@ import {
   Delete,
   Body,
   Param,
-  ParseIntPipe,
 } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse } from '@nestjs/swagger';
 import { LectureService } from './lecture.service';
@@ -36,7 +35,7 @@ export class LectureController {
   @ApiOperation({ summary: 'Get lecture by ID' })
   @ApiResponse({ status: 200, description: 'Lecture found' })
   @ApiResponse({ status: 404, description: 'Lecture not found' })
-  findOne(@Param('id', ParseIntPipe) id: number) {
+  findOne(@Param('id') id: string) {
     return this.lectureService.findOne(id);
   }
 
@@ -44,7 +43,7 @@ export class LectureController {
   @ApiOperation({ summary: 'Update lecture' })
   @ApiResponse({ status: 200, description: 'Lecture updated successfully' })
   @ApiResponse({ status: 404, description: 'Lecture not found' })
-  update(@Param('id', ParseIntPipe) id: number, @Body() dto: UpdateLectureDto) {
+  update(@Param('id') id: string, @Body() dto: UpdateLectureDto) {
     return this.lectureService.update(id, dto);
   }
 
@@ -52,7 +51,7 @@ export class LectureController {
   @ApiOperation({ summary: 'Delete lecture' })
   @ApiResponse({ status: 200, description: 'Lecture deleted successfully' })
   @ApiResponse({ status: 404, description: 'Lecture not found' })
-  remove(@Param('id', ParseIntPipe) id: number) {
+  remove(@Param('id') id: string) {
     return this.lectureService.remove(id);
   }
 }

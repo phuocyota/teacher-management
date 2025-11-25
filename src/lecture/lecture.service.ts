@@ -20,7 +20,7 @@ export class LectureService {
     return this.lectureRepository.find();
   }
 
-  async findOne(id: number): Promise<Lecture> {
+  async findOne(id: string): Promise<Lecture> {
     const lecture = await this.lectureRepository.findOne({ where: { id } });
     if (!lecture) {
       throw new NotFoundException(`Lecture with id ${id} not found`);
@@ -28,13 +28,13 @@ export class LectureService {
     return lecture;
   }
 
-  async update(id: number, payload: UpdateLectureDto) {
+  async update(id: string, payload: UpdateLectureDto) {
     const lecture = await this.findOne(id);
     Object.assign(lecture, payload);
     return this.lectureRepository.save(lecture);
   }
 
-  async remove(id: number) {
+  async remove(id: string) {
     const lecture = await this.findOne(id);
     await this.lectureRepository.remove(lecture);
     return { deleted: true };
