@@ -1,12 +1,18 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
+import { APP_GUARD } from '@nestjs/core';
 import { TeacherModule } from './teacher/teacher.module';
 import { LectureModule } from './lecture/lecture.module';
 import { Teacher } from './teacher/teacher.entity';
 import { Lecture } from './lecture/lecture.entity';
 import { UserModule } from './user/user.module';
 import { LicenseModule } from './license/license.module';
+import { DeviceModule } from './device/device.module';
+import { SocketModule } from './socket/socket.module';
+import { AuthService } from './auth/auth.service';
+import { AuthModule } from './auth/auth.module';
+import { AuthGuard } from './common/guard/auth.guard';
 
 @Module({
   imports: [
@@ -31,6 +37,16 @@ import { LicenseModule } from './license/license.module';
     LectureModule,
     UserModule,
     LicenseModule,
+    DeviceModule,
+    SocketModule,
+    AuthModule,
+  ],
+  providers: [
+    AuthService,
+    {
+      provide: APP_GUARD,
+      useClass: AuthGuard,
+    },
   ],
 })
 export class AppModule {}

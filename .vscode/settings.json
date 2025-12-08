@@ -1,3 +1,4 @@
 {
-  "CodeGPT.apiKey": "OpenRouter"
+  "CodeGPT.apiKey": "OpenRouter",
+  "typescript.tsdk": "node_modules/typescript/lib"
 }

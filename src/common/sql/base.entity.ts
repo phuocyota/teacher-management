@@ -4,20 +4,28 @@ import {
   UpdateDateColumn,
   Column,
 } from 'typeorm';
+import { Status } from '../enum/status.enum';
 
 export abstract class BaseEntity {
-  @PrimaryGeneratedColumn()
+  @PrimaryGeneratedColumn('uuid')
   id: string;
 
-  @CreateDateColumn()
+  @CreateDateColumn({ name: 'created_at' })
   createdAt: Date;
 
-  @UpdateDateColumn()
+  @UpdateDateColumn({ name: 'updated_at' })
   updatedAt: Date;
 
-  @Column()
-  updatedBy: string;
+  @Column({ name: 'updated_by', nullable: true })
+  updatedBy?: string;
 
-  @Column()
-  createdBy: string;
+  @Column({ name: 'created_by', nullable: true })
+  createdBy?: string;
+
+  @Column({
+    name: 'status',
+    type: 'varchar',
+    default: Status.ACTIVE,
+  })
+  status: Status;
 }

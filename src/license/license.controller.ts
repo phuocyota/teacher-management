@@ -10,6 +10,8 @@ import {
 import { LicenseService } from './license.service';
 import { CreateLicenseDto, UpdateLicenseDto } from './dto/license.dto';
 import { ApiTags, ApiOperation, ApiResponse } from '@nestjs/swagger';
+import { User } from 'src/common/decorator/user.decorator';
+import { JwtPayload } from 'src/common/interface/jwt-payload.interface';
 
 @ApiTags('License')
 @Controller('licenses')
@@ -20,8 +22,8 @@ export class LicenseController {
   @ApiOperation({ summary: 'Create a new license' })
   @ApiResponse({ status: 201, description: 'License created successfully' })
   @ApiResponse({ status: 400, description: 'Invalid input' })
-  async create(@Body() dto: CreateLicenseDto) {
-    return this.licenseService.create(dto);
+  async create(@Body() dto: CreateLicenseDto, @User() user: JwtPayload) {
+    return this.licenseService.create(dto, user);
   }
 
   @Get()
@@ -43,15 +45,19 @@ export class LicenseController {
   @ApiOperation({ summary: 'Update a license' })
   @ApiResponse({ status: 200, description: 'License updated successfully' })
   @ApiResponse({ status: 404, description: 'License not found' })
-  async update(@Param('id') id: string, @Body() dto: UpdateLicenseDto) {
-    return this.licenseService.update(id, dto);
+  async update(
+    @Param('id') id: string,
+    @Body() dto: UpdateLicenseDto,
+    @User() user: JwtPayload,
+  ) {
+    return this.licenseService.update(id, dto, user);
   }
 
   @Delete(':id')
   @ApiOperation({ summary: 'Delete license' })
   @ApiResponse({ status: 204, description: 'License deleted successfully' })
   @ApiResponse({ status: 404, description: 'License not found' })
-  async delete(@Param('id') id: string) {
-    await this.licenseService.delete(id);
+  async delete(@Param('id') id: string, @User() user: JwtPayload) {
+    await this.licenseService.delete(id, user);
   }
 }

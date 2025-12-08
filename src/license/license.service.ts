@@ -1,42 +1,19 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { LicenseEntity } from './license.entity';
-import { CreateLicenseDto, UpdateLicenseDto } from './dto/license.dto';
+import { BaseService } from 'src/common/sql/base.service';
 
 @Injectable()
-export class LicenseService {
+export class LicenseService extends BaseService<LicenseEntity> {
   constructor(
     @InjectRepository(LicenseEntity)
-    private readonly repo: Repository<LicenseEntity>,
-  ) {}
-
-  findAll() {
-    return this.repo.find();
+    repo: Repository<LicenseEntity>,
+  ) {
+    super(repo);
   }
 
-  async findOne(id: string) {
-    const license = await this.repo.findOne({ where: { id } });
-    if (!license) throw new NotFoundException('License not found');
-    return license;
-  }
-
-  create(dto: CreateLicenseDto) {
-    const license = this.repo.create(dto);
-    return this.repo.save(license);
-  }
-
-  async update(id: string, dto: UpdateLicenseDto) {
-    const license = await this.findOne(id);
-
-    const updated = Object.assign(license, dto);
-
-    return this.repo.save(updated);
-  }
-
-  async delete(id: string) {
-    const license = await this.findOne(id);
-    await this.repo.remove(license);
-    return license;
+  protected getEntityName(): string {
+    return 'License';
   }
 }

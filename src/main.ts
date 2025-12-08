@@ -12,6 +12,9 @@ async function bootstrap() {
     .addTag('Teacher', 'Teacher management endpoints')
     .addTag('Lecture', 'Lecture management endpoints')
     .addTag('User', 'User management endpoints')
+    .addTag('Auth', 'Authentication endpoints')
+    .addTag('Device', 'Device management endpoints')
+    .addTag('License', 'License management endpoints')
     .build();
 
   const document = SwaggerModule.createDocument(app, config);

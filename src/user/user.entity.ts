@@ -4,18 +4,21 @@ import { Entity, Column } from 'typeorm';
 
 @Entity('users')
 export class UserEntity extends BaseEntity {
-  @Column()
-  userName: string;
+  @Column({ name: 'user_name', type: 'text', nullable: false, unique: true })
+  userName!: string;
 
-  @Column()
-  password!: string;
+  @Column({ name: 'full_name', type: 'text' })
+  fullName?: string;
 
-  @Column({ length: 100 })
-  name: string;
+  @Column({ name: 'hash_password', type: 'text', nullable: false })
+  hashPassword!: string;
 
-  @Column({ unique: true })
+  @Column({ type: 'text', nullable: false, unique: true })
   email!: string;
 
-  @Column()
-  userType: UserType;
+  @Column({ name: 'phone_number', type: 'text', nullable: true })
+  phoneNumber?: string;
+
+  @Column({ name: 'user_type', type: 'enum' })
+  userType!: UserType;
 }

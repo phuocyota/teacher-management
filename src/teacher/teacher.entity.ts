@@ -8,4 +8,7 @@ export class Teacher extends BaseEntity {
 
   @Column()
   email: string;
+
+  @Column({ nullable: false, unique: true, name: 'device_id' })
+  deviceId!: string;
 }

@@ -11,6 +11,8 @@ import {
 import { UserService } from './user.service';
 import { CreateUserDto, UpdateUserDto } from './dto/user.dto';
 import { ApiTags, ApiOperation, ApiResponse } from '@nestjs/swagger';
+import { User } from 'src/common/decorator/user.decorator';
+import { JwtPayload } from 'src/common/interface/jwt-payload.interface';
 
 @ApiTags('User')
 @Controller('users')
@@ -21,8 +23,8 @@ export class UserController {
   @ApiOperation({ summary: 'Create a new user' })
   @ApiResponse({ status: 201, description: 'User created successfully' })
   @ApiResponse({ status: 400, description: 'Invalid input' })
-  create(@Body() dto: CreateUserDto) {
-    return this.userService.create(dto);
+  create(@Body() dto: CreateUserDto, @User() user: JwtPayload) {
+    return this.userService.createUser(dto, user);
   }
 
   @Get()
@@ -44,15 +46,19 @@ export class UserController {
   @ApiOperation({ summary: 'Update user' })
   @ApiResponse({ status: 200, description: 'User updated successfully' })
   @ApiResponse({ status: 404, description: 'User not found' })
-  update(@Param('id', ParseIntPipe) id: string, @Body() dto: UpdateUserDto) {
-    return this.userService.update(id, dto);
+  update(
+    @Param('id', ParseIntPipe) id: string,
+    @Body() dto: UpdateUserDto,
+    @User() user: JwtPayload,
+  ) {
+    return this.userService.update(id, dto, user);
   }
 
   @Delete(':id')
   @ApiOperation({ summary: 'Delete user' })
   @ApiResponse({ status: 200, description: 'User deleted successfully' })
   @ApiResponse({ status: 404, description: 'User not found' })
-  delete(@Param('id', ParseIntPipe) id: string) {
-    return this.userService.delete(id);
+  delete(@Param('id', ParseIntPipe) id: string, @User() user: JwtPayload) {
+    return this.userService.delete(id, user);
   }
 }
