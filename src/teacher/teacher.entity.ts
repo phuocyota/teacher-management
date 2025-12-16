@@ -2,11 +2,11 @@ import { Entity, Column } from 'typeorm';
 import { BaseEntity } from '../common/sql/base.entity';
 
 @Entity()
-export class Teacher extends BaseEntity {
-  @Column()
+export class TeacherEntity extends BaseEntity {
+  @Column({ name: 'name', type: 'varchar' })
   name: string;
 
-  @Column()
+  @Column({ name: 'email', type: 'text' })
   email: string;
 
   @Column({ nullable: false, unique: true, name: 'device_id' })

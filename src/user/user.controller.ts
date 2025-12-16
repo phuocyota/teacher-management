@@ -3,16 +3,20 @@ import {
   Get,
   Post,
   Put,
+  Patch,
   Delete,
   Param,
   Body,
-  ParseIntPipe,
+  Query,
+  ParseUUIDPipe,
 } from '@nestjs/common';
 import { UserService } from './user.service';
-import { CreateUserDto, UpdateUserDto } from './dto/user.dto';
+import { ChangePasswordDto, UserQueryDto } from './dto/user.dto';
+import { CreateUserDto } from './dto/create.dto.js';
+import { UpdateUserDto } from './dto/update.dto.js';
 import { ApiTags, ApiOperation, ApiResponse } from '@nestjs/swagger';
 import { User } from 'src/common/decorator/user.decorator';
-import { JwtPayload } from 'src/common/interface/jwt-payload.interface';
+import type { JwtPayload } from 'src/common/interface/jwt-payload.interface';
 
 @ApiTags('User')
 @Controller('users')
@@ -20,45 +24,71 @@ export class UserController {
   constructor(private readonly userService: UserService) {}
 
   @Post()
-  @ApiOperation({ summary: 'Create a new user' })
-  @ApiResponse({ status: 201, description: 'User created successfully' })
-  @ApiResponse({ status: 400, description: 'Invalid input' })
+  @ApiOperation({ summary: 'Tạo người dùng mới' })
+  @ApiResponse({ status: 201, description: 'Tạo thành công' })
+  @ApiResponse({ status: 400, description: 'Dữ liệu không hợp lệ' })
+  @ApiResponse({ status: 409, description: 'Trùng userName hoặc email' })
   create(@Body() dto: CreateUserDto, @User() user: JwtPayload) {
     return this.userService.createUser(dto, user);
   }
 
   @Get()
-  @ApiOperation({ summary: 'Get all users' })
-  @ApiResponse({ status: 200, description: 'List of users' })
-  findAll() {
-    return this.userService.findAll();
+  @ApiOperation({ summary: 'Lấy danh sách người dùng có phân trang và filter' })
+  @ApiResponse({ status: 200, description: 'Danh sách người dùng' })
+  findAll(@Query() query: UserQueryDto) {
+    return this.userService.findAllWithQuery(query);
   }
 
   @Get(':id')
-  @ApiOperation({ summary: 'Get user by ID' })
-  @ApiResponse({ status: 200, description: 'User found' })
-  @ApiResponse({ status: 404, description: 'User not found' })
-  findOne(@Param('id', ParseIntPipe) id: string) {
+  @ApiOperation({ summary: 'Lấy thông tin người dùng theo ID' })
+  @ApiResponse({ status: 200, description: 'Thông tin người dùng' })
+  @ApiResponse({ status: 404, description: 'Không tìm thấy' })
+  findOne(@Param('id', ParseUUIDPipe) id: string) {
     return this.userService.findOne(id);
   }
 
   @Put(':id')
-  @ApiOperation({ summary: 'Update user' })
-  @ApiResponse({ status: 200, description: 'User updated successfully' })
-  @ApiResponse({ status: 404, description: 'User not found' })
+  @ApiOperation({ summary: 'Cập nhật thông tin người dùng' })
+  @ApiResponse({ status: 200, description: 'Cập nhật thành công' })
+  @ApiResponse({ status: 404, description: 'Không tìm thấy' })
+  @ApiResponse({ status: 409, description: 'Email đã tồn tại' })
   update(
-    @Param('id', ParseIntPipe) id: string,
+    @Param('id', ParseUUIDPipe) id: string,
     @Body() dto: UpdateUserDto,
     @User() user: JwtPayload,
   ) {
-    return this.userService.update(id, dto, user);
+    return this.userService.updateUser(id, dto, user);
+  }
+
+  @Patch(':id/password')
+  @ApiOperation({ summary: 'Đổi mật khẩu' })
+  @ApiResponse({ status: 200, description: 'Đổi mật khẩu thành công' })
+  @ApiResponse({ status: 400, description: 'Mật khẩu hiện tại không đúng' })
+  @ApiResponse({ status: 404, description: 'Không tìm thấy' })
+  changePassword(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: ChangePasswordDto,
+    @User() user: JwtPayload,
+  ) {
+    return this.userService.changePassword(id, dto, user);
+  }
+
+  @Patch(':id/toggle-disabled')
+  @ApiOperation({ summary: 'Vô hiệu hóa/kích hoạt tài khoản' })
+  @ApiResponse({ status: 200, description: 'Thao tác thành công' })
+  @ApiResponse({ status: 404, description: 'Không tìm thấy' })
+  toggleDisabled(
+    @Param('id', ParseUUIDPipe) id: string,
+    @User() user: JwtPayload,
+  ) {
+    return this.userService.toggleDisabled(id, user);
   }
 
   @Delete(':id')
-  @ApiOperation({ summary: 'Delete user' })
-  @ApiResponse({ status: 200, description: 'User deleted successfully' })
-  @ApiResponse({ status: 404, description: 'User not found' })
-  delete(@Param('id', ParseIntPipe) id: string, @User() user: JwtPayload) {
+  @ApiOperation({ summary: 'Xóa người dùng' })
+  @ApiResponse({ status: 200, description: 'Xóa thành công' })
+  @ApiResponse({ status: 404, description: 'Không tìm thấy' })
+  delete(@Param('id', ParseUUIDPipe) id: string, @User() user: JwtPayload) {
     return this.userService.delete(id, user);
   }
 }

@@ -1,7 +1,7 @@
 import { BaseEntity } from 'src/common/sql/base.entity';
 import { Entity, Column } from 'typeorm';
 
-@Entity('licenses')
+@Entity('license')
 export class LicenseEntity extends BaseEntity {
   @Column({ type: 'varchar', length: 100 })
   key: string;

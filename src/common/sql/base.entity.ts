@@ -4,7 +4,6 @@ import {
   UpdateDateColumn,
   Column,
 } from 'typeorm';
-import { Status } from '../enum/status.enum';
 
 export abstract class BaseEntity {
   @PrimaryGeneratedColumn('uuid')
@@ -21,11 +20,4 @@ export abstract class BaseEntity {
 
   @Column({ name: 'created_by', nullable: true })
   createdBy?: string;
-
-  @Column({
-    name: 'status',
-    type: 'varchar',
-    default: Status.ACTIVE,
-  })
-  status: Status;
 }

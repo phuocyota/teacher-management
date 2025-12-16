@@ -6,9 +6,9 @@ import {
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { DeviceRequest } from './entity/device-request.entity';
-import { ApprovedDevice } from './entity/approved-device.entity';
-import { CreateDeviceRequestDto } from './dto/device.dto';
-import { DeviceRequestStatus } from 'src/common/enum/device-request.enum';
+import { ApprovedDeviceEntity } from './entity/approved-device.entity';
+import { CreateDeviceRequestDto, DeviceRequestDto } from './dto/device.dto';
+import { DeviceRequestStatus } from './enum/device-request.enum';
 import { JwtPayload } from 'src/common/interface/jwt-payload.interface';
 
 @Injectable()
@@ -16,8 +16,8 @@ export class DeviceService {
   constructor(
     @InjectRepository(DeviceRequest)
     private readonly deviceRequestRepo: Repository<DeviceRequest>,
-    @InjectRepository(ApprovedDevice)
-    private readonly approvedDeviceRepo: Repository<ApprovedDevice>,
+    @InjectRepository(ApprovedDeviceEntity)
+    private readonly approvedDeviceRepo: Repository<ApprovedDeviceEntity>,
   ) {}
 
   /**
@@ -56,7 +56,7 @@ export class DeviceService {
   async approveDeviceRequest(
     id: string,
     user: JwtPayload,
-  ): Promise<ApprovedDevice> {
+  ): Promise<DeviceRequestDto> {
     const deviceRequest = await this.deviceRequestRepo.findOne({
       where: { id },
     });
@@ -73,6 +73,7 @@ export class DeviceService {
 
     // Cập nhật status của request
     deviceRequest.status = DeviceRequestStatus.APPROVED;
+    deviceRequest.updatedBy = user.userId;
     await this.deviceRequestRepo.save(deviceRequest);
 
     // Tạo approved device record
@@ -140,7 +141,7 @@ export class DeviceService {
   /**
    * Lấy danh sách approved devices của 1 user
    */
-  async getApprovedDevicesByUser(userId: string): Promise<ApprovedDevice[]> {
+  async getApprovedDevicesByUser(userId: string): Promise<DeviceRequestDto[]> {
     return this.approvedDeviceRepo.find({
       where: { userId },
       order: { approvedAt: 'DESC' },

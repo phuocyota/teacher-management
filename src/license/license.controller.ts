@@ -11,7 +11,7 @@ import { LicenseService } from './license.service';
 import { CreateLicenseDto, UpdateLicenseDto } from './dto/license.dto';
 import { ApiTags, ApiOperation, ApiResponse } from '@nestjs/swagger';
 import { User } from 'src/common/decorator/user.decorator';
-import { JwtPayload } from 'src/common/interface/jwt-payload.interface';
+import type { JwtPayload } from 'src/common/interface/jwt-payload.interface';
 
 @ApiTags('License')
 @Controller('licenses')
@@ -50,7 +50,7 @@ export class LicenseController {
     @Body() dto: UpdateLicenseDto,
     @User() user: JwtPayload,
   ) {
-    return this.licenseService.update(id, dto, user);
+    return this.licenseService.update(id, dto as any, user);
   }
 
   @Delete(':id')

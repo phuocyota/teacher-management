@@ -1,7 +1,7 @@
 import { Controller, Post, Body } from '@nestjs/common';
 import { AuthService } from './auth.service';
 import { LoginDto } from './dto/login.dto';
-import { CreateUserDto } from 'src/user/dto/user.dto';
+import { CreateUserDto } from 'src/user/dto/create.dto';
 import { ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { Public } from 'src/common/decorator/public.decorator';
 
@@ -11,12 +11,27 @@ export class AuthController {
   constructor(private readonly authService: AuthService) {}
 
   @Public()
-  @Post('login')
-  @ApiOperation({ summary: 'User login' })
+  @Post('login/admin')
+  @ApiOperation({ summary: 'Admin login' })
   @ApiResponse({ status: 200, description: 'Login successful' })
-  @ApiResponse({ status: 401, description: 'Invalid credentials' })
-  async login(@Body() dto: LoginDto) {
-    return this.authService.login(dto);
+  @ApiResponse({
+    status: 401,
+    description: 'Invalid credentials or not an admin',
+  })
+  async loginAdmin(@Body() dto: LoginDto) {
+    return this.authService.loginAdmin(dto);
+  }
+
+  @Public()
+  @Post('login/teacher')
+  @ApiOperation({ summary: 'Teacher login' })
+  @ApiResponse({ status: 200, description: 'Login successful' })
+  @ApiResponse({
+    status: 401,
+    description: 'Invalid credentials or not a teacher',
+  })
+  async loginTeacher(@Body() dto: LoginDto) {
+    return this.authService.loginTeacher(dto);
   }
 
   @Public()

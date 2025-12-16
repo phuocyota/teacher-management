@@ -1,6 +1,6 @@
 import { Column, Entity } from 'typeorm';
 import { BaseDeviceEntity } from './base-device.entity';
-import { DeviceRequestStatus } from 'src/common/enum/device-request.enum';
+import { DeviceRequestStatus } from '../enum/device-request.enum';
 
 @Entity('device_requests')
 export class DeviceRequest extends BaseDeviceEntity {

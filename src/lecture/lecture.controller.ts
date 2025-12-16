@@ -1,17 +1,9 @@
-import {
-  Controller,
-  Get,
-  Post,
-  Put,
-  Delete,
-  Body,
-  Param,
-} from '@nestjs/common';
+import { Controller, Get, Post, Put, Body, Param } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse } from '@nestjs/swagger';
 import { LectureService } from './lecture.service';
 import type { CreateLectureDto, UpdateLectureDto } from './dto/lecture.dto';
 import { User } from 'src/common/decorator/user.decorator';
-import { JwtPayload } from 'src/common/interface/jwt-payload.interface';
+import type { JwtPayload } from 'src/common/interface/jwt-payload.interface';
 
 @ApiTags('Lecture')
 @Controller('lecture')
@@ -53,11 +45,11 @@ export class LectureController {
     return this.lectureService.update(id, dto, user);
   }
 
-  @Delete(':id')
-  @ApiOperation({ summary: 'Delete lecture' })
-  @ApiResponse({ status: 200, description: 'Lecture deleted successfully' })
-  @ApiResponse({ status: 404, description: 'Lecture not found' })
-  remove(@Param('id') id: string, @User() user: JwtPayload) {
-    return this.lectureService.delete(id, user);
-  }
+  // @Delete(':id')
+  // @ApiOperation({ summary: 'Delete lecture' })
+  // @ApiResponse({ status: 200, description: 'Lecture deleted successfully' })
+  // @ApiResponse({ status: 404, description: 'Lecture not found' })
+  // remove(@Param('id') id: string, @User() user: JwtPayload) {
+  //   return this.lectureService.delete(id, user);
+  // }
 }

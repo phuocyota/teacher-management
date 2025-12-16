@@ -8,9 +8,8 @@ import {
   Query,
 } from '@nestjs/common';
 import { DeviceService } from './device.service';
-import { CreateDeviceRequestDto } from './dto/device.dto';
+import { CreateDeviceRequestDto, DeviceRequestDto } from './dto/device.dto';
 import { DeviceRequest } from './entity/device-request.entity';
-import { ApprovedDevice } from './entity/approved-device.entity';
 import { ApiOperation, ApiResponse } from '@nestjs/swagger';
 import { User } from 'src/common/decorator/user.decorator';
 import type { JwtPayload } from 'src/common/interface/jwt-payload.interface';
@@ -83,7 +82,7 @@ export class DeviceController {
   async approveDeviceRequest(
     @Param('id') requestId: string,
     @User() user: JwtPayload,
-  ): Promise<ApprovedDevice> {
+  ): Promise<DeviceRequestDto> {
     return this.deviceService.approveDeviceRequest(requestId, user);
   }
 
@@ -123,7 +122,7 @@ export class DeviceController {
   @ApiResponse({ status: 404, description: 'No approved devices found' })
   async getApprovedDevicesByUser(
     @Query('userId') userId: string,
-  ): Promise<ApprovedDevice[]> {
+  ): Promise<DeviceRequestDto[]> {
     return this.deviceService.getApprovedDevicesByUser(userId);
   }
 }
