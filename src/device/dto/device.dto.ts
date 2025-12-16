@@ -59,8 +59,8 @@ export class CreateDeviceRequestDto {
 
 export class RejectDeviceRequestDto {
   @ApiProperty({
-    description: 'Reason for rejecting the device request',
-    example: 'Invalid device ID',
+    description: 'Lý do từ chối yêu cầu thiết bị',
+    example: 'ID thiết bị không hợp lệ',
   })
   @IsString()
   rejectReason?: string;

@@ -1,11 +1,17 @@
 import { Controller, Get, Post, Put, Body, Param } from '@nestjs/common';
-import { ApiTags, ApiOperation, ApiResponse } from '@nestjs/swagger';
-import { LectureService } from './lecture.service';
+import {
+  ApiTags,
+  ApiOperation,
+  ApiResponse,
+  ApiBearerAuth,
+} from '@nestjs/swagger';
+import { LectureService } from './services/lecture.service';
 import type { CreateLectureDto, UpdateLectureDto } from './dto/lecture.dto';
 import { User } from 'src/common/decorator/user.decorator';
 import type { JwtPayload } from 'src/common/interface/jwt-payload.interface';
 
 @ApiTags('Lecture')
+@ApiBearerAuth('access-token')
 @Controller('lecture')
 export class LectureController {
   constructor(private readonly lectureService: LectureService) {}

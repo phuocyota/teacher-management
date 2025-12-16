@@ -10,10 +10,17 @@ import {
 import { DeviceService } from './device.service';
 import { CreateDeviceRequestDto, DeviceRequestDto } from './dto/device.dto';
 import { DeviceRequest } from './entity/device-request.entity';
-import { ApiOperation, ApiResponse } from '@nestjs/swagger';
+import {
+  ApiOperation,
+  ApiResponse,
+  ApiTags,
+  ApiBearerAuth,
+} from '@nestjs/swagger';
 import { User } from 'src/common/decorator/user.decorator';
 import type { JwtPayload } from 'src/common/interface/jwt-payload.interface';
 
+@ApiTags('Device')
+@ApiBearerAuth('access-token')
 @Controller('device')
 export class DeviceController {
   constructor(private readonly deviceService: DeviceService) {}
@@ -23,12 +30,12 @@ export class DeviceController {
    * POST /device/request
    */
   @Post('request')
-  @ApiOperation({ summary: 'Create a new device request' })
+  @ApiOperation({ summary: 'Tạo yêu cầu thiết bị mới' })
   @ApiResponse({
     status: 201,
-    description: 'Device request created successfully',
+    description: 'Tạo yêu cầu thiết bị thành công',
   })
-  @ApiResponse({ status: 400, description: 'Invalid input' })
+  @ApiResponse({ status: 400, description: 'Dữ liệu đầu vào không hợp lệ' })
   async createDeviceRequest(
     @Body() dto: CreateDeviceRequestDto,
     @User() user: JwtPayload,
@@ -41,12 +48,15 @@ export class DeviceController {
    * GET /device/requests/pending
    */
   @Get('requests/pending')
-  @ApiOperation({ summary: 'Get list of pending device requests' })
+  @ApiOperation({ summary: 'Lấy danh sách yêu cầu thiết bị đang chờ' })
   @ApiResponse({
     status: 200,
-    description: 'List of pending device requests retrieved successfully',
+    description: 'Lấy danh sách yêu cầu thiết bị đang chờ thành công',
   })
-  @ApiResponse({ status: 404, description: 'No pending device requests found' })
+  @ApiResponse({
+    status: 404,
+    description: 'Không tìm thấy yêu cầu thiết bị đang chờ',
+  })
   async getPendingRequests(): Promise<DeviceRequest[]> {
     return this.deviceService.getPendingRequests();
   }
@@ -56,12 +66,12 @@ export class DeviceController {
    * GET /device/request/:id
    */
   @Get('request/:id')
-  @ApiOperation({ summary: 'Get details of a device request' })
+  @ApiOperation({ summary: 'Lấy chi tiết yêu cầu thiết bị' })
   @ApiResponse({
     status: 200,
-    description: 'Device request details retrieved successfully',
+    description: 'Lấy chi tiết yêu cầu thiết bị thành công',
   })
-  @ApiResponse({ status: 404, description: 'Device request not found' })
+  @ApiResponse({ status: 404, description: 'Yêu cầu thiết bị không tồn tại' })
   async getDeviceRequestDetail(
     @Param('id') requestId: string,
   ): Promise<DeviceRequest> {
@@ -73,12 +83,12 @@ export class DeviceController {
    * PATCH /device/request/:id/approve?approvedBy=<admin-id>
    */
   @Patch('request/:id/approve')
-  @ApiOperation({ summary: 'Approve a device request' })
+  @ApiOperation({ summary: 'Phê duyệt yêu cầu thiết bị' })
   @ApiResponse({
     status: 200,
-    description: 'Device request approved successfully',
+    description: 'Phê duyệt yêu cầu thiết bị thành công',
   })
-  @ApiResponse({ status: 404, description: 'Device request not found' })
+  @ApiResponse({ status: 404, description: 'Yêu cầu thiết bị không tồn tại' })
   async approveDeviceRequest(
     @Param('id') requestId: string,
     @User() user: JwtPayload,
@@ -91,12 +101,12 @@ export class DeviceController {
    * PATCH /device/request/:id/reject
    */
   @Patch('request/:id/reject')
-  @ApiOperation({ summary: 'Reject a device request' })
+  @ApiOperation({ summary: 'Từ chối yêu cầu thiết bị' })
   @ApiResponse({
     status: 200,
-    description: 'Device request rejected successfully',
+    description: 'Từ chối yêu cầu thiết bị thành công',
   })
-  @ApiResponse({ status: 404, description: 'Device request not found' })
+  @ApiResponse({ status: 404, description: 'Yêu cầu thiết bị không tồn tại' })
   async rejectDeviceRequest(
     @Param('id') requestId: string,
     @Body('rejectReason') rejectReason: string,
@@ -114,12 +124,15 @@ export class DeviceController {
    * GET /device/approved?userId=<user-id>
    */
   @Get('approved')
-  @ApiOperation({ summary: 'Get approved devices by user ID' })
+  @ApiOperation({ summary: 'Lấy danh sách thiết bị đã phê duyệt theo user ID' })
   @ApiResponse({
     status: 200,
-    description: 'List of approved devices retrieved successfully',
+    description: 'Lấy danh sách thiết bị đã phê duyệt thành công',
   })
-  @ApiResponse({ status: 404, description: 'No approved devices found' })
+  @ApiResponse({
+    status: 404,
+    description: 'Không tìm thấy thiết bị đã phê duyệt',
+  })
   async getApprovedDevicesByUser(
     @Query('userId') userId: string,
   ): Promise<DeviceRequestDto[]> {

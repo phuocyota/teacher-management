@@ -3,6 +3,10 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { ClassEntity } from './class.entity';
 import { CreateClassDto, UpdateClassDto } from './dto/create-class.dto';
+import {
+  ERROR_MESSAGES,
+  ENTITY_NAMES,
+} from 'src/common/constant/error-messages.constant';
 
 @Injectable()
 export class ClassService {
@@ -23,7 +27,9 @@ export class ClassService {
   async findOne(id: string): Promise<ClassEntity> {
     const record = await this.classRepo.findOne({ where: { id } });
     if (!record) {
-      throw new NotFoundException(`Class with ID ${id} not found`);
+      throw new NotFoundException(
+        ERROR_MESSAGES.NOT_FOUND_WITH_ID(ENTITY_NAMES.CLASS, id),
+      );
     }
     return record;
   }

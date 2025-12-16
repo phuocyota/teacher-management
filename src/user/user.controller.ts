@@ -14,11 +14,17 @@ import { UserService } from './user.service';
 import { ChangePasswordDto, UserQueryDto } from './dto/user.dto';
 import { CreateUserDto } from './dto/create.dto.js';
 import { UpdateUserDto } from './dto/update.dto.js';
-import { ApiTags, ApiOperation, ApiResponse } from '@nestjs/swagger';
+import {
+  ApiTags,
+  ApiOperation,
+  ApiResponse,
+  ApiBearerAuth,
+} from '@nestjs/swagger';
 import { User } from 'src/common/decorator/user.decorator';
 import type { JwtPayload } from 'src/common/interface/jwt-payload.interface';
 
 @ApiTags('User')
+@ApiBearerAuth('access-token')
 @Controller('users')
 export class UserController {
   constructor(private readonly userService: UserService) {}

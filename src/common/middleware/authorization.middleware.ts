@@ -6,6 +6,7 @@ import {
 import { Request, Response, NextFunction } from 'express';
 import * as jwt from 'jsonwebtoken';
 import { JwtPayload } from '../interface/jwt-payload.interface';
+import { ERROR_MESSAGES } from '../constant/error-messages.constant';
 
 @Injectable()
 export class AuthorizationMiddleware implements NestMiddleware {
@@ -13,7 +14,9 @@ export class AuthorizationMiddleware implements NestMiddleware {
     const authHeader = req.headers['authorization'];
 
     if (!authHeader) {
-      throw new UnauthorizedException('Missing Authorization header');
+      throw new UnauthorizedException(
+        ERROR_MESSAGES.MISSING_AUTHORIZATION_HEADER,
+      );
     }
 
     const token = authHeader.replace('Bearer ', '');
@@ -23,9 +26,7 @@ export class AuthorizationMiddleware implements NestMiddleware {
 
       // --- Kiểm tra token phải có các trường bắt buộc ---
       if (!decoded.userId || !decoded.userType || !decoded.deviceId) {
-        throw new UnauthorizedException(
-          'Invalid token structure (missing fields)',
-        );
+        throw new UnauthorizedException(ERROR_MESSAGES.INVALID_TOKEN_STRUCTURE);
       }
 
       // --- Gắn user vào req ---
@@ -33,7 +34,7 @@ export class AuthorizationMiddleware implements NestMiddleware {
 
       next();
     } catch (err) {
-      throw new UnauthorizedException('Invalid token');
+      throw new UnauthorizedException(ERROR_MESSAGES.INVALID_TOKEN);
     }
   }
 }

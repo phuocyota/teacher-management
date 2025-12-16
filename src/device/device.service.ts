@@ -10,6 +10,10 @@ import { ApprovedDeviceEntity } from './entity/approved-device.entity';
 import { CreateDeviceRequestDto, DeviceRequestDto } from './dto/device.dto';
 import { DeviceRequestStatus } from './enum/device-request.enum';
 import { JwtPayload } from 'src/common/interface/jwt-payload.interface';
+import {
+  ERROR_MESSAGES,
+  ENTITY_NAMES,
+} from 'src/common/constant/error-messages.constant';
 
 @Injectable()
 export class DeviceService {
@@ -52,40 +56,50 @@ export class DeviceService {
 
   /**
    * Admin phê duyệt device request
+   * Sử dụng transaction để đảm bảo tính nhất quán
    */
   async approveDeviceRequest(
     id: string,
     user: JwtPayload,
   ): Promise<DeviceRequestDto> {
-    const deviceRequest = await this.deviceRequestRepo.findOne({
-      where: { id },
-    });
+    // Sử dụng transaction
+    return this.deviceRequestRepo.manager.connection.transaction(
+      async (manager) => {
+        const deviceRequest = await manager.findOne(DeviceRequest, {
+          where: { id },
+        });
 
-    if (!deviceRequest) {
-      throw new NotFoundException(`Device request với id ${id} không tồn tại`);
-    }
+        if (!deviceRequest) {
+          throw new NotFoundException(
+            ERROR_MESSAGES.NOT_FOUND_WITH_ID(ENTITY_NAMES.DEVICE_REQUEST, id),
+          );
+        }
 
-    if (deviceRequest.status !== DeviceRequestStatus.PENDING) {
-      throw new BadRequestException(
-        `Request đã được xử lý với status: ${deviceRequest.status}`,
-      );
-    }
+        if (deviceRequest.status !== DeviceRequestStatus.PENDING) {
+          throw new BadRequestException(
+            ERROR_MESSAGES.DEVICE_REQUEST_ALREADY_PROCESSED(
+              deviceRequest.status,
+            ),
+          );
+        }
 
-    // Cập nhật status của request
-    deviceRequest.status = DeviceRequestStatus.APPROVED;
-    deviceRequest.updatedBy = user.userId;
-    await this.deviceRequestRepo.save(deviceRequest);
+        // Cập nhật status của request
+        deviceRequest.status = DeviceRequestStatus.APPROVED;
+        deviceRequest.updatedBy = user.userId;
+        await manager.save(deviceRequest);
 
-    // Tạo approved device record
-    const approvedDevice = this.approvedDeviceRepo.create({
-      userId: deviceRequest.createdBy,
-      deviceId: deviceRequest.deviceId,
-      productKey: deviceRequest.productKey,
-      approvedBy: user.userId,
-    });
+        // Tạo approved device record
+        const approvedDevice = this.approvedDeviceRepo.create({
+          userId: deviceRequest.createdBy,
+          deviceId: deviceRequest.deviceId,
+          productKey: deviceRequest.productKey,
+          approvedBy: user.userId,
+        });
 
-    const savedApproved = await this.approvedDeviceRepo.save(approvedDevice);
-    return savedApproved;
+        const savedApproved = await manager.save(approvedDevice);
+        return savedApproved;
+      },
+    );
   }
 
   /**
@@ -102,13 +116,16 @@ export class DeviceService {
 
     if (!deviceRequest) {
       throw new NotFoundException(
-        `Device request với id ${requestId} không tồn tại`,
+        ERROR_MESSAGES.NOT_FOUND_WITH_ID(
+          ENTITY_NAMES.DEVICE_REQUEST,
+          requestId,
+        ),
       );
     }
 
     if (deviceRequest.status !== DeviceRequestStatus.PENDING) {
       throw new BadRequestException(
-        `Request đã được xử lý với status: ${deviceRequest.status}`,
+        ERROR_MESSAGES.DEVICE_REQUEST_ALREADY_PROCESSED(deviceRequest.status),
       );
     }
 
@@ -131,7 +148,10 @@ export class DeviceService {
 
     if (!deviceRequest) {
       throw new NotFoundException(
-        `Device request với id ${requestId} không tồn tại`,
+        ERROR_MESSAGES.NOT_FOUND_WITH_ID(
+          ENTITY_NAMES.DEVICE_REQUEST,
+          requestId,
+        ),
       );
     }
 

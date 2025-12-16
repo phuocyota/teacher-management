@@ -9,11 +9,17 @@ import {
 } from '@nestjs/common';
 import { LicenseService } from './license.service';
 import { CreateLicenseDto, UpdateLicenseDto } from './dto/license.dto';
-import { ApiTags, ApiOperation, ApiResponse } from '@nestjs/swagger';
+import {
+  ApiTags,
+  ApiOperation,
+  ApiResponse,
+  ApiBearerAuth,
+} from '@nestjs/swagger';
 import { User } from 'src/common/decorator/user.decorator';
 import type { JwtPayload } from 'src/common/interface/jwt-payload.interface';
 
 @ApiTags('License')
+@ApiBearerAuth('access-token')
 @Controller('licenses')
 export class LicenseController {
   constructor(private readonly licenseService: LicenseService) {}

@@ -8,6 +8,7 @@ import { Reflector } from '@nestjs/core';
 import * as jwt from 'jsonwebtoken';
 import { IS_PUBLIC_KEY } from '../decorator/public.decorator';
 import { JwtPayload } from '../interface/jwt-payload.interface';
+import { ERROR_MESSAGES } from '../constant/error-messages.constant';
 
 @Injectable()
 export class AuthGuard implements CanActivate {
@@ -28,7 +29,9 @@ export class AuthGuard implements CanActivate {
     const authHeader = request.headers['authorization'];
 
     if (!authHeader) {
-      throw new UnauthorizedException('Missing Authorization header');
+      throw new UnauthorizedException(
+        ERROR_MESSAGES.MISSING_AUTHORIZATION_HEADER,
+      );
     }
 
     const token = authHeader.replace('Bearer ', '');
@@ -39,9 +42,7 @@ export class AuthGuard implements CanActivate {
 
       // Validate required fields
       if (!decoded.userId || !decoded.userType || !decoded.deviceId) {
-        throw new UnauthorizedException(
-          'Invalid token structure (missing fields)',
-        );
+        throw new UnauthorizedException(ERROR_MESSAGES.INVALID_TOKEN_STRUCTURE);
       }
 
       // Attach user to request
@@ -49,7 +50,7 @@ export class AuthGuard implements CanActivate {
 
       return true;
     } catch (err) {
-      throw new UnauthorizedException('Invalid token');
+      throw new UnauthorizedException(ERROR_MESSAGES.INVALID_TOKEN);
     }
   }
 }

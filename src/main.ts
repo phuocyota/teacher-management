@@ -15,6 +15,17 @@ async function bootstrap() {
     .addTag('Auth', 'Authentication endpoints')
     .addTag('Device', 'Device management endpoints')
     .addTag('License', 'License management endpoints')
+    .addBearerAuth(
+      {
+        type: 'http',
+        scheme: 'bearer',
+        bearerFormat: 'JWT',
+        name: 'Authorization',
+        description: 'Nhập JWT token',
+        in: 'header',
+      },
+      'access-token',
+    )
     .build();
 
   const document = SwaggerModule.createDocument(app, config);

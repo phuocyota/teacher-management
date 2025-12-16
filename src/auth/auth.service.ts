@@ -6,6 +6,7 @@ import { CreateUserDto } from 'src/user/dto/create.dto';
 import { UserService } from 'src/user/user.service';
 import { UserEntity } from 'src/user/user.entity';
 import { UserType } from 'src/common/enum/user-type.enum';
+import { ERROR_MESSAGES } from 'src/common/constant/error-messages.constant';
 
 @Injectable()
 export class AuthService {
@@ -18,7 +19,7 @@ export class AuthService {
     const user = await this.userService.findByUsernameOrEmail(identifier);
     if (!user) return null;
     // Compare hashed password
-    const match = await bcrypt.compare(password, user.hashPassword);
+    const match = bcrypt.compare(password, user.hashPassword);
     if (!match) return null;
 
     return user;
@@ -36,47 +37,62 @@ export class AuthService {
   }
 
   async login(dto: LoginDto) {
-    const user = await this.validateUser(dto.identifier, dto.password);
+    const user = await this.validateUser(dto.username, dto.password);
     if (!user) {
-      throw new UnauthorizedException('Invalid credentials');
+      throw new UnauthorizedException(ERROR_MESSAGES.INVALID_CREDENTIALS);
     }
 
     const token = this.generateToken(user, dto.deviceId);
-    return { accessToken: token };
+    return {
+      accessToken: token,
+      userId: user.id,
+      userType: user.userType,
+      deviceId: dto.deviceId,
+    };
   }
 
   /**
    * Login for Admin only
    */
   async loginAdmin(dto: LoginDto) {
-    const user = await this.validateUser(dto.identifier, dto.password);
+    const user = await this.validateUser(dto.username, dto.password);
     if (!user) {
-      throw new UnauthorizedException('Invalid credentials');
+      throw new UnauthorizedException(ERROR_MESSAGES.INVALID_CREDENTIALS);
     }
 
     if (user.userType !== UserType.ADMIN) {
-      throw new UnauthorizedException('Access denied. Admin only.');
+      throw new UnauthorizedException(ERROR_MESSAGES.ACCESS_DENIED_ADMIN);
     }
 
     const token = this.generateToken(user, dto.deviceId);
-    return { accessToken: token };
+    return {
+      accessToken: token,
+      userId: user.id,
+      userType: user.userType,
+      deviceId: dto.deviceId,
+    };
   }
 
   /**
    * Login for Teacher only
    */
   async loginTeacher(dto: LoginDto) {
-    const user = await this.validateUser(dto.identifier, dto.password);
+    const user = await this.validateUser(dto.username, dto.password);
     if (!user) {
-      throw new UnauthorizedException('Invalid credentials');
+      throw new UnauthorizedException(ERROR_MESSAGES.INVALID_CREDENTIALS);
     }
 
     if (user.userType !== UserType.TEACHER) {
-      throw new UnauthorizedException('Access denied. Teacher only.');
+      throw new UnauthorizedException(ERROR_MESSAGES.ACCESS_DENIED_TEACHER);
     }
 
     const token = this.generateToken(user, dto.deviceId);
-    return { accessToken: token };
+    return {
+      accessToken: token,
+      userId: user.id,
+      userType: user.userType,
+      deviceId: dto.deviceId,
+    };
   }
 
   /**
