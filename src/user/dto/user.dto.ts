@@ -30,6 +30,14 @@ export class ChangePasswordDto {
   newPassword!: string;
 }
 
+export class ChangePasswordResponseDto {
+  @ApiProperty({
+    example: 'Đổi mật khẩu thành công',
+    description: 'Thông báo kết quả',
+  })
+  message: string;
+}
+
 // ===== USER RESPONSE DTO (không trả về password) =====
 @Exclude()
 export class UserResponseDto {

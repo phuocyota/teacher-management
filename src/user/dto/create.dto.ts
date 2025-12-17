@@ -7,6 +7,8 @@ import {
   IsOptional,
   IsString,
   MinLength,
+  IsArray,
+  IsUUID,
 } from 'class-validator';
 import { UserType } from '../../common/enum/user-type.enum.js';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
@@ -193,4 +195,14 @@ export class CreateUserDto {
   @IsOptional()
   @IsEnum(Status, { message: 'Trạng thái không hợp lệ' })
   status?: Status;
+
+  @ApiPropertyOptional({
+    example: ['group-uuid-1', 'group-uuid-2'],
+    description: 'Danh sách group IDs để thêm user vào',
+    type: [String],
+  })
+  @IsOptional()
+  @IsArray()
+  @IsUUID('4', { each: true })
+  groupIds?: string[];
 }

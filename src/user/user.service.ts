@@ -4,7 +4,7 @@ import {
   NotFoundException,
   BadRequestException,
 } from '@nestjs/common';
-import * as bcrypt from 'bcrypt';
+import bcrypt from 'bcrypt';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { UserEntity } from './user.entity';
@@ -13,12 +13,18 @@ import { CreateUserDto } from './dto/create.dto.js';
 import { UpdateUserDto } from './dto/update.dto.js';
 import { JwtPayload } from 'src/common/interface/jwt-payload.interface';
 import { BaseService } from 'src/common/sql/base.service';
+import { UserGroupService } from '../user-group/user-group.service';
+import {
+  ERROR_MESSAGES,
+  ENTITY_NAMES,
+} from 'src/common/constant/error-messages.constant';
 
 @Injectable()
 export class UserService extends BaseService<UserEntity> {
   constructor(
     @InjectRepository(UserEntity)
     userRepo: Repository<UserEntity>,
+    private readonly userGroupService: UserGroupService,
   ) {
     super(userRepo);
   }
@@ -46,12 +52,12 @@ export class UserService extends BaseService<UserEntity> {
 
     if (existing) {
       if (existing.userName === dto.userName) {
-        throw new ConflictException('Tên đăng nhập đã tồn tại');
+        throw new ConflictException(ERROR_MESSAGES.USERNAME_ALREADY_EXISTS);
       }
       if (existing.email === dto.email) {
-        throw new ConflictException('Email đã tồn tại');
+        throw new ConflictException(ERROR_MESSAGES.EMAIL_ALREADY_EXISTS);
       }
-      throw new ConflictException('Người dùng đã tồn tại');
+      throw new ConflictException(ERROR_MESSAGES.USER_ALREADY_EXISTS);
     }
 
     const saltRounds = 10;
@@ -63,7 +69,18 @@ export class UserService extends BaseService<UserEntity> {
       hashPassword: hash,
     });
 
-    return await this.repo.save(newUser);
+    const savedUser = await this.repo.save(newUser);
+
+    // Nếu có groupIds, thêm user vào các groups
+    if (dto.groupIds && dto.groupIds.length > 0 && user) {
+      const groupIds = [...dto.groupIds];
+      while (groupIds.length > 0) {
+        const gid = groupIds.pop()!;
+        await this.userGroupService.addUsersToGroup(gid, [savedUser.id], user);
+      }
+    }
+
+    return savedUser;
   }
 
   /**
@@ -73,7 +90,7 @@ export class UserService extends BaseService<UserEntity> {
     const existingUser = await this.repo.findOne({ where: { id } });
 
     if (!existingUser) {
-      throw new NotFoundException('Không tìm thấy người dùng');
+      throw new NotFoundException(ERROR_MESSAGES.NOT_FOUND(ENTITY_NAMES.USER));
     }
 
     // Kiểm tra email unique nếu có thay đổi
@@ -110,7 +127,7 @@ export class UserService extends BaseService<UserEntity> {
     id: string,
     dto: ChangePasswordDto,
     user?: JwtPayload,
-  ): Promise<{ message: string }> {
+  ): Promise<void> {
     const existingUser = await this.repo.findOne({ where: { id } });
 
     if (!existingUser) {
@@ -124,7 +141,7 @@ export class UserService extends BaseService<UserEntity> {
     );
 
     if (!isMatch) {
-      throw new BadRequestException('Mật khẩu hiện tại không đúng');
+      throw new BadRequestException(ERROR_MESSAGES.CURRENT_PASSWORD_INCORRECT);
     }
 
     const saltRounds = 10;
@@ -134,8 +151,6 @@ export class UserService extends BaseService<UserEntity> {
     existingUser.updatedBy = user?.userId;
 
     await this.repo.save(existingUser);
-
-    return { message: 'Đổi mật khẩu thành công' };
   }
 
   /**
@@ -152,7 +167,7 @@ export class UserService extends BaseService<UserEntity> {
     } = query;
     const skip = (page - 1) * limit;
 
-    const whereConditions: any = {};
+    const whereConditions: Record<string, unknown> = {};
 
     if (userType) {
       whereConditions.userType = userType;
@@ -217,7 +232,7 @@ export class UserService extends BaseService<UserEntity> {
     const existingUser = await this.repo.findOne({ where: { id } });
 
     if (!existingUser) {
-      throw new NotFoundException('Không tìm thấy người dùng');
+      throw new NotFoundException(ERROR_MESSAGES.NOT_FOUND(ENTITY_NAMES.USER));
     }
 
     existingUser.isDisabled = !existingUser.isDisabled;

@@ -45,12 +45,16 @@ export abstract class BaseService<T extends BaseEntity> {
     return this.repo.find();
   }
 
-  async findOne(id: string): Promise<T> {
-    const item = await this.repo.findOne({
+  async findById(id: string): Promise<T | null> {
+    return this.repo.findOne({
       where: {
         id,
       } as FindOptionsWhere<T>,
     });
+  }
+
+  async findOne(id: string): Promise<T> {
+    const item = await this.findById(id);
 
     if (!item) {
       throw new NotFoundException(

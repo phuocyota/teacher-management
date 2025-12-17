@@ -5,7 +5,9 @@ import {
   IsArray,
   IsUUID,
   MaxLength,
+  IsEnum,
 } from 'class-validator';
+import { GroupMemberRole } from '../enum/group-member-role.enum';
 
 export class CreateGroupDto {
   @ApiProperty({
@@ -18,7 +20,6 @@ export class CreateGroupDto {
 
   @ApiPropertyOptional({
     description: 'Danh sách user IDs để thêm vào group',
-    example: ['user-id-1', 'user-id-2'],
     type: [String],
   })
   @IsArray()
@@ -40,6 +41,33 @@ export class AddUsersToGroupDto {
   userIds: string[];
 }
 
+export class AddUserWithRoleDto {
+  @ApiProperty({
+    description: 'User ID',
+    example: 'user-id-1',
+  })
+  @IsUUID('4')
+  userId: string;
+
+  @ApiPropertyOptional({
+    description: 'Vai trò của user trong group',
+    enum: GroupMemberRole,
+    default: GroupMemberRole.MEMBER,
+  })
+  @IsEnum(GroupMemberRole)
+  @IsOptional()
+  role?: GroupMemberRole;
+}
+
+export class AddUsersWithRoleDto {
+  @ApiProperty({
+    description: 'Danh sách users với role để thêm vào group',
+    type: [AddUserWithRoleDto],
+  })
+  @IsArray()
+  users: AddUserWithRoleDto[];
+}
+
 export class RemoveUsersFromGroupDto {
   @ApiProperty({
     description: 'Danh sách user IDs để xóa khỏi group',
@@ -49,6 +77,15 @@ export class RemoveUsersFromGroupDto {
   @IsArray()
   @IsUUID('4', { each: true })
   userIds: string[];
+}
+
+export class UpdateMemberRoleDto {
+  @ApiProperty({
+    description: 'Vai trò mới cho user',
+    enum: GroupMemberRole,
+  })
+  @IsEnum(GroupMemberRole)
+  role: GroupMemberRole;
 }
 
 /**
@@ -97,6 +134,12 @@ export class GroupMemberDto {
 
   @ApiProperty({ description: 'Email', example: 'nguyenvana@school.edu.vn' })
   email: string;
+
+  @ApiProperty({
+    description: 'Vai trò trong group',
+    enum: GroupMemberRole,
+  })
+  role: GroupMemberRole;
 }
 
 /**
@@ -104,16 +147,46 @@ export class GroupMemberDto {
  */
 export class GroupWithMembersDto extends GroupResponseDto {
   @ApiProperty({
-    description: 'Danh sách thành viên',
+    description: 'Danh sách thành viên trong group',
     type: [GroupMemberDto],
   })
   members: GroupMemberDto[];
 }
 
-/**
- * DTO response cho mã group lớn nhất
- */
 export class MaxCodeResponseDto {
   @ApiProperty({ description: 'Mã group lớn nhất hiện tại', example: 10 })
   maxCode: number;
+}
+
+export class GroupDto {
+  @ApiProperty({
+    description: 'ID của group',
+  })
+  id: string;
+
+  @ApiProperty({
+    description: 'Mã group (tự động tăng)',
+    example: 1,
+  })
+  code: number;
+
+  @ApiProperty({
+    description: 'Tên group',
+    example: 'Giáo viên Toán',
+  })
+  name: string;
+
+  @ApiProperty({ description: 'Ngày tạo' })
+  createdAt: Date;
+
+  @ApiPropertyOptional({ description: 'Ngày cập nhật' })
+  updatedAt?: Date;
+}
+
+export class GroupWithCountDto extends GroupDto {
+  @ApiProperty({
+    description: 'Số lượng thành viên trong group',
+    example: 12,
+  })
+  count: number;
 }

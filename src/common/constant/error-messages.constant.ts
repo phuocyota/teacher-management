@@ -28,6 +28,12 @@ export const ERROR_MESSAGES = {
     'Bạn không có quyền xóa thành viên khỏi group này',
   SOME_USERS_NOT_FOUND: 'Một số user không tồn tại',
 
+  // User errors
+  USERNAME_ALREADY_EXISTS: 'Tên đăng nhập đã tồn tại',
+  EMAIL_ALREADY_EXISTS: 'Email đã tồn tại',
+  USER_ALREADY_EXISTS: 'Người dùng đã tồn tại',
+  CURRENT_PASSWORD_INCORRECT: 'Mật khẩu hiện tại không đúng',
+
   // Input errors
   INVALID_INPUT: 'Dữ liệu đầu vào không hợp lệ',
 };

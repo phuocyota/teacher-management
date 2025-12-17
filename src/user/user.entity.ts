@@ -1,8 +1,9 @@
 import { UserType } from '../common/enum/user-type.enum.js';
 import { BaseEntity } from '../common/sql/base.entity.js';
-import { Entity, Column, ManyToMany } from 'typeorm';
+import { Entity, Column, OneToMany } from 'typeorm';
 import { Gender } from './enum/gender.enum.js';
 import { Status } from './enum/status.enum.js';
+import { UserGroupEntity } from '../user-group/entity/user-group.entity';
 
 @Entity('user')
 export class UserEntity extends BaseEntity {
@@ -90,9 +91,12 @@ export class UserEntity extends BaseEntity {
   createdIp?: string;
 
   /**
-   * Quan hệ many-to-many với Group
-   * Một user có thể thuộc nhiều groups
+   * Quan hệ one-to-many với UserGroupEntity
+   * Một user có nhiều user_group relationships
    */
-  @ManyToMany('GroupEntity', 'users')
-  groups?: import('../group/group.entity').GroupEntity[];
+  @OneToMany(
+    () => UserGroupEntity,
+    (userGroup: UserGroupEntity) => userGroup.user,
+  )
+  groupMembers?: UserGroupEntity[];
 }

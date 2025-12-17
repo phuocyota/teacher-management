@@ -1,8 +1,8 @@
-import { Entity, Column, ManyToOne, JoinColumn } from 'typeorm';
+import { Entity, Column } from 'typeorm';
 import { BaseEntity } from 'src/common/sql/base.entity';
 import { FileVisibility } from '../enum/file-visibility.enum';
 
-@Entity('files')
+@Entity('file')
 export class FileEntity extends BaseEntity {
   @Column({ name: 'original_name' })
   originalName: string;

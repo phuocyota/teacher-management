@@ -20,12 +20,8 @@ import { GroupService } from './group.service';
 import {
   CreateGroupDto,
   UpdateGroupDto,
-  AddUsersToGroupDto,
-  RemoveUsersFromGroupDto,
   GroupResponseDto,
   GroupWithMemberCountDto,
-  GroupWithMembersDto,
-  GroupMemberDto,
   MaxCodeResponseDto,
 } from './dto/group.dto';
 import { User } from 'src/common/decorator/user.decorator';
@@ -74,17 +70,6 @@ export class GroupController {
     return this.groupService.findAllWithMemberCount();
   }
 
-  @Get('my-groups')
-  @ApiOperation({ summary: 'Lấy danh sách groups của current user' })
-  @ApiResponse({
-    status: 200,
-    description: 'Lấy danh sách thành công',
-    type: [GroupResponseDto],
-  })
-  async getMyGroups(@User() user: JwtPayload): Promise<GroupResponseDto[]> {
-    return this.groupService.getMyGroups(user);
-  }
-
   @Get('search')
   @ApiOperation({ summary: 'Tìm kiếm groups theo tên hoặc mã' })
   @ApiQuery({ name: 'keyword', required: true, description: 'Từ khóa cần tìm' })
@@ -107,20 +92,6 @@ export class GroupController {
   async getMaxCode(): Promise<MaxCodeResponseDto> {
     const maxCode = await this.groupService.getMaxCode();
     return { maxCode };
-  }
-
-  @Get(':id')
-  @ApiOperation({ summary: 'Lấy chi tiết group theo ID' })
-  @ApiResponse({
-    status: 200,
-    description: 'Lấy thông tin thành công',
-    type: GroupWithMembersDto,
-  })
-  @ApiResponse({ status: 404, description: 'Không tìm thấy group' })
-  async findOne(
-    @Param('id', ParseUUIDPipe) id: string,
-  ): Promise<GroupWithMembersDto> {
-    return this.groupService.findOne(id);
   }
 
   @Put(':id')
@@ -151,67 +122,5 @@ export class GroupController {
   ): Promise<{ message: string }> {
     await this.groupService.remove(id, user);
     return { message: 'Đã xóa group thành công' };
-  }
-
-  @Get(':id/members')
-  @ApiOperation({ summary: 'Lấy danh sách thành viên của group' })
-  @ApiResponse({
-    status: 200,
-    description: 'Lấy danh sách thành công',
-    type: [GroupMemberDto],
-  })
-  @ApiResponse({ status: 404, description: 'Không tìm thấy group' })
-  async getGroupMembers(
-    @Param('id', ParseUUIDPipe) id: string,
-  ): Promise<GroupMemberDto[]> {
-    return this.groupService.getGroupMembers(id);
-  }
-
-  @Post(':id/members')
-  @ApiOperation({ summary: 'Thêm users vào group' })
-  @ApiResponse({
-    status: 200,
-    description: 'Thêm thành viên thành công',
-    type: GroupWithMembersDto,
-  })
-  @ApiResponse({ status: 404, description: 'Không tìm thấy group' })
-  @ApiResponse({ status: 403, description: 'Không có quyền' })
-  async addUsersToGroup(
-    @Param('id', ParseUUIDPipe) id: string,
-    @Body() dto: AddUsersToGroupDto,
-    @User() user: JwtPayload,
-  ): Promise<GroupWithMembersDto> {
-    return this.groupService.addUsersToGroup(id, dto.userIds, user);
-  }
-
-  @Delete(':id/members')
-  @ApiOperation({ summary: 'Xóa users khỏi group' })
-  @ApiResponse({
-    status: 200,
-    description: 'Xóa thành viên thành công',
-    type: GroupWithMembersDto,
-  })
-  @ApiResponse({ status: 404, description: 'Không tìm thấy group' })
-  @ApiResponse({ status: 403, description: 'Không có quyền' })
-  async removeUsersFromGroup(
-    @Param('id', ParseUUIDPipe) id: string,
-    @Body() dto: RemoveUsersFromGroupDto,
-    @User() user: JwtPayload,
-  ): Promise<GroupWithMembersDto> {
-    return this.groupService.removeUsersFromGroup(id, dto.userIds, user);
-  }
-
-  @Get('user/:userId')
-  @ApiOperation({ summary: 'Lấy danh sách groups của một user' })
-  @ApiResponse({
-    status: 200,
-    description: 'Lấy danh sách thành công',
-    type: [GroupResponseDto],
-  })
-  @ApiResponse({ status: 404, description: 'Không tìm thấy user' })
-  async getUserGroups(
-    @Param('userId', ParseUUIDPipe) userId: string,
-  ): Promise<GroupResponseDto[]> {
-    return this.groupService.getUserGroups(userId);
   }
 }

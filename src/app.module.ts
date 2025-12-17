@@ -24,7 +24,9 @@ import { UploadModule } from './upload/upload.module';
 import { FileEntity } from './upload/entity/file.entity';
 import { FileAccessEntity } from './upload/entity/file-access.entity';
 import { GroupModule } from './group/group.module';
-import { GroupEntity } from './group/group.entity';
+import { GroupEntity } from './group/entity/group.entity';
+import { UserGroupEntity } from './user-group/entity/user-group.entity';
+import { UserGroupModule } from './user-group/user-group.module';
 import { TeacherLecturePermissionEntity } from './lecture/entity/teacher-lecture-permission.entity';
 
 @Module({
@@ -53,6 +55,7 @@ import { TeacherLecturePermissionEntity } from './lecture/entity/teacher-lecture
           FileEntity,
           FileAccessEntity,
           GroupEntity,
+          UserGroupEntity,
           TeacherLecturePermissionEntity,
         ],
         synchronize: true,
@@ -68,6 +71,7 @@ import { TeacherLecturePermissionEntity } from './lecture/entity/teacher-lecture
     ClassModule,
     UploadModule,
     GroupModule,
+    UserGroupModule,
   ],
   providers: [
     AuthService,
