@@ -1,15 +1,12 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { EntityManager, In, Repository } from 'typeorm';
 import { GroupEntity } from '../entity/group.entity';
 import { ERROR_MESSAGES } from 'src/common/constant/error-messages.constant';
 import { BaseService } from 'src/common/sql/base.service';
 import { GroupWithCountDto } from '../dto/group.dto';
 import { autoMapListToDto, autoMapToDto } from 'src/common/utils/auto-map.util';
 
-/**
- * Service xử lý các thao tác với GroupRepository
- */
 @Injectable()
 export class GroupRepositoryService extends BaseService<GroupEntity> {
   constructor(
@@ -142,5 +139,25 @@ export class GroupRepositoryService extends BaseService<GroupEntity> {
    */
   getRepository(): Repository<GroupEntity> {
     return this.groupRepository;
+  }
+
+  /**
+   * Kiểm tra các groupIds có tồn tại không
+   */
+  async validateGroupsExist(
+    groupIds: string[],
+    manager?: EntityManager,
+  ): Promise<void> {
+    const repo = manager
+      ? manager.getRepository(GroupEntity)
+      : this.groupRepository;
+
+    const count = await repo.countBy({
+      id: In(groupIds),
+    });
+
+    if (count !== groupIds.length) {
+      throw new NotFoundException(ERROR_MESSAGES.SOME_GROUPS_NOT_FOUND);
+    }
   }
 }

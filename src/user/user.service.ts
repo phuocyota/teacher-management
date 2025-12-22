@@ -4,9 +4,9 @@ import {
   NotFoundException,
   BadRequestException,
 } from '@nestjs/common';
-import bcrypt from 'bcrypt';
+import bcrypt from 'bcryptjs';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { EntityManager, Repository } from 'typeorm';
 import { UserEntity } from './user.entity';
 import { ChangePasswordDto, UserQueryDto } from './dto/user.dto';
 import { CreateUserDto } from './dto/create.dto.js';
@@ -18,6 +18,7 @@ import {
   ERROR_MESSAGES,
   ENTITY_NAMES,
 } from 'src/common/constant/error-messages.constant';
+import { runInTransaction } from 'src/common/database/transaction.utils';
 
 @Injectable()
 export class UserService extends BaseService<UserEntity> {
@@ -25,6 +26,7 @@ export class UserService extends BaseService<UserEntity> {
     @InjectRepository(UserEntity)
     userRepo: Repository<UserEntity>,
     private readonly userGroupService: UserGroupService,
+    private readonly entityManager: EntityManager,
   ) {
     super(userRepo);
   }
@@ -33,7 +35,9 @@ export class UserService extends BaseService<UserEntity> {
     return 'User';
   }
 
-  async findByUsernameOrEmail(identifier: string): Promise<UserEntity | null> {
+  public async findByUsernameOrEmail(
+    identifier: string,
+  ): Promise<UserEntity | null> {
     const user = await this.repo.findOne({
       where: [{ userName: identifier }, { email: identifier }],
     });
@@ -41,11 +45,9 @@ export class UserService extends BaseService<UserEntity> {
     return user ?? null;
   }
 
-  /**
-   * Tạo user mới với hash password và kiểm tra unique
+  /**   * Kiểm tra userName và email đã tồn tại chưa
    */
-  async createUser(dto: CreateUserDto, user?: JwtPayload) {
-    // Kiểm tra unique userName/email
+  private async checkUserExisting(dto: CreateUserDto): Promise<void> {
     const existing = await this.repo.findOne({
       where: [{ userName: dto.userName }, { email: dto.email }],
     });
@@ -59,65 +61,97 @@ export class UserService extends BaseService<UserEntity> {
       }
       throw new ConflictException(ERROR_MESSAGES.USER_ALREADY_EXISTS);
     }
+  }
 
-    const saltRounds = 10;
-    const hash = await bcrypt.hash(dto.password, saltRounds);
+  /**
+   * Tạo user mới với hash password và kiểm tra unique
+   */
+  public async createUser(dto: CreateUserDto, user?: JwtPayload) {
+    return runInTransaction(this.entityManager, async (manager) => {
+      const userRepo = manager.getRepository(UserEntity);
 
-    const newUser = this.repo.create({
-      ...dto,
-      createdBy: user?.userId,
-      hashPassword: hash,
+      await this.checkUserExisting(dto);
+
+      const saltRounds = 10;
+      const hashPassword = await bcrypt.hash(dto.password, saltRounds);
+
+      const savedUser = await userRepo.save(
+        userRepo.create({
+          ...dto,
+          createdBy: user?.userId,
+          hashPassword,
+        }),
+      );
+
+      if (dto.groupIds?.length && user) {
+        await this.userGroupService.addUserToGroups(
+          dto.groupIds,
+          savedUser.id,
+          user?.userId,
+          manager,
+        );
+      }
+
+      return savedUser;
+    });
+  }
+
+  /**   * Kiểm tra email đã tồn tại chưa
+   */
+  private async checkEmailExisting(email: string): Promise<void> {
+    const existing = await this.repo.findOne({
+      where: { email },
     });
 
-    const savedUser = await this.repo.save(newUser);
-
-    // Nếu có groupIds, thêm user vào các groups
-    if (dto.groupIds && dto.groupIds.length > 0 && user) {
-      const groupIds = [...dto.groupIds];
-      while (groupIds.length > 0) {
-        const gid = groupIds.pop()!;
-        await this.userGroupService.addUsersToGroup(gid, [savedUser.id], user);
-      }
+    if (existing) {
+      throw new ConflictException(ERROR_MESSAGES.EMAIL_ALREADY_EXISTS);
     }
-
-    return savedUser;
   }
 
   /**
    * Cập nhật user
    */
   async updateUser(id: string, dto: UpdateUserDto, user?: JwtPayload) {
-    const existingUser = await this.repo.findOne({ where: { id } });
+    return runInTransaction(this.entityManager, async (manager) => {
+      const userRepo = manager.getRepository(UserEntity);
 
-    if (!existingUser) {
-      throw new NotFoundException(ERROR_MESSAGES.NOT_FOUND(ENTITY_NAMES.USER));
-    }
+      const existingUser = await userRepo.findOne({ where: { id } });
 
-    // Kiểm tra email unique nếu có thay đổi
-    if (dto.email && dto.email !== existingUser.email) {
-      const emailExists = await this.repo.findOne({
-        where: { email: dto.email },
-      });
-      if (emailExists) {
-        throw new ConflictException('Email đã tồn tại');
+      if (!existingUser) {
+        throw new NotFoundException(
+          ERROR_MESSAGES.NOT_FOUND(ENTITY_NAMES.USER),
+        );
       }
-    }
 
-    // Xử lý vô hiệu hóa tài khoản
-    if (
-      dto.isDisabled !== undefined &&
-      dto.isDisabled !== existingUser.isDisabled
-    ) {
-      existingUser.isDisabled = dto.isDisabled;
-      existingUser.disabledAt = dto.isDisabled ? new Date() : undefined;
-    }
+      if (dto.email && dto.email !== existingUser.email) {
+        await this.checkEmailExisting(dto.email);
+      }
 
-    Object.assign(existingUser, {
-      ...dto,
-      updatedBy: user?.userId,
+      // Handle disable / enable
+      if (
+        dto.isDisabled !== undefined &&
+        dto.isDisabled !== existingUser.isDisabled
+      ) {
+        existingUser.isDisabled = dto.isDisabled;
+        existingUser.disabledAt = dto.isDisabled ? new Date() : undefined;
+      }
+
+      Object.assign(existingUser, {
+        ...dto,
+        updatedBy: user?.userId,
+      });
+
+      if (dto.groupIds?.length && user) {
+        await this.userGroupService.updateUserGroups(
+          dto.groupIds,
+          existingUser.id,
+          user?.userId,
+          manager,
+        );
+      }
+
+      return userRepo.save(existingUser);
     });
-
-    return await this.repo.save(existingUser);
   }
 
   /**
@@ -128,29 +162,44 @@ export class UserService extends BaseService<UserEntity> {
     dto: ChangePasswordDto,
     user?: JwtPayload,
   ): Promise<void> {
-    const existingUser = await this.repo.findOne({ where: { id } });
+    const queryRunner = this.entityManager.connection.createQueryRunner();
+    await queryRunner.connect();
+    await queryRunner.startTransaction();
+    try {
+      const userRepo = queryRunner.manager.getRepository(UserEntity);
+      const existingUser = await userRepo.findOne({ where: { id } });
 
-    if (!existingUser) {
-      throw new NotFoundException('Không tìm thấy người dùng');
+      if (!existingUser) {
+        throw new NotFoundException(
+          ERROR_MESSAGES.NOT_FOUND(ENTITY_NAMES.USER),
+        );
+      }
+
+      const isMatch = await bcrypt.compare(
+        dto.currentPassword,
+        existingUser.hashPassword,
+      );
+
+      if (!isMatch) {
+        throw new BadRequestException(
+          ERROR_MESSAGES.CURRENT_PASSWORD_INCORRECT,
+        );
+      }
+
+      const saltRounds = 10;
+      const hash = await bcrypt.hash(dto.newPassword, saltRounds);
+
+      existingUser.hashPassword = hash;
+      existingUser.updatedBy = user?.userId;
+
+      await userRepo.save(existingUser);
+      await queryRunner.commitTransaction();
+    } catch (error) {
+      await queryRunner.rollbackTransaction();
+      throw error;
+    } finally {
+      await queryRunner.release();
     }
-
-    // Kiểm tra mật khẩu hiện tại
-    const isMatch = await bcrypt.compare(
-      dto.currentPassword,
-      existingUser.hashPassword,
-    );
-
-    if (!isMatch) {
-      throw new BadRequestException(ERROR_MESSAGES.CURRENT_PASSWORD_INCORRECT);
-    }
-
-    const saltRounds = 10;
-    const hash = await bcrypt.hash(dto.newPassword, saltRounds);
-
-    existingUser.hashPassword = hash;
-    existingUser.updatedBy = user?.userId;
-
-    await this.repo.save(existingUser);
   }
 
   /**
@@ -229,16 +278,33 @@ export class UserService extends BaseService<UserEntity> {
    * Vô hiệu hóa/kích hoạt tài khoản
    */
   async toggleDisabled(id: string, user?: JwtPayload) {
-    const existingUser = await this.repo.findOne({ where: { id } });
+    const queryRunner = this.entityManager.connection.createQueryRunner();
+    await queryRunner.connect();
+    await queryRunner.startTransaction();
+    try {
+      const userRepo = queryRunner.manager.getRepository(UserEntity);
+      const existingUser = await userRepo.findOne({ where: { id } });
 
-    if (!existingUser) {
-      throw new NotFoundException(ERROR_MESSAGES.NOT_FOUND(ENTITY_NAMES.USER));
+      if (!existingUser) {
+        throw new NotFoundException(
+          ERROR_MESSAGES.NOT_FOUND(ENTITY_NAMES.USER),
+        );
+      }
+
+      existingUser.isDisabled = !existingUser.isDisabled;
+      existingUser.disabledAt = existingUser.isDisabled
+        ? new Date()
+        : undefined;
+      existingUser.updatedBy = user?.userId;
+
+      const result = await userRepo.save(existingUser);
+      await queryRunner.commitTransaction();
+      return result;
+    } catch (error) {
+      await queryRunner.rollbackTransaction();
+      throw error;
+    } finally {
+      await queryRunner.release();
     }
-
-    existingUser.isDisabled = !existingUser.isDisabled;
-    existingUser.disabledAt = existingUser.isDisabled ? new Date() : undefined;
-    existingUser.updatedBy = user?.userId;
-
-    return await this.repo.save(existingUser);
   }
 }

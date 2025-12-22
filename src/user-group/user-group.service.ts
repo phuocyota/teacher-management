@@ -5,7 +5,7 @@ import {
   ForbiddenException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { EntityManager, Repository } from 'typeorm';
+import { EntityManager, In, Repository } from 'typeorm';
 import { UserRepositoryService } from '../user/user-repository.service';
 import { GroupRepositoryService } from '../group/services/group-repository.service';
 import {
@@ -229,6 +229,79 @@ export class UserGroupService {
       currentUser,
     );
     return this.toWithMembersDto(group);
+  }
+
+  /**   * Thêm user vào nhiều group (dùng trong tạo user hoặc cập nhật user)
+   */
+  public async addUserToGroups(
+    groupIds: string[],
+    userId: string,
+    createdBy: string,
+    queryRunner: EntityManager,
+  ): Promise<void> {
+    await this.groupRepoService.validateGroupsExist(groupIds, queryRunner);
+
+    const userGroupRepo = queryRunner.getRepository(UserGroupEntity);
+
+    await userGroupRepo.save(
+      groupIds.map((groupId) =>
+        userGroupRepo.create({
+          groupId,
+          userId,
+          role: GroupMemberRole.MEMBER,
+          createdBy,
+        }),
+      ),
+    );
+  }
+
+  /**   * Cập nhật groups của user (dùng trong cập nhật user)
+   */
+  public async updateUserGroups(
+    groupIds: string[],
+    userId: string,
+    updatedBy: string,
+    manager: EntityManager,
+  ): Promise<void> {
+    // 1. Validate groups tồn tại (read-only, không lock)
+    await this.groupRepoService.validateGroupsExist(groupIds, manager);
+
+    const userGroupRepo = manager.getRepository(UserGroupEntity);
+
+    // 2. Lấy group hiện tại của user
+    const existingRelations = await userGroupRepo.find({
+      where: { userId },
+      select: ['groupId'],
+    });
+
+    const existingGroupIds = existingRelations.map((r) => r.groupId);
+
+    // 3. Tính diff
+    const toAdd = groupIds.filter((id) => !existingGroupIds.includes(id));
+
+    const toRemove = existingGroupIds.filter((id) => !groupIds.includes(id));
+
+    // 4. Remove group cũ
+    if (toRemove.length > 0) {
+      await userGroupRepo.delete({
+        userId,
+        groupId: In(toRemove),
+      });
+    }
+
+    // 5. Add group mới
+    if (toAdd.length > 0) {
+      await userGroupRepo.save(
+        toAdd.map((groupId) =>
+          userGroupRepo.create({
+            userId,
+            groupId,
+            role: GroupMemberRole.MEMBER,
+            createdBy: updatedBy,
+          }),
+        ),
+      );
+    }
   }
 
   /**

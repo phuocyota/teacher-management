@@ -9,6 +9,7 @@ import {
   Body,
   Query,
   ParseUUIDPipe,
+  UseGuards,
 } from '@nestjs/common';
 import { UserService } from './user.service';
 import { ChangePasswordDto, UserQueryDto } from './dto/user.dto';
@@ -22,6 +23,9 @@ import {
 } from '@nestjs/swagger';
 import { User } from 'src/common/decorator/user.decorator';
 import type { JwtPayload } from 'src/common/interface/jwt-payload.interface';
+import { RolesGuard } from 'src/common/guard/roles.guard';
+import { Roles } from 'src/common/decorator/roles.decorator';
+import { UserType } from 'src/common/enum/user-type.enum';
 
 @ApiTags('User')
 @ApiBearerAuth('access-token')
@@ -29,6 +33,8 @@ import type { JwtPayload } from 'src/common/interface/jwt-payload.interface';
 export class UserController {
   constructor(private readonly userService: UserService) {}
 
+  @UseGuards(RolesGuard)
+  @Roles(UserType.ADMIN)
   @Post()
   @ApiOperation({ summary: 'Tạo người dùng mới' })
   @ApiResponse({ status: 201, description: 'Tạo thành công' })

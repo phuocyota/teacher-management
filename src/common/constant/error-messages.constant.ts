@@ -15,6 +15,7 @@ export const ERROR_MESSAGES = {
   NOT_FOUND: (entity: string) => `${entity} không tồn tại`,
   NOT_FOUND_WITH_ID: (entity: string, id: string) =>
     `${entity} với ID ${id} không tồn tại`,
+  SOME_ENTITY_NOT_FOUND: (entity: string) => `Một số ${entity} không tồn tại`,
 
   // Device errors
   DEVICE_REQUEST_ALREADY_PROCESSED: (status: string) =>
@@ -27,12 +28,14 @@ export const ERROR_MESSAGES = {
   NO_PERMISSION_REMOVE_MEMBER:
     'Bạn không có quyền xóa thành viên khỏi group này',
   SOME_USERS_NOT_FOUND: 'Một số user không tồn tại',
+  SOME_GROUPS_NOT_FOUND: 'Một số group không tồn tại',
 
   // User errors
   USERNAME_ALREADY_EXISTS: 'Tên đăng nhập đã tồn tại',
   EMAIL_ALREADY_EXISTS: 'Email đã tồn tại',
   USER_ALREADY_EXISTS: 'Người dùng đã tồn tại',
   CURRENT_PASSWORD_INCORRECT: 'Mật khẩu hiện tại không đúng',
+  NO_PERMISSION_CREATE_USER: 'Bạn không có quyền tạo người dùng',
 
   // Input errors
   INVALID_INPUT: 'Dữ liệu đầu vào không hợp lệ',
