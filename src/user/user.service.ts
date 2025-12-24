@@ -213,44 +213,63 @@ export class UserService extends BaseService<UserEntity> {
       userType,
       status,
       isDisabled,
+      groupId,
     } = query;
+
     const skip = (page - 1) * limit;
 
-    const whereConditions: Record<string, unknown> = {};
+    const qb = this.repo.createQueryBuilder('user');
 
+    /* =====================
+     * CONDITIONAL JOIN
+     * ===================== */
+    if (groupId) {
+      qb.innerJoin(
+        'user_group',
+        'ug',
+        'ug.user_id = user.id AND ug.group_id = :groupId',
+        { groupId },
+      );
+    }
+
+    /* =====================
+     * WHERE
+     * ===================== */
     if (userType) {
-      whereConditions.userType = userType;
+      qb.andWhere('user.userType = :userType', { userType });
     }
 
     if (status) {
-      whereConditions.status = status;
+      qb.andWhere('user.status = :status', { status });
     }
 
     if (isDisabled !== undefined) {
-      whereConditions.isDisabled = isDisabled;
+      qb.andWhere('user.isDisabled = :isDisabled', { isDisabled });
     }
 
-    const queryBuilder = this.repo.createQueryBuilder('user');
-
-    // Áp dụng điều kiện where
-    if (Object.keys(whereConditions).length > 0) {
-      Object.entries(whereConditions).forEach(([key, value]) => {
-        queryBuilder.andWhere(`user.${key} = :${key}`, { [key]: value });
-      });
-    }
-
-    // Tìm kiếm theo tên hoặc email
+    /* =====================
+     * SEARCH
+     * ===================== */
     if (search) {
-      queryBuilder.andWhere(
-        '(user.fullName ILIKE :search OR user.email ILIKE :search OR user.userName ILIKE :search)',
+      qb.andWhere(
+        `
+      (
+        user.fullName ILIKE :search
+        OR user.email ILIKE :search
+        OR user.userName ILIKE :search
+      )
+      `,
         { search: `%${search}%` },
       );
     }
 
-    const [items, total] = await queryBuilder
+    /* =====================
+     * PAGINATION
+     * ===================== */
+    const [items, total] = await qb
+      .orderBy('user.createdAt', 'DESC')
       .skip(skip)
       .take(limit)
-      .orderBy('user.createdAt', 'DESC')
       .getManyAndCount();
 
     return {

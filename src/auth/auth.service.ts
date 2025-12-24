@@ -1,6 +1,6 @@
 import { Injectable, UnauthorizedException } from '@nestjs/common';
 import * as jwt from 'jsonwebtoken';
-import * as bcrypt from 'bcrypt';
+import bcrypt from 'bcryptjs';
 import { LoginDto } from './dto/login.dto';
 import { CreateUserDto } from 'src/user/dto/create.dto';
 import { UserService } from 'src/user/user.service';
@@ -19,7 +19,7 @@ export class AuthService {
     const user = await this.userService.findByUsernameOrEmail(identifier);
     if (!user) return null;
     // Compare hashed password
-    const match = bcrypt.compare(password, user.hashPassword);
+    const match = await bcrypt.compare(password, user.hashPassword);
     if (!match) return null;
 
     return user;

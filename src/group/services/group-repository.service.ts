@@ -5,7 +5,7 @@ import { GroupEntity } from '../entity/group.entity';
 import { ERROR_MESSAGES } from 'src/common/constant/error-messages.constant';
 import { BaseService } from 'src/common/sql/base.service';
 import { GroupWithCountDto } from '../dto/group.dto';
-import { autoMapListToDto, autoMapToDto } from 'src/common/utils/auto-map.util';
+import { autoMapListToDto } from 'src/common/utils/auto-map.util';
 
 @Injectable()
 export class GroupRepositoryService extends BaseService<GroupEntity> {
@@ -84,7 +84,7 @@ export class GroupRepositoryService extends BaseService<GroupEntity> {
   /**
    * Lấy group theo ID với số lượng members (dùng raw SQL)
    */
-  async findOneWithMemberCount(id: string): Promise<GroupWithCountDto> {
+  async findOneWithMemberCount(id: string): Promise<GroupWithCountDto[]> {
     const query = `
       SELECT
         g.id,
@@ -98,7 +98,7 @@ export class GroupRepositoryService extends BaseService<GroupEntity> {
       WHERE g.id = $1
       GROUP BY g.id
     `;
-    return autoMapToDto(
+    return autoMapListToDto(
       GroupWithCountDto,
       await this.groupRepository.query(query, [id]),
     );
