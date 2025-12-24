@@ -470,7 +470,6 @@ export class UserGroupService {
       return [];
     }
 
-    const groups = userGroups.map((ug) => ug.group);
-    return groups.map((g) => autoMapToDto(GroupResponseDto, g));
+    return autoMapListToDto(GroupResponseDto, userGroups);
   }
 }
