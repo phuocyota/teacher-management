@@ -17,6 +17,7 @@ import {
 import { JwtPayload } from 'src/common/interface/jwt-payload.interface';
 import { UserType } from 'src/common/enum/user-type.enum';
 import { ERROR_MESSAGES } from 'src/common/constant/error-messages.constant';
+import { autoMapToDto } from 'src/common/utils/auto-map.util';
 
 @Injectable()
 export class LecturePermissionService {
@@ -28,24 +29,6 @@ export class LecturePermissionService {
     @InjectRepository(UserEntity)
     private readonly userRepo: Repository<UserEntity>,
   ) {}
-
-  /**
-   * Chuyển đổi Entity sang DTO
-   */
-  private toResponseDto(
-    entity: TeacherLecturePermissionEntity,
-  ): TeacherLecturePermissionResponseDto {
-    return {
-      id: entity.id,
-      lectureId: entity.lectureId,
-      teacherId: entity.teacherId,
-      permissionType: entity.permissionType,
-      grantedBy: entity.grantedBy,
-      expiresAt: entity.expiresAt,
-      createdAt: entity.createdAt,
-      updatedAt: entity.updatedAt,
-    };
-  }
 
   /**
    * Cấp quyền cho giáo viên xem bài giảng
@@ -92,8 +75,7 @@ export class LecturePermissionService {
       // Cập nhật quyền nếu đã tồn tại
       existing.permissionType = dto.permissionType;
       existing.expiresAt = dto.expiresAt ? new Date(dto.expiresAt) : undefined;
-      const updated = await this.permissionRepo.save(existing);
-      return this.toResponseDto(updated);
+      await this.permissionRepo.save(existing);
     }
 
     // Tạo quyền mới
@@ -106,7 +88,7 @@ export class LecturePermissionService {
     });
 
     const saved = await this.permissionRepo.save(permission);
-    return this.toResponseDto(saved);
+    return autoMapToDto(TeacherLecturePermissionResponseDto, saved);
   }
 
   /**
@@ -175,7 +157,9 @@ export class LecturePermissionService {
             permission = await manager.save(newPermission);
           }
 
-          results.push(this.toResponseDto(permission));
+          results.push(
+            autoMapToDto(TeacherLecturePermissionResponseDto, permission),
+          );
         }
 
         return results;
@@ -224,7 +208,9 @@ export class LecturePermissionService {
       order: { createdAt: 'DESC' },
     });
 
-    return permissions.map((p) => this.toResponseDto(p));
+    return permissions.map((p) =>
+      autoMapToDto(TeacherLecturePermissionResponseDto, p),
+    );
   }
 
   /**
@@ -241,7 +227,9 @@ export class LecturePermissionService {
       },
     });
 
-    return permission ? this.toResponseDto(permission) : null;
+    return permission
+      ? autoMapToDto(TeacherLecturePermissionResponseDto, permission)
+      : null;
   }
 
   /**
