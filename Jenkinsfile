@@ -2,8 +2,8 @@ pipeline {
   agent any
 
   environment {
-    APP_PATH = "/var/www/teacher-api"
-    PM2_APP = "teacher-api"
+    APP_PATH = "/var/www/teacher-management"
+    PM2_APP = "teacher-management"
   }
 
   stages {
@@ -11,7 +11,7 @@ pipeline {
     stage('Checkout') {
       steps {
         git branch: 'main',
-            url: 'https://github.com/your-org/your-repo.git'
+            url: 'https://github.com/se140866/teacher-management.git'
       }
     }
 
