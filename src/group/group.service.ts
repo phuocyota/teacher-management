@@ -21,20 +21,6 @@ export class GroupService {
   ) {}
 
   /**
-   * Chuyển đổi Entity sang DTO
-   */
-  private toResponseDto(group: GroupEntity): GroupResponseDto {
-    return autoMapToDto(GroupResponseDto, group);
-  }
-
-  /**
-   * Chuyển đổi danh sách Entity sang danh sách DTO
-   */
-  private toResponseDtos(groups: GroupEntity[]): GroupResponseDto[] {
-    return groups.map((g) => this.toResponseDto(g));
-  }
-
-  /**
    * Tạo group mới
    */
   async create(
@@ -46,7 +32,7 @@ export class GroupService {
     group.createdBy = user.userId;
     const savedGroup = await this.groupRepoService.save(group);
 
-    return this.toResponseDto(savedGroup);
+    return autoMapToDto(GroupResponseDto, savedGroup);
   }
 
   /**
@@ -54,7 +40,7 @@ export class GroupService {
    */
   async findAll(): Promise<GroupResponseDto[]> {
     const groups = await this.groupRepoService.findAllGroups(true);
-    return this.toResponseDtos(groups);
+    return autoMapListToDto(GroupResponseDto, groups);
   }
 
   /**
@@ -83,7 +69,7 @@ export class GroupService {
     Object.assign(group, dto, { updatedBy: user.userId });
 
     const savedGroup = await this.groupRepoService.save(group);
-    return this.toResponseDto(savedGroup);
+    return autoMapToDto(GroupResponseDto, savedGroup);
   }
 
   /**
@@ -105,7 +91,7 @@ export class GroupService {
    */
   async search(keyword: string): Promise<GroupResponseDto[]> {
     const groups = await this.groupRepoService.searchByName(keyword);
-    return this.toResponseDtos(groups);
+    return autoMapListToDto(GroupResponseDto, groups);
   }
 
   /**

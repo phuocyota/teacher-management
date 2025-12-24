@@ -519,7 +519,6 @@ export class UploadService {
         // Tạo permission records
         for (const teacherId of teacherIds) {
           const permission = this.permissionRepo.create({
-            // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
             lectureId: savedLecture.id,
             teacherId,
             permissionType: PermissionType.VIEW,
@@ -532,12 +531,10 @@ export class UploadService {
 
       return {
         fileId: savedFile.id,
-        // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
         lectureId: savedLecture.id,
         filename: savedFile.filename,
         originalName: savedFile.originalName,
         size: savedFile.size,
-        // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
         lectureTitle: savedLecture.title,
         teachersGranted,
         createdAt: savedFile.createdAt,
