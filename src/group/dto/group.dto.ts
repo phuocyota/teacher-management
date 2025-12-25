@@ -7,7 +7,7 @@ import {
   MaxLength,
   IsEnum,
 } from 'class-validator';
-import { GroupMemberRole } from '../enum/group-member-role.enum';
+import { GroupMemberRole } from '../../user-group/enum/group-member-role.enum';
 
 export class CreateGroupDto {
   @ApiProperty({
@@ -30,18 +30,7 @@ export class CreateGroupDto {
 
 export class UpdateGroupDto extends PartialType(CreateGroupDto) {}
 
-export class AddUsersToGroupDto {
-  @ApiProperty({
-    description: 'Danh sách user IDs để thêm vào group',
-    example: ['user-id-1', 'user-id-2'],
-    type: [String],
-  })
-  @IsArray()
-  @IsUUID('4', { each: true })
-  userIds: string[];
-}
-
-export class AddUserWithRoleDto {
+export class AddUserToGroupDto {
   @ApiProperty({
     description: 'User ID',
     example: 'user-id-1',
@@ -59,13 +48,13 @@ export class AddUserWithRoleDto {
   role?: GroupMemberRole;
 }
 
-export class AddUsersWithRoleDto {
+export class AddUsersToGroupDto {
   @ApiProperty({
     description: 'Danh sách users với role để thêm vào group',
-    type: [AddUserWithRoleDto],
+    type: [AddUserToGroupDto],
   })
   @IsArray()
-  users: AddUserWithRoleDto[];
+  users: AddUserToGroupDto[] | string[];
 }
 
 export class RemoveUsersFromGroupDto {

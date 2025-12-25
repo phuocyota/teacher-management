@@ -160,4 +160,8 @@ export class GroupRepositoryService extends BaseService<GroupEntity> {
       throw new NotFoundException(ERROR_MESSAGES.SOME_GROUPS_NOT_FOUND);
     }
   }
+
+  async findById(id: string): Promise<GroupEntity | null> {
+    return this.groupRepository.findOne({ where: { id } });
+  }
 }

@@ -1,5 +1,5 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { IsUUID, IsEnum } from 'class-validator';
+import { IsUUID, IsEnum, IsOptional } from 'class-validator';
 import { GroupMemberRole } from '../enum/group-member-role.enum';
 
 /**
@@ -20,12 +20,9 @@ export class UserGroupDto {
   @IsUUID('4')
   userId: string;
 
-  @ApiProperty({
-    description: 'Vai trò của user trong group',
-    enum: GroupMemberRole,
-  })
   @IsEnum(GroupMemberRole)
-  role: GroupMemberRole;
+  @IsOptional()
+  role?: GroupMemberRole;
 
   @ApiPropertyOptional({
     description: 'Ngày tạo',
@@ -155,10 +152,6 @@ export class UserGroupItemDto {
   })
   name: string;
 
-  @ApiProperty({
-    description: 'Vai trò của user trong group',
-    enum: GroupMemberRole,
-  })
   role: GroupMemberRole;
 }
 
@@ -172,9 +165,5 @@ export class CheckMembershipDto {
   })
   isMember: boolean;
 
-  @ApiPropertyOptional({
-    description: 'Vai trò của user trong group',
-    enum: GroupMemberRole,
-  })
   role?: GroupMemberRole;
 }

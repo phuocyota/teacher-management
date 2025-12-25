@@ -8,7 +8,7 @@ import {
 } from 'typeorm';
 import { GroupEntity } from 'src/group/entity/group.entity';
 import { UserEntity } from 'src/user/user.entity';
-import { GroupMemberRole } from 'src/group/enum/group-member-role.enum';
+import { GroupMemberRole } from 'src/user-group/enum/group-member-role.enum';
 import { BaseEntity } from 'src/common/sql/base.entity';
 
 /**

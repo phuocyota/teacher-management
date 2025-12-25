@@ -52,4 +52,5 @@ export const ENTITY_NAMES = {
   LICENSE: 'Giấy phép',
   LECTURE: 'Bài giảng',
   GROUP: 'Nhóm',
+  COURSE: 'Khóa học',
 };

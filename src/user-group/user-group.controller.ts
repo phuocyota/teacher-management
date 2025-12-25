@@ -17,20 +17,15 @@ import {
   ApiParam,
 } from '@nestjs/swagger';
 import { UserGroupService } from './user-group.service';
-import {
-  UserGroupItemDto,
-  CheckMembershipDto,
-} from '../group/dto/user-group.dto';
+import { UserGroupItemDto, CheckMembershipDto } from './dto/user-group.dto';
 import {
   AddUsersToGroupDto,
-  AddUsersWithRoleDto,
   RemoveUsersFromGroupDto,
   UpdateMemberRoleDto,
-  GroupWithMembersDto,
   GroupMemberDto,
   GroupResponseDto,
 } from '../group/dto/group.dto';
-import { GroupMemberRole } from '../group/enum/group-member-role.enum';
+import { GroupMemberRole } from './enum/group-member-role.enum';
 import { User } from 'src/common/decorator/user.decorator';
 import type { JwtPayload } from 'src/common/interface/jwt-payload.interface';
 
@@ -139,41 +134,15 @@ export class UserGroupController {
   @ApiResponse({
     status: 200,
     description: 'Thêm thành viên thành công',
-    type: GroupWithMembersDto,
   })
   @ApiResponse({ status: 404, description: 'Không tìm thấy group' })
   @ApiResponse({ status: 403, description: 'Không có quyền' })
-  async addMembers(
+  addUsersToGroup(
     @Param('groupId', ParseUUIDPipe) groupId: string,
     @Body() dto: AddUsersToGroupDto,
     @User() user: JwtPayload,
-  ): Promise<GroupWithMembersDto> {
-    return this.userGroupService.addUsersToGroup(groupId, dto.userIds, user);
-  }
-
-  @Post('group/:groupId/members-with-role')
-  @ApiOperation({ summary: 'Thêm users vào group với role' })
-  @ApiParam({ name: 'groupId', description: 'Group ID' })
-  @ApiResponse({
-    status: 200,
-    description: 'Thêm thành viên thành công',
-    type: GroupWithMembersDto,
-  })
-  @ApiResponse({ status: 404, description: 'Không tìm thấy group' })
-  @ApiResponse({ status: 403, description: 'Không có quyền' })
-  async addMembersWithRole(
-    @Param('groupId', ParseUUIDPipe) groupId: string,
-    @Body() dto: AddUsersWithRoleDto,
-    @User() user: JwtPayload,
-  ): Promise<GroupWithMembersDto> {
-    return this.userGroupService.addUsersWithRole(
-      groupId,
-      dto.users.map((u) => ({
-        userId: u.userId,
-        role: u.role || GroupMemberRole.MEMBER,
-      })),
-      user,
-    );
+  ): Promise<void> {
+    return this.userGroupService.addUsersToGroup(groupId, dto, user);
   }
 
   @Put('group/:groupId/members/:userId/role')
@@ -183,7 +152,6 @@ export class UserGroupController {
   @ApiResponse({
     status: 200,
     description: 'Cập nhật thành công',
-    type: GroupWithMembersDto,
   })
   @ApiResponse({ status: 404, description: 'Không tìm thấy group hoặc user' })
   @ApiResponse({ status: 403, description: 'Không có quyền' })
@@ -192,7 +160,7 @@ export class UserGroupController {
     @Param('userId', ParseUUIDPipe) userId: string,
     @Body() dto: UpdateMemberRoleDto,
     @User() user: JwtPayload,
-  ): Promise<GroupWithMembersDto> {
+  ): Promise<void> {
     return this.userGroupService.updateMemberRole(
       groupId,
       userId,
