@@ -138,17 +138,20 @@ export class UserGroupService {
     return runInTransaction(this.entityManager, async (manager) => {
       await this.checkGroupExists(groupId);
 
-      dto.users = dto.users.map((u) =>
-        typeof u === 'string' ? { userId: u, role: GroupMemberRole.MEMBER } : u,
-      );
-
       const records = dto.users.map((user) =>
-        manager.create(UserGroupEntity, {
-          groupId,
-          role: user.role,
-          userId: user.userId,
-          createdBy: currentUser.userId,
-        }),
+        typeof user === 'string'
+          ? manager.create(UserGroupEntity, {
+              groupId,
+              role: GroupMemberRole.MEMBER,
+              userId: user,
+              createdBy: currentUser.userId,
+            })
+          : manager.create(UserGroupEntity, {
+              groupId,
+              role: user.role,
+              userId: user.userId,
+              createdBy: currentUser.userId,
+            }),
       );
 
       await manager.save(UserGroupEntity, records);
