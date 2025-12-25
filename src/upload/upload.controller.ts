@@ -10,7 +10,6 @@ import {
   Res,
   Delete,
   Body,
-  Patch,
 } from '@nestjs/common';
 import { FileInterceptor, FilesInterceptor } from '@nestjs/platform-express';
 import {
@@ -30,14 +29,11 @@ import {
   UploadMultipleFilesResponseDto,
   GrantFileAccessDto,
   GrantFileAccessToManyDto,
-  UpdateFileVisibilityDto,
   FileAccessResponseDto,
 } from './dto/upload.dto';
-import { FileVisibility } from './enum/file-visibility.enum';
+import { FileType } from './enum/file-visibility.enum';
 import { User } from 'src/common/decorator/user.decorator';
 import type { JwtPayload } from 'src/common/interface/jwt-payload.interface';
-import { FileEntity } from './entity/file.entity';
-import { FileAccessEntity } from './entity/file-access.entity';
 
 // Interface cho Multer File
 interface MulterFile {
@@ -49,7 +45,6 @@ interface MulterFile {
 }
 
 // Cấu hình storage cho Multer
-// eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-call
 const storage = diskStorage({
   destination: './uploads',
   filename: (
@@ -119,11 +114,11 @@ export class UploadController {
           format: 'binary',
           description: 'File cần upload',
         },
-        visibility: {
+        fileType: {
           type: 'string',
-          enum: ['PUBLIC', 'PRIVATE', 'RESTRICTED'],
-          default: 'PRIVATE',
-          description: 'Mức độ hiển thị của file',
+          enum: ['NORMAL', 'CONFIG'],
+          default: 'NORMAL',
+          description: 'Loại file',
         },
         description: {
           type: 'string',
@@ -140,7 +135,6 @@ export class UploadController {
   @ApiResponse({ status: 400, description: 'File không hợp lệ' })
   @UseInterceptors(
     FileInterceptor('file', {
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
       storage,
       fileFilter,
       limits: {
@@ -151,13 +145,14 @@ export class UploadController {
   async uploadSingleFile(
     @UploadedFile() file: MulterFile,
     @User() user: JwtPayload,
-    @Body('visibility') visibility?: FileVisibility,
+    @Body('fileType') fileType?: FileType,
     @Body('description') description?: string,
-  ): Promise<FileEntity> {
+  ): Promise<UploadFileResponseDto> {
     return this.uploadService.handleFileUpload(
       file,
       user,
-      visibility || FileVisibility.PRIVATE,
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+      fileType || FileType.NORMAL,
       description,
     );
   }
@@ -177,11 +172,11 @@ export class UploadController {
           },
           description: 'Danh sách file cần upload (tối đa 10 file)',
         },
-        visibility: {
+        fileType: {
           type: 'string',
-          enum: ['PUBLIC', 'PRIVATE', 'RESTRICTED'],
-          default: 'PRIVATE',
-          description: 'Mức độ hiển thị của files',
+          enum: ['NORMAL', 'CONFIG'],
+          default: 'NORMAL',
+          description: 'Loại file',
         },
       },
     },
@@ -194,7 +189,6 @@ export class UploadController {
   @ApiResponse({ status: 400, description: 'File không hợp lệ' })
   @UseInterceptors(
     FilesInterceptor('files', 10, {
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
       storage,
       fileFilter,
       limits: {
@@ -205,27 +199,14 @@ export class UploadController {
   async uploadMultipleFiles(
     @UploadedFiles() files: MulterFile[],
     @User() user: JwtPayload,
-    @Body('visibility') visibility?: FileVisibility,
-  ): Promise<{ files: FileEntity[]; totalFiles: number }> {
+    @Body('fileType') fileType?: FileType,
+  ): Promise<UploadMultipleFilesResponseDto> {
     return this.uploadService.handleMultipleFilesUpload(
       files,
       user,
-      visibility || FileVisibility.PRIVATE,
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+      fileType || FileType.NORMAL,
     );
-  }
-
-  @Get('my-files')
-  @ApiOperation({ summary: 'Lấy danh sách file của tôi' })
-  @ApiResponse({ status: 200, description: 'Danh sách file' })
-  async getMyFiles(@User() user: JwtPayload): Promise<FileEntity[]> {
-    return this.uploadService.getMyFiles(user);
-  }
-
-  @Get('accessible')
-  @ApiOperation({ summary: 'Lấy danh sách file tôi có quyền truy cập' })
-  @ApiResponse({ status: 200, description: 'Danh sách file' })
-  async getAccessibleFiles(@User() user: JwtPayload): Promise<FileEntity[]> {
-    return this.uploadService.getAccessibleFiles(user);
   }
 
   @Get(':fileId/access')
@@ -239,7 +220,7 @@ export class UploadController {
   async getFileAccessList(
     @Param('fileId') fileId: string,
     @User() user: JwtPayload,
-  ): Promise<FileAccessEntity[]> {
+  ): Promise<FileAccessResponseDto[]> {
     return this.uploadService.getFileAccessList(fileId, user);
   }
 
@@ -255,7 +236,7 @@ export class UploadController {
     @Param('fileId') fileId: string,
     @Body() dto: GrantFileAccessDto,
     @User() user: JwtPayload,
-  ): Promise<FileAccessEntity> {
+  ): Promise<FileAccessResponseDto> {
     return this.uploadService.grantFileAccess(
       fileId,
       dto.userId,
@@ -277,7 +258,7 @@ export class UploadController {
     @Param('fileId') fileId: string,
     @Body() dto: GrantFileAccessToManyDto,
     @User() user: JwtPayload,
-  ): Promise<FileAccessEntity[]> {
+  ): Promise<FileAccessResponseDto[]> {
     return this.uploadService.grantFileAccessToMany(
       fileId,
       dto.userIds,
@@ -287,46 +268,16 @@ export class UploadController {
     );
   }
 
-  @Delete(':fileId/access/:userId')
-  @ApiOperation({ summary: 'Thu hồi quyền truy cập file của user' })
-  @ApiResponse({ status: 200, description: 'Thu hồi quyền thành công' })
-  @ApiResponse({ status: 403, description: 'Không có quyền' })
-  async revokeFileAccess(
-    @Param('fileId') fileId: string,
-    @Param('userId') userId: string,
-    @User() user: JwtPayload,
-  ): Promise<{ message: string }> {
-    await this.uploadService.revokeFileAccess(fileId, userId, user);
-    return { message: 'Thu hồi quyền truy cập thành công' };
-  }
-
-  @Patch(':fileId/visibility')
-  @ApiOperation({ summary: 'Cập nhật visibility của file' })
-  @ApiResponse({ status: 200, description: 'Cập nhật thành công' })
-  @ApiResponse({ status: 403, description: 'Không có quyền' })
-  async updateFileVisibility(
-    @Param('fileId') fileId: string,
-    @Body() dto: UpdateFileVisibilityDto,
-    @User() user: JwtPayload,
-  ): Promise<FileEntity> {
-    return this.uploadService.updateFileVisibility(
-      fileId,
-      dto.visibility,
-      user,
-    );
-  }
-
   @Get('download/:filename')
-  @ApiOperation({ summary: 'Tải file về (có kiểm tra quyền)' })
+  @ApiOperation({ summary: 'Tải file về' })
   @ApiResponse({ status: 200, description: 'Trả về file' })
   @ApiResponse({ status: 403, description: 'Không có quyền tải file' })
   @ApiResponse({ status: 404, description: 'File không tồn tại' })
   async downloadFile(
     @Param('filename') filename: string,
-    @User() user: JwtPayload,
     @Res() res: Response,
   ): Promise<void> {
-    const { filePath } = await this.uploadService.downloadFile(filename, user);
+    const { filePath } = await this.uploadService.downloadFile(filename);
     res.sendFile(filePath);
   }
 

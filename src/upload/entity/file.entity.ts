@@ -1,6 +1,6 @@
 import { Entity, Column } from 'typeorm';
 import { BaseEntity } from 'src/common/sql/base.entity';
-import { FileVisibility } from '../enum/file-visibility.enum';
+import { FileType } from '../enum/file-visibility.enum';
 
 @Entity('file')
 export class FileEntity extends BaseEntity {
@@ -20,12 +20,12 @@ export class FileEntity extends BaseEntity {
   size: number;
 
   @Column({
-    name: 'visibility',
+    name: 'file_type',
     type: 'enum',
-    enum: FileVisibility,
-    default: FileVisibility.PRIVATE,
+    enum: FileType,
+    default: FileType.NORMAL,
   })
-  visibility: FileVisibility;
+  fileType: FileType;
 
   @Column({ name: 'uploaded_by' })
   uploadedBy: string;

@@ -19,6 +19,21 @@ export enum FileVisibility {
 }
 
 /**
+ * Enum định nghĩa loại file
+ */
+export enum FileType {
+  /**
+   * File bình thường (ảnh, video, documents, etc.)
+   */
+  NORMAL = 'NORMAL',
+
+  /**
+   * File cấu hình (config files, settings, etc.)
+   */
+  CONFIG = 'CONFIG',
+}
+
+/**
  * Enum định nghĩa loại quyền truy cập file
  */
 export enum FileAccessType {

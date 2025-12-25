@@ -7,7 +7,9 @@ import {
   IsDateString,
   IsArray,
 } from 'class-validator';
-import { FileVisibility, FileAccessType } from '../enum/file-visibility.enum';
+import { FileAccessType, FileType } from '../enum/file-visibility.enum';
+import { FileEntity } from '../entity/file.entity';
+import { FileAccessEntity } from '../entity/file-access.entity';
 
 export class UploadFileResponseDto {
   @ApiProperty({
@@ -47,11 +49,47 @@ export class UploadFileResponseDto {
   size: number;
 
   @ApiProperty({
-    description: 'Mức độ hiển thị của file',
-    enum: FileVisibility,
-    example: FileVisibility.PRIVATE,
+    description: 'Loại file',
+    enum: FileType,
+    example: FileType.NORMAL,
   })
-  visibility: FileVisibility;
+  fileType: FileType;
+
+  @ApiPropertyOptional({
+    description: 'Mô tả file',
+  })
+  description?: string;
+
+  @ApiProperty({
+    description: 'ID người upload',
+  })
+  uploadedBy: string;
+
+  @ApiProperty({
+    description: 'Thời gian tạo',
+  })
+  createdAt: Date;
+
+  @ApiProperty({
+    description: 'Thời gian cập nhật',
+  })
+  updatedAt: Date;
+
+  static fromEntity(entity: FileEntity): UploadFileResponseDto {
+    const dto = new UploadFileResponseDto();
+    dto.id = entity.id;
+    dto.originalName = entity.originalName;
+    dto.filename = entity.filename;
+    dto.path = entity.path;
+    dto.mimetype = entity.mimetype;
+    dto.size = entity.size;
+    dto.fileType = entity.fileType;
+    dto.description = entity.description;
+    dto.uploadedBy = entity.uploadedBy;
+    dto.createdAt = entity.createdAt;
+    dto.updatedAt = entity.updatedAt;
+    return dto;
+  }
 }
 
 export class UploadMultipleFilesResponseDto {
@@ -70,13 +108,13 @@ export class UploadMultipleFilesResponseDto {
 
 export class UploadFileDto {
   @ApiPropertyOptional({
-    description: 'Mức độ hiển thị của file',
-    enum: FileVisibility,
-    default: FileVisibility.PRIVATE,
+    description: 'Loại file',
+    enum: FileType,
+    default: FileType.NORMAL,
   })
-  @IsEnum(FileVisibility)
+  @IsEnum(FileType)
   @IsOptional()
-  visibility?: FileVisibility;
+  fileType?: FileType;
 
   @ApiPropertyOptional({
     description: 'Mô tả file',
@@ -139,16 +177,6 @@ export class GrantFileAccessToManyDto {
   expiresAt?: string;
 }
 
-export class UpdateFileVisibilityDto {
-  @ApiProperty({
-    description: 'Mức độ hiển thị mới của file',
-    enum: FileVisibility,
-    example: FileVisibility.RESTRICTED,
-  })
-  @IsEnum(FileVisibility)
-  visibility: FileVisibility;
-}
-
 export class FileAccessResponseDto {
   @ApiProperty({ description: 'ID của quyền truy cập' })
   id: string;
@@ -167,4 +195,22 @@ export class FileAccessResponseDto {
 
   @ApiPropertyOptional({ description: 'Thời gian hết hạn' })
   expiresAt?: Date;
+
+  @ApiProperty({ description: 'Người cấp quyền' })
+  grantedBy: string;
+
+  @ApiProperty({ description: 'Thời gian tạo' })
+  createdAt: Date;
+
+  static fromEntity(entity: FileAccessEntity): FileAccessResponseDto {
+    const dto = new FileAccessResponseDto();
+    dto.id = entity.id;
+    dto.fileId = entity.fileId;
+    dto.userId = entity.userId;
+    dto.accessType = entity.accessType;
+    dto.expiresAt = entity.expiresAt;
+    dto.grantedBy = entity.grantedBy;
+    dto.createdAt = entity.createdAt;
+    return dto;
+  }
 }
