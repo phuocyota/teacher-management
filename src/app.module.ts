@@ -27,9 +27,10 @@ import { GroupModule } from './group/group.module';
 import { GroupEntity } from './group/entity/group.entity';
 import { UserGroupEntity } from './user-group/entity/user-group.entity';
 import { UserGroupModule } from './user-group/user-group.module';
-import { TeacherLecturePermissionEntity } from './lecture/entity/teacher-lecture-permission.entity';
 import { CourseModule } from './course/course.module';
 import { CourseEntity } from './course/course.entity';
+import { LectureResourceEntity } from './lecture/entity/lecture_resource.entity';
+import { LectureContextEntity } from './lecture/entity/lecture_context.entity';
 
 @Module({
   imports: [
@@ -59,7 +60,8 @@ import { CourseEntity } from './course/course.entity';
           FileAccessEntity,
           GroupEntity,
           UserGroupEntity,
-          TeacherLecturePermissionEntity,
+          LectureResourceEntity,
+          LectureContextEntity,
         ],
         synchronize: true,
       }),

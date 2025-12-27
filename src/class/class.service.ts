@@ -2,18 +2,21 @@ import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { ClassEntity } from './class.entity';
-import { CreateClassDto, UpdateClassDto } from './dto/create-class.dto';
+import { CreateClassDto, UpdateClassDto } from './create-class.dto';
 import {
   ERROR_MESSAGES,
   ENTITY_NAMES,
 } from 'src/common/constant/error-messages.constant';
+import { BaseService } from 'src/common/sql/base.service';
 
 @Injectable()
-export class ClassService {
+export class ClassService extends BaseService<ClassEntity> {
   constructor(
     @InjectRepository(ClassEntity)
     private readonly classRepo: Repository<ClassEntity>,
-  ) {}
+  ) {
+    super(classRepo);
+  }
 
   async create(data: CreateClassDto): Promise<ClassEntity> {
     const record = this.classRepo.create(data);

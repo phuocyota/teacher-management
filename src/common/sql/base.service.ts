@@ -1,5 +1,11 @@
 import { NotFoundException } from '@nestjs/common';
-import { DeepPartial, FindOptionsWhere, Repository } from 'typeorm';
+import {
+  DeepPartial,
+  EntityManager,
+  FindOptionsWhere,
+  In,
+  Repository,
+} from 'typeorm';
 import { JwtPayload } from '../interface/jwt-payload.interface.js';
 import { BaseEntity } from './base.entity.js';
 import { ERROR_MESSAGES } from '../constant/error-messages.constant.js';
@@ -11,7 +17,7 @@ export abstract class BaseService<T extends BaseEntity> {
    * Chạy một hàm trong transaction
    * Nếu chưa có transaction, tạo mới; nếu đã có, chỉ execute hàm
    */
-  protected async runInTransaction<R>(callback: () => Promise<R>): Promise<R> {
+  public async runInTransaction<R>(callback: () => Promise<R>): Promise<R> {
     // Lấy QueryRunner từ connection
     const queryRunner = this.repo.manager.connection.createQueryRunner();
 
@@ -64,12 +70,31 @@ export abstract class BaseService<T extends BaseEntity> {
     return item;
   }
 
-  async create(dto: DeepPartial<T>, user: JwtPayload): Promise<T> {
-    const item = this.repo.create({
+  async findByIds(ids: string[]): Promise<T[]> {
+    const items = await this.repo.findBy({
+      id: In(ids),
+    } as FindOptionsWhere<T>);
+    if (!items || items.length === 0) {
+      throw new NotFoundException(
+        ERROR_MESSAGES.NOT_FOUND(this.getEntityName()),
+      );
+    }
+    return items;
+  }
+
+  async create(
+    dto: DeepPartial<T>,
+    user: JwtPayload,
+    manager?: EntityManager,
+  ): Promise<T> {
+    const repo = manager ? manager.getRepository(this.repo.target) : this.repo;
+
+    const item = repo.create({
       ...dto,
       createdBy: user.userId,
-    } as DeepPartial<T>);
-    return this.repo.save(item);
+    });
+
+    return repo.save(item);
   }
 
   async update(id: string, dto: DeepPartial<T>, user: JwtPayload): Promise<T> {
