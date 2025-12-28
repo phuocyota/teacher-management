@@ -161,8 +161,13 @@ export class UploadService {
   ): Promise<{ filePath: string; file: FileEntity }> {
     const file = await this.getFileByFilename(filename);
 
+    const absolutePath = this.getAbsoluteFilePath(filename);
+    if (!existsSync(absolutePath)) {
+      throw new NotFoundException('File không tồn tại trên server');
+    }
+
     return {
-      filePath: this.getFilePath(filename),
+      filePath: absolutePath,
       file,
     };
   }
@@ -319,9 +324,9 @@ export class UploadService {
     }
 
     // Xóa file vật lý
-    const filePath = join(this.uploadDir, filename);
-    if (existsSync(filePath)) {
-      unlinkSync(filePath);
+    const absolutePath = this.getAbsoluteFilePath(filename);
+    if (existsSync(absolutePath)) {
+      unlinkSync(absolutePath);
     }
 
     // Xóa trong database (cascade sẽ xóa cả file_access)
@@ -332,6 +337,15 @@ export class UploadService {
 
   /**
    * Lấy đường dẫn đầy đủ của file
+   */
+  private getAbsoluteFilePath(filename: string): string {
+    // Note: `file.path` được lưu bởi multer là một đường dẫn tương đối như 'uploads/filename.ext'
+    // Chúng ta cần một đường dẫn tuyệt đối để đảm bảo res.sendFile hoạt động đáng tin cậy
+    return join(process.cwd(), this.uploadDir, filename);
+  }
+
+  /**
+   * Lấy đường dẫn tương đối của file (giữ lại để tương thích nếu cần)
    */
   private getFilePath(filename: string): string {
     return join(this.uploadDir, filename);

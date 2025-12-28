@@ -4,9 +4,9 @@ import { LectureResourceEntity } from './lecture_resource.entity';
 
 @Entity('lecture')
 export class LectureEntity extends BaseEntity {
-  @Column({ unique: true })
+  @Column({ unique: true, nullable: true })
   @Index({ unique: true })
-  code: string; // Mã bài giảng (unique)
+  code!: string; // Mã bài giảng (unique)
 
   @Column()
   title: string; // Tiêu đề bài giảng
