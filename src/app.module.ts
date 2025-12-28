@@ -31,6 +31,8 @@ import { CourseModule } from './course/course.module';
 import { CourseEntity } from './course/course.entity';
 import { LectureResourceEntity } from './lecture/entity/lecture_resource.entity';
 import { LectureContextEntity } from './lecture/entity/lecture_context.entity';
+import { MiddlewareConsumer } from '@nestjs/common';
+import { RequestLoggerMiddleware } from './common/middleware/request-logger-middleware';
 
 @Module({
   imports: [
@@ -91,4 +93,8 @@ import { LectureContextEntity } from './lecture/entity/lecture_context.entity';
     },
   ],
 })
-export class AppModule {}
+export class AppModule {
+  configure(consumer: MiddlewareConsumer) {
+    consumer.apply(RequestLoggerMiddleware).forRoutes('*');
+  }
+}

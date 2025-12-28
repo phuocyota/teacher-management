@@ -9,7 +9,7 @@ import {
 } from '@nestjs/common';
 import { ApiTags, ApiBearerAuth } from '@nestjs/swagger';
 import { ClassService } from './class.service';
-import { CreateClassDto, UpdateClassDto } from './create-class.dto';
+import { CreateClassDto, UpdateClassDto } from './dto/create-class.dto';
 
 @ApiTags('Class')
 @ApiBearerAuth('access-token')

@@ -114,7 +114,7 @@ export class LectureService {
     dto: UpdateLectureDto,
     user: JwtPayload,
   ): Promise<LectureResponseDto> {
-    return await runInTransaction(this.entityManager, async (manager) => {
+    return runInTransaction(this.entityManager, async (manager) => {
       const lecture = await manager.findOne(LectureEntity, {
         where: { id },
         relations: ['resources'],

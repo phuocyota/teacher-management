@@ -5,7 +5,7 @@ import {
   IsOptional,
   IsString,
 } from 'class-validator';
-import { DisplayType } from './enum/display-type.enum';
+import { DisplayType } from '../enum/display-type.enum';
 
 export class CreateClassDto {
   @IsString()
