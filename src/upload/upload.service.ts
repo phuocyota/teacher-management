@@ -41,11 +41,7 @@ export class UploadService {
     private readonly fileAccessRepo: Repository<FileAccessEntity>,
     private readonly configService: ConfigService,
   ) {
-    // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
-    const uploadDirFromEnv = this.configService.get('UPLOAD_DIR');
-    this.uploadDir = uploadDirFromEnv || 'uploads';
-    console.log('🔍 UPLOAD_DIR configured:', this.uploadDir);
-    // Tạo thư mục uploads nếu chưa tồn tại
+    this.uploadDir = this.configService.get('UPLOAD_DIR') || 'uploads';
     this.ensureUploadDirExists();
   }
 
@@ -55,19 +51,13 @@ export class UploadService {
   private ensureUploadDirExists(): void {
     try {
       if (!existsSync(this.uploadDir)) {
-        console.log(`📁 Creating upload directory: ${this.uploadDir}`);
         mkdirSync(this.uploadDir, { recursive: true });
-        console.log('✅ Upload directory created successfully');
-      } else {
-        console.log(`✅ Upload directory already exists: ${this.uploadDir}`);
       }
     } catch (error) {
       // Gracefully handle permission errors
-      console.warn(
-        `⚠️  Warning: Cannot create upload directory at ${this.uploadDir}`,
+      throw new Error(
+        `Không thể tạo thư mục upload: ${this.uploadDir}. Vui lòng kiểm tra quyền truy cập., Error: ${error}`,
       );
-      console.warn('Make sure the directory exists and has write permissions.');
-      console.warn('Error:', error);
     }
   }
 
@@ -77,7 +67,6 @@ export class UploadService {
   async handleFileUpload(
     file: MulterFile,
     user: JwtPayload,
-    // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access
     fileType: FileType = FileType.NORMAL,
     description?: string,
   ): Promise<UploadFileResponseDto> {
@@ -91,7 +80,6 @@ export class UploadService {
       path: file.path,
       mimetype: file.mimetype,
       size: file.size,
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
       fileType,
       uploadedBy: user.userId,
       description,
@@ -99,7 +87,6 @@ export class UploadService {
     });
 
     const saved = await this.fileRepo.save(fileEntity);
-    // eslint-disable-next-line @typescript-eslint/no-unsafe-return, @typescript-eslint/no-unsafe-call
     return UploadFileResponseDto.fromEntity(saved);
   }
 
@@ -109,7 +96,6 @@ export class UploadService {
   async handleMultipleFilesUpload(
     files: MulterFile[],
     user: JwtPayload,
-    // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access
     fileType: FileType = FileType.NORMAL,
   ): Promise<UploadMultipleFilesResponseDto> {
     if (!files || files.length === 0) {
@@ -217,7 +203,6 @@ export class UploadService {
     }
 
     const saved = await this.fileAccessRepo.save(access);
-    // eslint-disable-next-line @typescript-eslint/no-unsafe-return, @typescript-eslint/no-unsafe-call
     return FileAccessResponseDto.fromEntity(saved);
   }
 
@@ -268,7 +253,6 @@ export class UploadService {
       relations: ['file'],
     });
 
-    // eslint-disable-next-line @typescript-eslint/no-unsafe-return, @typescript-eslint/no-unsafe-call
     return accessList.map((access) => FileAccessResponseDto.fromEntity(access));
   }
 
@@ -308,7 +292,6 @@ export class UploadService {
         new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
     );
 
-    // eslint-disable-next-line @typescript-eslint/no-unsafe-return, @typescript-eslint/no-unsafe-call
     return sorted.map((file) => UploadFileResponseDto.fromEntity(file));
   }
 

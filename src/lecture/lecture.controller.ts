@@ -6,6 +6,7 @@ import {
   Delete,
   Body,
   Param,
+  Query,
 } from '@nestjs/common';
 import {
   ApiTags,
@@ -15,12 +16,17 @@ import {
 } from '@nestjs/swagger';
 import { LectureService } from './services/lecture.service';
 import {
-  LectureResponseDto,
   CreateLectureDto,
+  GetAllLectureDto,
   UpdateLectureDto,
-} from './dto/lecture.dto';
+} from './dto/lecture.request.dto';
+import {
+  LectureResponse,
+  LectureResponseDto,
+} from './dto/lecture.response.dto';
 import { User } from 'src/common/decorator/user.decorator';
 import type { JwtPayload } from 'src/common/interface/jwt-payload.interface';
+import { PaginationResponseDto } from 'src/common/dto/pagingation.dto';
 
 @ApiTags('Lecture')
 @ApiBearerAuth('access-token')
@@ -48,10 +54,12 @@ export class LectureController {
   @ApiResponse({
     status: 200,
     description: 'List of lectures',
-    type: [LectureResponseDto],
+    type: PaginationResponseDto<LectureResponse>,
   })
-  findAll(): Promise<LectureResponseDto[]> {
-    return this.lectureService.findAll();
+  findAll(
+    @Query() dto: GetAllLectureDto,
+  ): Promise<PaginationResponseDto<LectureResponse>> {
+    return this.lectureService.findAll(dto);
   }
 
   @Get(':id')

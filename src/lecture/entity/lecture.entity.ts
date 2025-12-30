@@ -1,6 +1,7 @@
 import { Entity, Column, OneToMany, Index } from 'typeorm';
 import { BaseEntity } from '../../common/sql/base.entity';
 import { LectureResourceEntity } from './lecture_resource.entity';
+import { LectureContextEntity } from './lecture_context.entity';
 
 @Entity('lecture')
 export class LectureEntity extends BaseEntity {
@@ -25,4 +26,10 @@ export class LectureEntity extends BaseEntity {
     cascade: true,
   })
   resources?: LectureResourceEntity[];
+
+  //context
+  @OneToMany(() => LectureContextEntity, (context) => context.lecture, {
+    cascade: true,
+  })
+  contexts?: LectureContextEntity[];
 }

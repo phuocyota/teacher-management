@@ -12,55 +12,7 @@ import {
   Min,
 } from 'class-validator';
 import { Type } from 'class-transformer';
-
-export class LectureResponseDto {
-  @ApiProperty({ description: 'ID của bài giảng' })
-  id: string;
-
-  @ApiPropertyOptional({
-    type: 'string',
-    example: 'CS101',
-    description: 'Mã của bài giảng',
-  })
-  code?: string;
-
-  @ApiProperty({
-    type: 'string',
-    example: 'Giới thiệu về Khoa học Máy tính',
-    description: 'Tiêu đề của bài giảng',
-  })
-  title: string;
-
-  @ApiPropertyOptional({
-    type: 'string',
-    example: 'Đây là bài giảng đầu tiên trong khóa học.',
-    description: 'Ghi chú thêm cho bài giảng',
-  })
-  note?: string;
-
-  @ApiProperty({
-    type: 'number',
-    example: 1,
-    description: 'Thứ tự sắp xếp của bài giảng',
-    default: 0,
-  })
-  orderColumn: number;
-
-  @ApiPropertyOptional({
-    type: 'string',
-    description: 'Ảnh đại diện bài giảng (URL hoặc base64)',
-  })
-  avatar?: string;
-
-  @ApiProperty({ description: 'Người tạo' })
-  createdBy?: string;
-
-  @ApiProperty({ description: 'Thời gian tạo' })
-  createdAt?: Date;
-
-  @ApiProperty({ description: 'Thời gian cập nhật' })
-  updatedAt?: Date;
-}
+import { PaginationRequestDto } from 'src/common/dto/pagingation.dto';
 
 export class LectureResourceDto {
   @ApiProperty({
@@ -341,4 +293,31 @@ export class UpdateLectureDto {
   @ValidateNested({ each: true, message: 'Mỗi resource phải đúng định dạng' })
   @Type(() => LectureResourceDto)
   resources?: LectureResourceDto[];
+}
+
+// DTO dùng cho get danh sách bài giảng với phân trang và lọc
+export class GetAllLectureDto extends PaginationRequestDto {
+  @ApiPropertyOptional({
+    type: 'string',
+    format: 'uuid',
+  })
+  @IsOptional()
+  @IsUUID('4', { message: 'courseId phải là một UUID hợp lệ' })
+  courseId?: string;
+
+  @ApiPropertyOptional({
+    type: 'string',
+    format: 'uuid',
+  })
+  @IsOptional()
+  @IsUUID('4', { message: 'classId phải là một UUID hợp lệ' })
+  classId?: string;
+
+  @ApiPropertyOptional({
+    type: 'string',
+    format: 'uuid',
+  })
+  @IsOptional()
+  @IsUUID('4', { message: 'groupId phải là một UUID hợp lệ' })
+  groupId?: string;
 }

@@ -8,8 +8,15 @@ import { EntityManager, Repository } from 'typeorm';
 import { LectureEntity } from '../entity/lecture.entity';
 import { LectureContextEntity } from '../entity/lecture_context.entity';
 import { LectureResourceEntity } from '../entity/lecture_resource.entity';
-import { LectureResponseDto } from '../dto/lecture.dto';
-import type { CreateLectureDto, UpdateLectureDto } from '../dto/lecture.dto';
+import {
+  LectureResponse,
+  LectureResponseDto,
+} from '../dto/lecture.response.dto';
+import type {
+  CreateLectureDto,
+  GetAllLectureDto,
+  UpdateLectureDto,
+} from '../dto/lecture.request.dto';
 import { JwtPayload } from 'src/common/interface/jwt-payload.interface';
 import { UserType } from 'src/common/enum/user-type.enum';
 import { ERROR_MESSAGES } from 'src/common/constant/error-messages.constant';
@@ -18,6 +25,8 @@ import { ClassService } from 'src/class/class.service';
 import { CourseService } from 'src/course/course.service';
 import { GroupService } from 'src/group/group.service';
 import { runInTransaction } from 'src/common/database/transaction.utils';
+import { PaginationResponseDto } from 'src/common/dto/pagingation.dto';
+import { autoMapListToDto } from 'src/common/utils/auto-map.util';
 
 @Injectable()
 export class LectureService {
@@ -86,12 +95,63 @@ export class LectureService {
     });
   }
 
-  async findAll(): Promise<LectureResponseDto[]> {
-    const lectures = await this.lectureRepository.find({
-      relations: ['resources'],
-      order: { orderColumn: 'ASC' },
-    });
-    return lectures;
+  async findAll(
+    dto: GetAllLectureDto,
+  ): Promise<PaginationResponseDto<LectureResponse>> {
+    const { courseId, classId, groupId, search, page = 1, size = 10 } = dto;
+
+    const query = this.lectureRepository
+      .createQueryBuilder('lecture')
+      .innerJoin('lecture.contexts', 'context')
+      .select([
+        'lecture.id AS id',
+        'lecture.code AS code',
+        'lecture.title AS title',
+        'lecture.note AS note',
+        'lecture.orderColumn AS "orderColumn"',
+        'lecture.avatar AS avatar',
+        'lecture.createdAt AS "createdAt"',
+        'lecture.updatedAt AS "updatedAt"',
+        'lecture.createdBy AS "createdBy"',
+        'lecture.updatedBy AS "updatedBy"',
+        'context.groupId AS "groupId"',
+        'context.classId AS "classId"',
+        'context.courseId AS "courseId"',
+      ])
+      .orderBy('lecture.orderColumn', 'ASC')
+      .skip((page - 1) * size)
+      .take(size)
+      .distinct(true);
+
+    if (courseId) {
+      query.andWhere('context.courseId = :courseId', { courseId });
+    }
+
+    if (classId) {
+      query.andWhere('context.classId = :classId', { classId });
+    }
+
+    if (groupId) {
+      query.andWhere('context.groupId = :groupId', { groupId });
+    }
+
+    if (search) {
+      query.andWhere('lecture.title ILIKE :search', {
+        search: `%${search}%`,
+      });
+    }
+
+    const [raw, total] = await Promise.all([
+      query.getRawMany(),
+      query.getCount(),
+    ]);
+
+    return {
+      page,
+      size,
+      total,
+      data: autoMapListToDto(LectureResponseDto, raw),
+    };
   }
 
   async findOne(id: string): Promise<LectureResponseDto> {
