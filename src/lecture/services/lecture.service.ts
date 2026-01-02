@@ -27,6 +27,7 @@ import { GroupService } from 'src/group/group.service';
 import { runInTransaction } from 'src/common/database/transaction.utils';
 import { PaginationResponseDto } from 'src/common/dto/pagingation.dto';
 import { autoMapListToDto } from 'src/common/utils/auto-map.util';
+import { EMPTY_UUID } from 'src/common/constant/constant';
 
 @Injectable()
 export class LectureService {
@@ -82,6 +83,10 @@ export class LectureService {
           await this.groupService.checkById(dto.groupId);
         }
 
+        if (!dto.groupId && dto.userId) {
+          dto.groupId = EMPTY_UUID;
+        }
+
         await manager.save(LectureContextEntity, {
           lectureId: saved.id,
           classId: dto.classId || null,
@@ -110,10 +115,6 @@ export class LectureService {
         'lecture.note AS note',
         'lecture.orderColumn AS "orderColumn"',
         'lecture.avatar AS avatar',
-        'lecture.createdAt AS "createdAt"',
-        'lecture.updatedAt AS "updatedAt"',
-        'lecture.createdBy AS "createdBy"',
-        'lecture.updatedBy AS "updatedBy"',
         'context.groupId AS "groupId"',
         'context.classId AS "classId"',
         'context.courseId AS "courseId"',
@@ -263,6 +264,10 @@ export class LectureService {
 
         if (dto.groupId) {
           await this.groupService.checkById(dto.groupId);
+        }
+
+        if (!dto.groupId && dto.userId) {
+          dto.groupId = EMPTY_UUID;
         }
 
         const existingContext = await manager.findOne(LectureContextEntity, {

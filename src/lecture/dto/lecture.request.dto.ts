@@ -67,6 +67,17 @@ export class CreateLectureDto {
   @MaxLength(50, { message: 'code không được vượt quá 50 ký tự' })
   code: string;
 
+  //userId
+  @ApiPropertyOptional({
+    type: 'string',
+    format: 'uuid',
+    example: 'u1u2u3u4-u5u6-u7u8-u9u0-u1u2u3u4u5u6',
+    description: 'UUID của người dùng (nếu cần xác định người tạo)',
+  })
+  @IsOptional()
+  @IsUUID('4', { message: 'userId phải là một UUID hợp lệ' })
+  userId?: string;
+
   @ApiProperty({
     type: 'string',
     example: 'Giới thiệu về Khoa học Máy tính',
@@ -252,6 +263,17 @@ export class UpdateLectureDto {
   @IsOptional()
   @IsUUID('4', { message: 'courseId phải là một UUID hợp lệ' })
   courseId?: string;
+
+  //userId
+  @ApiPropertyOptional({
+    type: 'string',
+    format: 'uuid',
+    example: 'u1u2u3u4-u5u6-u7u8-u9u0-u1u2u3u4u5u6',
+    description: 'UUID của người dùng (nếu cần xác định người tạo)',
+  })
+  @IsOptional()
+  @IsUUID('4', { message: 'userId phải là một UUID hợp lệ' })
+  userId?: string;
 
   @ApiPropertyOptional({
     type: 'string',

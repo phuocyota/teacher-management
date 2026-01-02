@@ -1,6 +1,7 @@
 import { Entity, Column, OneToMany, Generated } from 'typeorm';
 import { BaseEntity } from 'src/common/sql/base.entity';
 import { UserGroupEntity } from '../../user-group/entity/user-group.entity';
+import { GroupType } from '../enum/group-type.enum';
 
 @Entity('group')
 export class GroupEntity extends BaseEntity {
@@ -10,6 +11,14 @@ export class GroupEntity extends BaseEntity {
 
   @Column({ name: 'name', type: 'text' })
   name: string;
+
+  @Column({
+    name: 'type',
+    type: 'enum',
+    enum: GroupType,
+    default: GroupType.PERSONAL,
+  })
+  type: GroupType;
 
   /**
    * Quan hệ one-to-many với UserGroupEntity

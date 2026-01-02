@@ -27,7 +27,7 @@ export class PaginationRequestDto {
   //search
   @ApiPropertyOptional({
     type: 'string',
-    example: 'keyword',
+    example: 'search',
     description: 'Từ khóa tìm kiếm',
   })
   @IsOptional()
