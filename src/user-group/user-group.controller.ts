@@ -24,6 +24,7 @@ import {
   UpdateMemberRoleDto,
   GroupMemberDto,
   GroupResponseDto,
+  RemoveUserFromGroupDto,
 } from '../group/dto/group.dto';
 import { GroupMemberRole } from './enum/group-member-role.enum';
 import { User } from 'src/common/decorator/user.decorator';
@@ -188,5 +189,22 @@ export class UserGroupController {
       dto.userIds,
       user,
     );
+  }
+
+  @Delete('group/:groupId/member')
+  @ApiOperation({ summary: 'Xóa users khỏi group' })
+  @ApiParam({ name: 'groupId', description: 'Group ID' })
+  @ApiResponse({
+    status: 200,
+    description: 'Xóa thành viên thành công',
+  })
+  @ApiResponse({ status: 404, description: 'Không tìm thấy group' })
+  @ApiResponse({ status: 403, description: 'Không có quyền' })
+  async removeMember(
+    @Param('groupId', ParseUUIDPipe) groupId: string,
+    @Body() dto: RemoveUserFromGroupDto,
+    @User() user: JwtPayload,
+  ): Promise<void> {
+    return this.userGroupService.remoreUserFromGroup(groupId, dto.userId, user);
   }
 }

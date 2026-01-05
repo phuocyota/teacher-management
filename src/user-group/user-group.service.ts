@@ -275,6 +275,38 @@ export class UserGroupService {
     });
   }
 
+  async remoreUserFromGroup(
+    groupId: string,
+    userId: string,
+    currentUser: JwtPayload,
+  ): Promise<void> {
+    // Sử dụng transaction
+    await this.entityManager.connection.transaction(async (manager) => {
+      const groupEntity = await manager.findOne(GroupEntity, {
+        where: { id: groupId },
+        relations: ['members', 'members.user'],
+      });
+
+      if (!groupEntity) {
+        throw new NotFoundException(
+          ERROR_MESSAGES.NOT_FOUND_WITH_ID('Group', groupId),
+        );
+      }
+
+      // Kiểm tra quyền
+      if (
+        groupEntity.createdBy !== currentUser.userId &&
+        currentUser.userType !== UserType.ADMIN
+      ) {
+        throw new ForbiddenException(
+          ERROR_MESSAGES.NO_PERMISSION_REMOVE_MEMBER,
+        );
+      }
+
+      await manager.delete(UserGroupEntity, { groupId, userId });
+    });
+  }
+
   /**
    * Cập nhật role của user trong group
    */

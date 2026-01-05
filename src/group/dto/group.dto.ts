@@ -68,6 +68,16 @@ export class RemoveUsersFromGroupDto {
   userIds: string[];
 }
 
+export class RemoveUserFromGroupDto {
+  @ApiProperty({
+    description: 'ID của user để xóa khỏi group',
+    example: 'user-id-1',
+    type: String,
+  })
+  @IsUUID('4')
+  userId: string;
+}
+
 export class UpdateMemberRoleDto {
   @ApiProperty({
     description: 'Vai trò mới cho user',
