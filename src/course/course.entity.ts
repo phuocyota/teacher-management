@@ -4,7 +4,7 @@ import { ClassEntity } from 'src/class/class.entity';
 
 @Entity('course')
 export class CourseEntity extends BaseEntity {
-  @Column({ name: 'code', type: 'text', unique: true, nullable: false })
+  @Column({ name: 'code', type: 'text', nullable: false })
   code!: string;
 
   @Column({ name: 'name', type: 'text', nullable: false })

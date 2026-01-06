@@ -14,7 +14,7 @@ import { Status } from 'src/common/enum/status.enum';
 export class CreateCourseDto {
   @IsString()
   @IsNotEmpty()
-  @ApiProperty({ description: 'Unique course code', example: 'CS101' })
+  @ApiProperty({ description: 'course code', example: 'CS101' })
   code!: string;
 
   @IsString()
