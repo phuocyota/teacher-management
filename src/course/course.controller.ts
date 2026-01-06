@@ -40,13 +40,20 @@ export class CourseController {
     type: String,
     description: 'Search by code or name',
   })
+  @ApiQuery({
+    name: 'classId',
+    required: false,
+    type: String,
+    description: 'Filter courses by classId',
+  })
   @ApiOkResponse({ type: CourseListResponseDto })
   findAll(
     @Query('page') page?: number,
     @Query('size') size?: number,
     @Query('q') q?: string,
+    @Query('classId') classId?: string,
   ) {
-    return this.courseService.findAll(page, size, q);
+    return this.courseService.findAll(page, size, q, classId);
   }
 
   @Get(':id')

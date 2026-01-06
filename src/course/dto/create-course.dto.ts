@@ -8,6 +8,7 @@ import {
   IsDateString,
 } from 'class-validator';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+import { IsUUID } from 'class-validator';
 import { Status } from 'src/common/enum/status.enum';
 
 export class CreateCourseDto {
@@ -74,6 +75,14 @@ export class CreateCourseDto {
     example: 'Requires basic math knowledge',
   })
   note?: string;
+
+  @IsOptional()
+  @IsUUID()
+  @ApiPropertyOptional({
+    description: 'ID of the class this course belongs to',
+    example: '550e8400-e29b-41d4-a716-446655440000',
+  })
+  classId?: string;
 }
 
 export class UpdateCourseDto {
@@ -123,4 +132,12 @@ export class UpdateCourseDto {
     example: '2025-06-01',
   })
   endDate?: string;
+
+  @IsOptional()
+  @IsUUID()
+  @ApiPropertyOptional({
+    description: 'ID of the class this course belongs to',
+    example: '550e8400-e29b-41d4-a716-446655440000',
+  })
+  classId?: string;
 }
