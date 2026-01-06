@@ -3,7 +3,8 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { MulterModule } from '@nestjs/platform-express';
 import { ConfigService } from '@nestjs/config';
 import { diskStorage } from 'multer';
-import { extname } from 'path';
+import { extname, join } from 'path';
+import { mkdirSync } from 'fs';
 import { UploadController } from './upload.controller';
 import { UploadService } from './upload.service';
 import { FileEntity } from './entity/file.entity';
@@ -26,17 +27,53 @@ interface MulterFile {
 
         return {
           storage: diskStorage({
-            destination: uploadDir,
+            destination: (
+              _req: unknown,
+              file: MulterFile,
+              callback: (error: Error | null, destination: string) => void,
+            ) => {
+              try {
+                const raw = (file.originalname || '').replace(/\\\\/g, '/');
+                const dirPart = raw.includes('/')
+                  ? raw.split('/').slice(0, -1).join('/')
+                  : '';
+                // Prevent path traversal by removing '..'
+                const safeDir = dirPart
+                  .split('/')
+                  .filter((p) => p && p !== '..')
+                  .join('/');
+                const dest = safeDir ? join(uploadDir, safeDir) : uploadDir;
+                try {
+                  mkdirSync(dest, { recursive: true });
+                } catch (e) {
+                  // ignore
+                }
+                callback(null, dest);
+              } catch (e) {
+                callback(e as any, uploadDir);
+              }
+            },
             filename: (
               _req: unknown,
               file: MulterFile,
               callback: (error: Error | null, filename: string) => void,
             ) => {
-              const uniqueSuffix =
-                Date.now() + '-' + Math.round(Math.random() * 1e9);
-              const ext = extname(file.originalname);
-              const filename = `${uniqueSuffix}${ext}`;
-              callback(null, filename);
+              try {
+                let raw = (file.originalname || '').replace(/\\\\/g, '/');
+                // attempt to fix common mojibake (latin1 interpreted as utf8)
+                if (/[ÃÂÄ]/.test(raw)) {
+                  try {
+                    raw = Buffer.from(raw, 'latin1').toString('utf8');
+                  } catch (err) {
+                    // ignore conversion errors
+                  }
+                }
+                const base = raw.split('/').filter(Boolean).pop() || 'file';
+                const safeName = base.replace(/[<>:\\"/\\|?*]+/g, '_').trim();
+                callback(null, safeName);
+              } catch (e) {
+                callback(null, 'file');
+              }
             },
           }),
           fileFilter: (
@@ -58,6 +95,8 @@ interface MulterFile {
               'application/vnd.openxmlformats-officedocument.presentationml.presentation',
               'text/plain',
               'application/zip',
+              'application/x-zip-compressed',
+              'application/octet-stream',
               'application/x-rar-compressed',
               'video/mp4',
               'video/mpeg',

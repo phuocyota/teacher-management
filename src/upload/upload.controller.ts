@@ -28,6 +28,7 @@ import {
   GrantFileAccessToManyDto,
   FileAccessResponseDto,
 } from './dto/upload.dto';
+import { UploadFolderResponseDto } from './dto/upload.dto';
 import { FileType } from './enum/file-visibility.enum';
 import { User } from 'src/common/decorator/user.decorator';
 import type { JwtPayload } from 'src/common/interface/jwt-payload.interface';
@@ -93,6 +94,51 @@ export class UploadController {
     );
   }
 
+  @Post('large')
+  @ApiOperation({ summary: 'Upload file lớn (tối đa 2GB)' })
+  @ApiConsumes('multipart/form-data')
+  @ApiBody({
+    schema: {
+      type: 'object',
+      properties: {
+        file: {
+          type: 'string',
+          format: 'binary',
+          description: 'File cần upload',
+        },
+        fileType: {
+          type: 'string',
+          enum: ['NORMAL', 'CONFIG'],
+          default: 'NORMAL',
+          description: 'Loại file',
+        },
+        description: { type: 'string', description: 'Mô tả file' },
+      },
+    },
+  })
+  @ApiResponse({
+    status: 201,
+    description: 'Upload file thành công',
+    type: UploadFileResponseDto,
+  })
+  @ApiResponse({ status: 400, description: 'File không hợp lệ' })
+  @UseInterceptors(
+    FileInterceptor('file', { limits: { fileSize: 2147483648 } }),
+  )
+  async uploadLargeFile(
+    @UploadedFile() file: MulterFile,
+    @User() user: JwtPayload,
+    @Body('fileType') fileType?: FileType,
+    @Body('description') description?: string,
+  ): Promise<UploadFileResponseDto> {
+    return this.uploadService.handleFileUpload(
+      file,
+      user,
+      fileType || FileType.NORMAL,
+      description,
+    );
+  }
+
   @Post('multiple')
   @ApiOperation({ summary: 'Upload nhiều file (tối đa 10 file)' })
   @ApiConsumes('multipart/form-data')
@@ -130,6 +176,45 @@ export class UploadController {
     @Body('fileType') fileType?: FileType,
   ): Promise<UploadMultipleFilesResponseDto> {
     return this.uploadService.handleMultipleFilesUpload(
+      files,
+      user,
+      fileType || FileType.NORMAL,
+    );
+  }
+
+  @Post('folder')
+  @ApiOperation({ summary: 'Upload một thư mục (giữ nguyên cấu trúc thư mục)' })
+  @ApiConsumes('multipart/form-data')
+  @ApiBody({
+    schema: {
+      type: 'object',
+      properties: {
+        files: {
+          type: 'array',
+          items: { type: 'string', format: 'binary' },
+          description: 'Các file trong thư mục (kèm đường dẫn tương đối)',
+        },
+        fileType: {
+          type: 'string',
+          enum: ['NORMAL', 'CONFIG'],
+          default: 'NORMAL',
+          description: 'Loại file',
+        },
+      },
+    },
+  })
+  @ApiResponse({
+    status: 201,
+    description: 'Upload folder thành công',
+    type: UploadFolderResponseDto,
+  })
+  @UseInterceptors(FilesInterceptor('files', 1000, { preservePath: true }))
+  async uploadFolder(
+    @UploadedFiles() files: MulterFile[],
+    @User() user: JwtPayload,
+    @Body('fileType') fileType?: FileType,
+  ): Promise<UploadFolderResponseDto> {
+    return this.uploadService.handleFolderUpload(
       files,
       user,
       fileType || FileType.NORMAL,

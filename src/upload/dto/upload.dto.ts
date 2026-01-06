@@ -106,6 +106,43 @@ export class UploadMultipleFilesResponseDto {
   totalFiles: number;
 }
 
+export class UploadFolderResponseDto {
+  @ApiProperty({
+    description: 'Đường dẫn thư mục gốc đã upload (relative)',
+    example: 'my-folder',
+  })
+  folderPath: string;
+
+  @ApiProperty({
+    description: 'Danh sách các file đã upload với đường dẫn tương đối',
+    type: [UploadFileResponseDto],
+  })
+  files: UploadFileResponseDto[];
+
+  @ApiProperty({
+    description: 'Tổng số file đã upload',
+    example: 3,
+  })
+  totalFiles: number;
+
+  @ApiPropertyOptional({
+    description: 'Tổng kích thước tất cả file (bytes)',
+  })
+  totalSize?: number;
+
+  static from(
+    files: UploadFileResponseDto[],
+    folderPath = '',
+  ): UploadFolderResponseDto {
+    const dto = new UploadFolderResponseDto();
+    dto.folderPath = folderPath;
+    dto.files = files;
+    dto.totalFiles = files.length;
+    dto.totalSize = files.reduce((s, f) => s + (f.size || 0), 0);
+    return dto;
+  }
+}
+
 export class UploadFileDto {
   @ApiPropertyOptional({
     description: 'Loại file',

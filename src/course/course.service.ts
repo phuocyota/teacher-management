@@ -31,6 +31,22 @@ export class CourseService {
       }
     }
 
+    // Check duplicate code + classId (use QueryBuilder to handle NULL classId)
+    const qbCheck = this.courseRepo
+      .createQueryBuilder('c')
+      .where('c.code = :code', {
+        code: dto.code,
+      });
+    if (dto.classId) {
+      qbCheck.andWhere('c.class_id = :classId', { classId: dto.classId });
+    } else {
+      qbCheck.andWhere('c.class_id IS NULL');
+    }
+    const existing = await qbCheck.getOne();
+    if (existing) {
+      throw new BadRequestException('Mã khóa học đã tồn tại trong lớp này');
+    }
+
     const record = this.courseRepo.create(
       dto as unknown as Partial<CourseEntity>,
     );
@@ -89,6 +105,24 @@ export class CourseService {
       if (!cls) {
         throw new BadRequestException('classId không tồn tại');
       }
+    }
+
+    // Determine target code and classId after update
+    const targetCode = (dto as any).code ?? record.code;
+    const targetClassId = (dto as any).classId ?? record.classId;
+
+    // Check conflict using QueryBuilder to handle NULL classId
+    const qbConflict = this.courseRepo
+      .createQueryBuilder('c')
+      .where('c.code = :code', { code: targetCode });
+    if (targetClassId) {
+      qbConflict.andWhere('c.class_id = :classId', { classId: targetClassId });
+    } else {
+      qbConflict.andWhere('c.class_id IS NULL');
+    }
+    const conflict = await qbConflict.getOne();
+    if (conflict && conflict.id !== id) {
+      throw new BadRequestException('Mã khóa học đã tồn tại trong lớp này');
     }
 
     const updated = Object.assign(record, dto as any);

@@ -31,6 +31,11 @@ export enum FileType {
    * File cấu hình (config files, settings, etc.)
    */
   CONFIG = 'CONFIG',
+
+  /**
+   * File Giao án (temporary files)
+   */
+  LECTURE = 'LECTURE',
 }
 
 /**

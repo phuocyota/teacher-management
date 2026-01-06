@@ -1,7 +1,8 @@
 import { BaseEntity } from 'src/common/sql/base.entity';
-import { Entity, Column, ManyToOne, JoinColumn } from 'typeorm';
+import { Entity, Column, ManyToOne, JoinColumn, Index } from 'typeorm';
 import { ClassEntity } from 'src/class/class.entity';
 
+@Index(['code', 'classId'], { unique: true })
 @Entity('course')
 export class CourseEntity extends BaseEntity {
   @Column({ name: 'code', type: 'text', nullable: false })

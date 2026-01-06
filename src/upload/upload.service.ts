@@ -7,8 +7,18 @@ import {
 import { ConfigService } from '@nestjs/config';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, In } from 'typeorm';
-import { existsSync, mkdirSync, unlinkSync } from 'fs';
-import { join } from 'path';
+import {
+  existsSync,
+  mkdirSync,
+  unlinkSync,
+  renameSync,
+  createWriteStream,
+  readdirSync,
+  lstatSync,
+} from 'fs';
+import * as yauzl from 'yauzl';
+import * as iconv from 'iconv-lite';
+import { join, dirname, isAbsolute, sep, normalize } from 'path';
 import { FileEntity } from './entity/file.entity';
 import { FileAccessEntity } from './entity/file-access.entity';
 import { FileAccessType, FileType } from './enum/file-visibility.enum';
@@ -16,6 +26,7 @@ import {
   UploadFileResponseDto,
   UploadMultipleFilesResponseDto,
   FileAccessResponseDto,
+  UploadFolderResponseDto,
 } from './dto/upload.dto';
 import { JwtPayload } from 'src/common/interface/jwt-payload.interface';
 import { UserType } from 'src/common/enum/user-type.enum';
@@ -74,19 +85,22 @@ export class UploadService {
       throw new BadRequestException('Không có file nào được upload');
     }
 
-    const fileEntity = this.fileRepo.create({
-      originalName: file.originalname,
-      filename: file.filename,
-      path: file.path,
-      mimetype: file.mimetype,
-      size: file.size,
-      fileType,
-      uploadedBy: user.userId,
-      description,
-      createdBy: user.userId,
-    });
+    const originalName = this.normalizeOriginalName(file.originalname);
 
-    const saved = await this.fileRepo.save(fileEntity);
+    const saved = await this.fileRepo.save(
+      this.fileRepo.create({
+        originalName,
+        filename: file.filename,
+        path: file.path,
+        mimetype: file.mimetype,
+        size: file.size,
+        fileType,
+        description,
+        createdBy: user.userId,
+        uploadedBy: user.userId,
+      }),
+    );
+
     return UploadFileResponseDto.fromEntity(saved);
   }
 
@@ -113,6 +127,75 @@ export class UploadService {
       files: savedFiles,
       totalFiles: savedFiles.length,
     };
+  }
+
+  /**
+   * Xử lý upload một thư mục (nhiều file), giữ nguyên cấu trúc thư mục nếu client gửi kèm đường dẫn
+   */
+  async handleFolderUpload(
+    files: MulterFile[],
+    user: JwtPayload,
+    fileType: FileType = FileType.NORMAL,
+  ): Promise<UploadFolderResponseDto> {
+    if (!files || files.length === 0) {
+      throw new BadRequestException('Không có file nào được upload');
+    }
+
+    const savedFiles: UploadFileResponseDto[] = [];
+
+    for (const file of files) {
+      // file.originalname có thể chứa đường dẫn tương đối do client (ví dụ webkitRelativePath)
+      // Lưu giữ cấu trúc bằng cách ghép với uploadDir
+      const relativePath = file.originalname || file.filename;
+      const destPath = join(this.uploadDir, relativePath);
+
+      // Tạo thư mục đích nếu chưa tồn tại
+      try {
+        mkdirSync(dirname(destPath), { recursive: true });
+      } catch (err) {}
+
+      // Di chuyển file tạm của multer tới vị trí đích nếu cần
+      try {
+        if (file.path && file.path !== destPath) {
+          renameSync(file.path, destPath);
+        }
+      } catch (err) {
+        // Nếu không thể rename, ignore và tiếp tục — multer có thể đã lưu đúng chỗ
+      }
+
+      // Tạo entity và lưu vào DB
+      const originalName = this.normalizeOriginalName(file.originalname);
+      const fileEntity = this.fileRepo.create({
+        originalName,
+        filename: relativePath.split(/[\\/]/).pop(),
+        path: join(this.uploadDir, relativePath),
+        mimetype: file.mimetype,
+        size: file.size,
+        fileType,
+        uploadedBy: user.userId,
+        createdBy: user.userId,
+      });
+
+      const saved = await this.fileRepo.save(fileEntity);
+      savedFiles.push(UploadFileResponseDto.fromEntity(saved));
+    }
+
+    // Tìm thư mục gốc chung (nếu có)
+    const paths = files.map((f) => f.originalname || f.filename);
+    const splitPaths = paths.map((p) => p.split(/[\\/]+/).filter(Boolean));
+    let commonParts: string[] = [];
+    if (splitPaths.length > 0) {
+      for (let i = 0; ; i++) {
+        const part = splitPaths[0][i];
+        if (!part) break;
+        if (splitPaths.every((sp) => sp[i] === part)) {
+          commonParts.push(part);
+        } else break;
+      }
+    }
+    const folderPath = commonParts.join('/');
+
+    return UploadFolderResponseDto.from(savedFiles, folderPath);
   }
 
   /**
@@ -322,15 +405,46 @@ export class UploadService {
    * Lấy đường dẫn đầy đủ của file
    */
   private getAbsoluteFilePath(filename: string): string {
-    // Note: `file.path` được lưu bởi multer là một đường dẫn tương đối như 'uploads/filename.ext'
-    // Chúng ta cần một đường dẫn tuyệt đối để đảm bảo res.sendFile hoạt động đáng tin cậy
-    return join(process.cwd(), this.uploadDir, filename);
+    // Handle cases where `filename` is:
+    // - an absolute path -> return as-is
+    // - already contains the uploadDir as prefix (eg 'uploads/xxx' or 'uploads\\xxx') -> strip prefix
+    // - a plain filename -> join with uploadDir
+    if (!filename) {
+      throw new Error('Filename is required');
+    }
+
+    // If absolute, return normalized absolute path
+    if (isAbsolute(filename)) {
+      return normalize(filename);
+    }
+
+    // Normalize separators
+    let normalized = filename.replace(/\\/g, '/');
+
+    const uploadPrefix = this.uploadDir.replace(/\\/g, '/');
+    if (normalized.startsWith(uploadPrefix + '/')) {
+      // remove leading uploadDir/
+      normalized = normalized.substring(uploadPrefix.length + 1);
+    }
+
+    return join(process.cwd(), this.uploadDir, normalized);
   }
 
   /**
-   * Lấy đường dẫn tương đối của file (giữ lại để tương thích nếu cần)
+   * Normalize original filename to UTF-8 when common garbling (latin1 interpretation) occurs.
    */
-  private getFilePath(filename: string): string {
-    return join(this.uploadDir, filename);
+  private normalizeOriginalName(name?: string): string {
+    if (!name) return 'unknown';
+    // If name contains common mojibake markers (Ã, Â, Ä), attempt latin1->utf8 conversion
+    if (/[ÃÂÄ]/.test(name)) {
+      try {
+        const converted = Buffer.from(name, 'latin1').toString('utf8');
+        return converted;
+      } catch (err) {
+        return name;
+      }
+    }
+
+    return name;
   }
 }
