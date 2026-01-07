@@ -245,6 +245,9 @@ export class UploadService {
       }),
     });
 
+    const fileUrl = process.env.FILE + file.path;
+    console.log('FILE URL:', fileUrl);
+
     res.setHeader(
       'Content-Disposition',
       response.headers['content-disposition'] ??
