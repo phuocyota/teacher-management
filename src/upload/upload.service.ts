@@ -22,6 +22,7 @@ import { JwtPayload } from 'src/common/interface/jwt-payload.interface';
 import { UserType } from 'src/common/enum/user-type.enum';
 import { ERROR_MESSAGES } from 'src/common/constant/error-messages.constant';
 import axios from 'axios';
+import * as https from 'https';
 import type { Response as ExpressResponse } from 'express';
 
 // Interface cho Multer File
@@ -239,6 +240,9 @@ export class UploadService {
     const response = await axios.get(process.env.FILE_SERVER + file.path, {
       responseType: 'stream',
       timeout: 0,
+      httpsAgent: new https.Agent({
+        rejectUnauthorized: false,
+      }),
     });
 
     res.setHeader(
