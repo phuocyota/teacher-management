@@ -9,7 +9,6 @@ import {
   Res,
   Delete,
   Body,
-  Req,
 } from '@nestjs/common';
 import { FileInterceptor, FilesInterceptor } from '@nestjs/platform-express';
 import {
@@ -282,11 +281,17 @@ export class UploadController {
   }
 
   @Get(':id/download')
-  async downloadFile(@Param('id') id: string, @Res() res: Response) {
-    return this.uploadService.downloadFile({
-      fileId: id,
-      res,
-    });
+  async download(@Param('id') id: string, @Res() res: Response) {
+    return this.uploadService.download(id, res);
+  }
+
+  @Get('download/:filename')
+  async downloadByFilename(
+    @Param('filename') filename: string,
+    @Res() res: Response,
+  ) {
+    const file = await this.uploadService.getFileByFilename(filename);
+    return this.uploadService.download(file.id, res);
   }
 
   @Delete(':filename')

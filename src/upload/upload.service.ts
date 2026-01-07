@@ -7,7 +7,7 @@ import {
 import { ConfigService } from '@nestjs/config';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, In } from 'typeorm';
-import { existsSync, mkdirSync, unlinkSync, renameSync } from 'fs';
+import { existsSync, mkdirSync, unlinkSync, renameSync, createReadStream, statSync } from 'fs';
 import { join, dirname, isAbsolute, normalize } from 'path';
 import { FileEntity } from './entity/file.entity';
 import { FileAccessEntity } from './entity/file-access.entity';
@@ -21,9 +21,7 @@ import {
 import { JwtPayload } from 'src/common/interface/jwt-payload.interface';
 import { UserType } from 'src/common/enum/user-type.enum';
 import { ERROR_MESSAGES } from 'src/common/constant/error-messages.constant';
-import axios from 'axios';
-import * as https from 'https';
-import type { Response as ExpressResponse } from 'express';
+import type { Response } from 'express';
 
 // Interface cho Multer File
 interface MulterFile {
@@ -215,46 +213,36 @@ export class UploadService {
     return file;
   }
 
-  async downloadFile({
-    fileId,
-    res,
-  }: {
-    fileId: string;
-    res: ExpressResponse;
-  }) {
-    const file = await this.getFileById(fileId);
-    return this.streamFileToResponse({
-      file,
-      res,
-    });
-  }
+  async download(fileId: string, res: Response) {
+    // 1️⃣ Lấy metadata file
+    const file = await this.fileRepo.findOne({ where: { id: fileId } });
 
-  // file-proxy.service.ts
-  async streamFileToResponse({
-    file,
-    res,
-  }: {
-    file: FileEntity;
-    res: ExpressResponse;
-  }) {
-    const response = await axios.get(process.env.FILE_SERVER + file.path, {
-      responseType: 'stream',
-      timeout: 0,
-      httpsAgent: new https.Agent({
-        rejectUnauthorized: false,
-      }),
-    });
+    if (!file) throw new NotFoundException('File not found');
 
-    const fileUrl = process.env.FILE + file.path;
-    console.log('FILE URL:', fileUrl);
+    // 2️⃣ Build local absolute path and validate
+    const absolutePath = this.getAbsoluteFilePath(file.path);
+    if (!existsSync(absolutePath)) {
+      throw new NotFoundException('File not found on storage');
+    }
 
+    const stats = statSync(absolutePath);
+    if (stats.isDirectory()) {
+      throw new BadRequestException('Downloading directories is not supported');
+    }
+
+    // 3️⃣ Set headers and stream file
     res.setHeader(
       'Content-Disposition',
-      response.headers['content-disposition'] ??
-        `attachment; filename="${file.originalName}"; filename*=UTF-8''${encodeURIComponent(file.originalName)}`,
+      `attachment; filename="${encodeURIComponent(file.originalName)}"`,
     );
+    res.setHeader('Content-Type', file.mimetype || 'application/octet-stream');
+    res.setHeader('Content-Length', stats.size.toString());
 
-    response.data.pipe(res);
+    const stream = createReadStream(absolutePath);
+    stream.on('error', (err) => {
+      res.status(500).end();
+    });
+    stream.pipe(res);
   }
 
   /**
