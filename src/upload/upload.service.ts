@@ -7,18 +7,8 @@ import {
 import { ConfigService } from '@nestjs/config';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, In } from 'typeorm';
-import {
-  existsSync,
-  mkdirSync,
-  unlinkSync,
-  renameSync,
-  createWriteStream,
-  readdirSync,
-  lstatSync,
-} from 'fs';
-import * as yauzl from 'yauzl';
-import * as iconv from 'iconv-lite';
-import { join, dirname, isAbsolute, sep, normalize } from 'path';
+import { existsSync, mkdirSync, unlinkSync, renameSync } from 'fs';
+import { join, dirname, isAbsolute, normalize } from 'path';
 import { FileEntity } from './entity/file.entity';
 import { FileAccessEntity } from './entity/file-access.entity';
 import { FileAccessType, FileType } from './enum/file-visibility.enum';
@@ -225,9 +215,7 @@ export class UploadService {
   /**
    * Tải file về (không kiểm tra quyền)
    */
-  downloadFile(
-    filename: string,
-  ): Promise<{ filePath: string; file: FileEntity }> {
+  async downloadFile(filename: string): Promise<{ filePath: string }> {
     const absolutePath = this.getAbsoluteFilePath(filename);
     if (!existsSync(absolutePath)) {
       throw new NotFoundException('File không tồn tại trên server');
