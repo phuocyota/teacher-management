@@ -236,7 +236,7 @@ export class UploadService {
     file: FileEntity;
     res: ExpressResponse;
   }) {
-    const response = await axios.get(process.env.FILE + file.path, {
+    const response = await axios.get(process.env.FILE_SERVER + file.path, {
       responseType: 'stream',
       timeout: 0,
     });
