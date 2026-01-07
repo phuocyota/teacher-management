@@ -225,11 +225,9 @@ export class UploadService {
   /**
    * Tải file về (không kiểm tra quyền)
    */
-  async downloadFile(
+  downloadFile(
     filename: string,
   ): Promise<{ filePath: string; file: FileEntity }> {
-    const file = await this.getFileByFilename(filename);
-
     const absolutePath = this.getAbsoluteFilePath(filename);
     if (!existsSync(absolutePath)) {
       throw new NotFoundException('File không tồn tại trên server');
@@ -237,7 +235,6 @@ export class UploadService {
 
     return {
       filePath: absolutePath,
-      file,
     };
   }
 
