@@ -9,8 +9,7 @@ import {
   Res,
   Delete,
   Body,
-  BadRequestException,
-  Query,
+  Req,
 } from '@nestjs/common';
 import { FileInterceptor, FilesInterceptor } from '@nestjs/platform-express';
 import {
@@ -282,15 +281,12 @@ export class UploadController {
     );
   }
 
-  @Get('download')
-  async downloadFile(
-    @Query('filename') filename: string,
-    @Res() res: Response,
-  ) {
-    if (!filename) throw new BadRequestException('Missing filename');
-
-    const { filePath } = await this.uploadService.downloadFile(filename);
-    res.sendFile(filePath);
+  @Get(':id/download')
+  async downloadFile(@Param('id') id: string, @Res() res: Response) {
+    return this.uploadService.downloadFile({
+      fileId: id,
+      res,
+    });
   }
 
   @Delete(':filename')

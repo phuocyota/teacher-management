@@ -21,6 +21,8 @@ import {
 import { JwtPayload } from 'src/common/interface/jwt-payload.interface';
 import { UserType } from 'src/common/enum/user-type.enum';
 import { ERROR_MESSAGES } from 'src/common/constant/error-messages.constant';
+import axios from 'axios';
+import type { Response as ExpressResponse } from 'express';
 
 // Interface cho Multer File
 interface MulterFile {
@@ -212,18 +214,40 @@ export class UploadService {
     return file;
   }
 
-  /**
-   * Tải file về (không kiểm tra quyền)
-   */
-  async downloadFile(filename: string): Promise<{ filePath: string }> {
-    const absolutePath = this.getAbsoluteFilePath(filename);
-    if (!existsSync(absolutePath)) {
-      throw new NotFoundException('File không tồn tại trên server');
-    }
+  async downloadFile({
+    fileId,
+    res,
+  }: {
+    fileId: string;
+    res: ExpressResponse;
+  }) {
+    const file = await this.getFileById(fileId);
+    return this.streamFileToResponse({
+      file,
+      res,
+    });
+  }
 
-    return {
-      filePath: absolutePath,
-    };
+  // file-proxy.service.ts
+  async streamFileToResponse({
+    file,
+    res,
+  }: {
+    file: FileEntity;
+    res: ExpressResponse;
+  }) {
+    const response = await axios.get(process.env.FILE + file.path, {
+      responseType: 'stream',
+      timeout: 0,
+    });
+
+    res.setHeader(
+      'Content-Disposition',
+      response.headers['content-disposition'] ??
+        `attachment; filename="${file.originalName}"; filename*=UTF-8''${encodeURIComponent(file.originalName)}`,
+    );
+
+    response.data.pipe(res);
   }
 
   /**
