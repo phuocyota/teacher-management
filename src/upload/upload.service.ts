@@ -585,8 +585,12 @@ export class UploadService {
     return name;
   }
 
+  getFilePath(filename: string): string {
+    return join(process.cwd(), this.uploadDir, filename);
+  }
+
   public downloadFile(filename: string): { filePath: string } {
-    const filePath = join(this.uploadDir, filename);
+    const filePath = this.getFilePath(filename);
     return { filePath };
   }
 }
