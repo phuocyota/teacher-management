@@ -284,6 +284,36 @@ export class UploadService {
   }
 
   /**
+   * Serve image file with appropriate content-type
+   */
+  async serveImage(filename: string, res: Response) {
+    const file = await this.getFileByFilename(filename);
+
+    const absolutePath = this.getAbsoluteFilePath(file.path);
+    if (!existsSync(absolutePath)) {
+      throw new NotFoundException('File not found on storage');
+    }
+
+    const stats = statSync(absolutePath);
+    if (stats.isDirectory()) {
+      throw new BadRequestException('Cannot serve a directory');
+    }
+
+    // Validate that file is an image
+    if (!file.mimetype || !file.mimetype.startsWith('image/')) {
+      throw new BadRequestException('File is not an image');
+    }
+
+    // Use sendFile for better performance and automatic content-type handling
+    res.sendFile(absolutePath, {
+      headers: {
+        'Content-Type': file.mimetype,
+        'Cache-Control': 'public, max-age=31536000',
+      },
+    });
+  }
+
+  /**
    * Stream file with support for Range requests (partial content)
    */
   async stream(fileId: string, req: Request, res: Response) {

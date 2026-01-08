@@ -311,6 +311,14 @@ export class UploadController {
     return this.uploadService.download(file.id, res);
   }
 
+  @Get('downloads/:filename/image')
+  @ApiOperation({ summary: 'Serve image file' })
+  @ApiResponse({ status: 200, description: 'Image được serve thành công' })
+  @ApiResponse({ status: 404, description: 'File không tồn tại' })
+  async serveImage(@Param('filename') filename: string, @Res() res: Response) {
+    return this.uploadService.serveImage(filename, res);
+  }
+
   @Get('stream/:filename')
   async streamByFilename(
     @Param('filename') filename: string,
