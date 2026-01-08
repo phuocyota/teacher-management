@@ -7,7 +7,14 @@ import {
 import { ConfigService } from '@nestjs/config';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, In } from 'typeorm';
-import { existsSync, mkdirSync, unlinkSync, renameSync, createReadStream, statSync } from 'fs';
+import {
+  existsSync,
+  mkdirSync,
+  unlinkSync,
+  renameSync,
+  createReadStream,
+  statSync,
+} from 'fs';
 import { join, dirname, isAbsolute, normalize } from 'path';
 import { FileEntity } from './entity/file.entity';
 import { FileAccessEntity } from './entity/file-access.entity';
@@ -21,7 +28,7 @@ import {
 import { JwtPayload } from 'src/common/interface/jwt-payload.interface';
 import { UserType } from 'src/common/enum/user-type.enum';
 import { ERROR_MESSAGES } from 'src/common/constant/error-messages.constant';
-import type { Response } from 'express';
+import type { Request, Response } from 'express';
 
 // Interface cho Multer File
 interface MulterFile {
@@ -77,6 +84,14 @@ export class UploadService {
     }
 
     const originalName = this.normalizeOriginalName(file.originalname);
+
+    // Prioritize checking duplicate by stored filename, then by originalName
+    const existingByName = await this.fileRepo.findOne({
+      where: { originalName },
+    });
+    if (existingByName) {
+      throw new BadRequestException('File đã tồn tại');
+    }
 
     const saved = await this.fileRepo.save(
       this.fileRepo.create({
@@ -144,6 +159,29 @@ export class UploadService {
       try {
         mkdirSync(dirname(destPath), { recursive: true });
       } catch (err) {}
+
+      // If destination already exists on disk or in DB, reject to avoid overwrite
+      if (existsSync(destPath)) {
+        throw new BadRequestException(`File ${relativePath} đã tồn tại`);
+      }
+      const dbPath = join(this.uploadDir, relativePath);
+      const existing = await this.fileRepo.findOne({ where: { path: dbPath } });
+      if (existing) {
+        throw new BadRequestException(`File ${relativePath} đã tồn tại`);
+      }
+
+      // Also check stored filename duplicate first
+      const storedFilename = relativePath.split(/[\\/]/).pop();
+      if (storedFilename) {
+        const existsByFilename = await this.fileRepo.findOne({
+          where: { filename: storedFilename },
+        });
+        if (existsByFilename) {
+          throw new BadRequestException(
+            `Tên file ${storedFilename} đã tồn tại`,
+          );
+        }
+      }
 
       // Di chuyển file tạm của multer tới vị trí đích nếu cần
       try {
@@ -243,6 +281,59 @@ export class UploadService {
       res.status(500).end();
     });
     stream.pipe(res);
+  }
+
+  /**
+   * Stream file with support for Range requests (partial content)
+   */
+  async stream(fileId: string, req: Request, res: Response) {
+    const file = await this.fileRepo.findOne({ where: { id: fileId } });
+
+    if (!file) throw new NotFoundException('File not found');
+
+    const absolutePath = this.getAbsoluteFilePath(file.path);
+    if (!existsSync(absolutePath)) {
+      throw new NotFoundException('File not found on storage');
+    }
+
+    const stats = statSync(absolutePath);
+    if (stats.isDirectory()) {
+      throw new BadRequestException('Streaming directories is not supported');
+    }
+
+    const fileSize = stats.size;
+    const range = req.headers.range;
+    const contentType = file.mimetype || 'application/octet-stream';
+
+    if (range) {
+      const parts = (range as string).replace(/bytes=/, '').split('-');
+      const start = parseInt(parts[0], 10);
+      const end = parts[1] ? parseInt(parts[1], 10) : fileSize - 1;
+
+      if (isNaN(start) || isNaN(end) || start > end || start >= fileSize) {
+        res.status(416).setHeader('Content-Range', `bytes */${fileSize}`);
+        return res.end();
+      }
+
+      res.status(206);
+      res.setHeader('Content-Range', `bytes ${start}-${end}/${fileSize}`);
+      res.setHeader('Accept-Ranges', 'bytes');
+      res.setHeader('Content-Length', (end - start + 1).toString());
+      res.setHeader('Content-Type', contentType);
+
+      const stream = createReadStream(absolutePath, { start, end });
+      stream.on('error', () => res.status(500).end());
+      stream.pipe(res);
+    } else {
+      res.status(200);
+      res.setHeader('Content-Length', fileSize.toString());
+      res.setHeader('Content-Type', contentType);
+      res.setHeader('Accept-Ranges', 'bytes');
+
+      const stream = createReadStream(absolutePath);
+      stream.on('error', () => res.status(500).end());
+      stream.pipe(res);
+    }
   }
 
   /**
@@ -379,6 +470,18 @@ export class UploadService {
         new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
     );
 
+    return sorted.map((file) => UploadFileResponseDto.fromEntity(file));
+  }
+
+  /**
+   * Lấy tất cả file (dành cho admin)
+   */
+  async getAllFiles(): Promise<UploadFileResponseDto[]> {
+    const files = await this.fileRepo.find();
+    const sorted = files.sort(
+      (a, b) =>
+        new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
+    );
     return sorted.map((file) => UploadFileResponseDto.fromEntity(file));
   }
 

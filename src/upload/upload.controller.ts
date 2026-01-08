@@ -9,6 +9,7 @@ import {
   Res,
   Delete,
   Body,
+  Req,
 } from '@nestjs/common';
 import { FileInterceptor, FilesInterceptor } from '@nestjs/platform-express';
 import {
@@ -19,7 +20,7 @@ import {
   ApiBody,
   ApiBearerAuth,
 } from '@nestjs/swagger';
-import type { Response } from 'express';
+import type { Response, Request } from 'express';
 import { UploadService } from './upload.service';
 import {
   UploadFileResponseDto,
@@ -32,6 +33,7 @@ import { UploadFolderResponseDto } from './dto/upload.dto';
 import { FileType } from './enum/file-visibility.enum';
 import { User } from 'src/common/decorator/user.decorator';
 import type { JwtPayload } from 'src/common/interface/jwt-payload.interface';
+import { UserType } from 'src/common/enum/user-type.enum';
 
 // Interface cho Multer File đã được chuyển sang module, nhưng vẫn cần ở đây cho type hinting
 interface MulterFile {
@@ -285,6 +287,21 @@ export class UploadController {
     return this.uploadService.download(id, res);
   }
 
+  @Get('list')
+  @ApiOperation({ summary: 'Lấy danh sách file user có quyền truy cập' })
+  @ApiResponse({
+    status: 200,
+    description: 'Danh sách file',
+    type: [UploadFileResponseDto],
+  })
+  async listFiles(@User() user: JwtPayload): Promise<UploadFileResponseDto[]> {
+    if (user.userType === UserType.ADMIN) {
+      return this.uploadService.getAllFiles();
+    }
+
+    return this.uploadService.getAccessibleFiles(user);
+  }
+
   @Get('download/:filename')
   async downloadByFilename(
     @Param('filename') filename: string,
@@ -292,6 +309,16 @@ export class UploadController {
   ) {
     const file = await this.uploadService.getFileByFilename(filename);
     return this.uploadService.download(file.id, res);
+  }
+
+  @Get('stream/:filename')
+  async streamByFilename(
+    @Param('filename') filename: string,
+    @Req() req: Request,
+    @Res() res: Response,
+  ) {
+    const file = await this.uploadService.getFileByFilename(filename);
+    return this.uploadService.stream(file.id, req, res);
   }
 
   @Delete(':filename')
