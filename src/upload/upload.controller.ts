@@ -312,13 +312,12 @@ export class UploadController {
   }
 
   @Get('downloads/:filename/image')
-  @ApiOperation({ summary: 'Serve image file' })
-  @ApiResponse({ status: 200, description: 'Image được serve thành công' })
-  @ApiResponse({ status: 404, description: 'File không tồn tại' })
-  async getImage(@Param('filename') filename: string, @Res() res: Response) {
-    const filePath = `/uploads/${filename}`;
-
-    res.setHeader('Content-Type', 'image/png');
+  downloadFile(
+    @Param('filename') filename: string,
+    @User() user: JwtPayload,
+    @Res() res: Response,
+  ): void {
+    const { filePath } = this.uploadService.downloadFile(filename);
     res.sendFile(filePath);
   }
 

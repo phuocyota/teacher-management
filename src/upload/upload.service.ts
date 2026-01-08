@@ -584,4 +584,9 @@ export class UploadService {
 
     return name;
   }
+
+  public downloadFile(filename: string): { filePath: string } {
+    const filePath = join(this.uploadDir, filename);
+    return { filePath };
+  }
 }
