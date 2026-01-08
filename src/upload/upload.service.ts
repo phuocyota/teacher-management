@@ -300,9 +300,9 @@ export class UploadService {
     }
 
     // Validate that file is an image
-    if (!file.mimetype || !file.mimetype.startsWith('image/')) {
-      throw new BadRequestException('File is not an image');
-    }
+    // if (!file.mimetype || !file.mimetype.startsWith('image/')) {
+    //   throw new BadRequestException('File is not an image');
+    // }
 
     // Use sendFile for better performance and automatic content-type handling
     res.sendFile(absolutePath, {
