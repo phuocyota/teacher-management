@@ -315,8 +315,8 @@ export class UploadController {
   @ApiOperation({ summary: 'Serve image file' })
   @ApiResponse({ status: 200, description: 'Image được serve thành công' })
   @ApiResponse({ status: 404, description: 'File không tồn tại' })
-  async getImage(@Param('name') name: string, @Res() res: Response) {
-    const filePath = `/uploads/${name}`;
+  async getImage(@Param('filename') filename: string, @Res() res: Response) {
+    const filePath = `/uploads/${filename}`;
 
     res.setHeader('Content-Type', 'image/png');
     res.sendFile(filePath);
