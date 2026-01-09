@@ -158,7 +158,9 @@ export class UploadService {
       // Tạo thư mục đích nếu chưa tồn tại
       try {
         mkdirSync(dirname(destPath), { recursive: true });
-      } catch (err) {}
+      } catch (err) {
+        throw new BadRequestException(err);
+      }
 
       // If destination already exists on disk or in DB, reject to avoid overwrite
       if (existsSync(destPath)) {
@@ -518,7 +520,10 @@ export class UploadService {
   /**
    * Xóa file (có kiểm tra quyền)
    */
-  async deleteFile(filename: string, user: JwtPayload): Promise<boolean> {
+  public async deleteFile(
+    filename: string,
+    user: JwtPayload,
+  ): Promise<boolean> {
     const file = await this.getFileByFilename(filename);
 
     // Chỉ owner hoặc admin mới có thể xóa

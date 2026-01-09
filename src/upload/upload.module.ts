@@ -4,7 +4,7 @@ import { MulterModule } from '@nestjs/platform-express';
 import { ConfigService } from '@nestjs/config';
 import { diskStorage } from 'multer';
 import { extname, join } from 'path';
-import { mkdirSync } from 'fs';
+import { mkdirSync, existsSync } from 'fs';
 import { UploadController } from './upload.controller';
 import { UploadService } from './upload.service';
 import { FileEntity } from './entity/file.entity';
