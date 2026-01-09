@@ -158,7 +158,9 @@ export class UploadService {
       // Tạo thư mục đích nếu chưa tồn tại
       try {
         mkdirSync(dirname(destPath), { recursive: true });
-      } catch (err) {}
+      } catch (err) {
+        throw new BadRequestException(err);
+      }
 
       // If destination already exists on disk or in DB, reject to avoid overwrite
       if (existsSync(destPath)) {
