@@ -3,8 +3,7 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { MulterModule } from '@nestjs/platform-express';
 import { ConfigService } from '@nestjs/config';
 import { diskStorage } from 'multer';
-import { extname, join } from 'path';
-import { mkdirSync, existsSync } from 'fs';
+import { extname } from 'path';
 import { UploadController } from './upload.controller';
 import { UploadService } from './upload.service';
 import { FileEntity } from './entity/file.entity';
@@ -27,76 +26,17 @@ interface MulterFile {
 
         return {
           storage: diskStorage({
-            destination: (
-              _req: unknown,
-              file: MulterFile,
-              callback: (error: Error | null, destination: string) => void,
-            ) => {
-              try {
-                const raw = (file.originalname || '').replace(/\\\\/g, '/');
-                const dirPart = raw.includes('/')
-                  ? raw.split('/').slice(0, -1).join('/')
-                  : '';
-                // Prevent path traversal by removing '..'
-                const safeDir = dirPart
-                  .split('/')
-                  .filter((p) => p && p !== '..')
-                  .join('/');
-                const dest = safeDir ? join(uploadDir, safeDir) : uploadDir;
-                try {
-                  mkdirSync(dest, { recursive: true });
-                } catch (e) {
-                  // ignore
-                }
-                callback(null, dest);
-              } catch (e) {
-                callback(e as any, uploadDir);
-              }
-            },
+            destination: uploadDir,
             filename: (
               _req: unknown,
               file: MulterFile,
               callback: (error: Error | null, filename: string) => void,
             ) => {
-              try {
-                let raw = (file.originalname || '').replace(/\\\\/g, '/');
-                // attempt to fix common mojibake (latin1 interpreted as utf8)
-                if (/[ÃÂÄ]/.test(raw)) {
-                  try {
-                    raw = Buffer.from(raw, 'latin1').toString('utf8');
-                  } catch (err) {
-                    // ignore conversion errors
-                  }
-                }
-                const base = raw.split('/').filter(Boolean).pop() || 'file';
-                const ext = extname(base);
-                const nameWithoutExt = base
-                  .replace(ext, '')
-                  .replace(/[<>:\\"/\\|?*]+/g, '_')
-                  .trim();
-
-                // Get destination directory from previous callback
-                const dirPart = raw.includes('/')
-                  ? raw.split('/').slice(0, -1).join('/')
-                  : '';
-                const safeDir = dirPart
-                  .split('/')
-                  .filter((p) => p && p !== '..')
-                  .join('/');
-                const dest = safeDir ? join(uploadDir, safeDir) : uploadDir;
-
-                // Find unique filename by adding (1), (2), etc. if file exists
-                let finalName = `${nameWithoutExt}${ext}`;
-                let counter = 1;
-                while (existsSync(join(dest, finalName))) {
-                  finalName = `${nameWithoutExt} (${counter})${ext}`;
-                  counter++;
-                }
-
-                callback(null, finalName);
-              } catch (e) {
-                callback(null, `file_${Date.now()}.bin`);
-              }
+              const uniqueSuffix =
+                Date.now() + '-' + Math.round(Math.random() * 1e9);
+              const ext = extname(file.originalname);
+              const filename = `${uniqueSuffix}${ext}`;
+              callback(null, filename);
             },
           }),
           fileFilter: (
