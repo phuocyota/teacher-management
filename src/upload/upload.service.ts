@@ -86,12 +86,12 @@ export class UploadService {
     const originalName = this.normalizeOriginalName(file.originalname);
 
     // Prioritize checking duplicate by stored filename, then by originalName
-    const existingByName = await this.fileRepo.findOne({
-      where: { originalName },
-    });
-    if (existingByName) {
-      throw new BadRequestException('File đã tồn tại');
-    }
+    // const existingByName = await this.fileRepo.findOne({
+    //   where: { originalName },
+    // });
+    // if (existingByName) {
+    //   throw new BadRequestException('File đã tồn tại');
+    // }
 
     const saved = await this.fileRepo.save(
       this.fileRepo.create({
