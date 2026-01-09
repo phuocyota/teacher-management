@@ -64,7 +64,7 @@ export class UploadController {
         },
         fileType: {
           type: 'string',
-          enum: ['NORMAL', 'CONFIG'],
+          enum: Object.values(FileType),
           default: 'NORMAL',
           description: 'Loại file',
         },
@@ -110,7 +110,7 @@ export class UploadController {
         },
         fileType: {
           type: 'string',
-          enum: ['NORMAL', 'CONFIG'],
+          enum: Object.values(FileType),
           default: 'NORMAL',
           description: 'Loại file',
         },
@@ -158,7 +158,7 @@ export class UploadController {
         },
         fileType: {
           type: 'string',
-          enum: ['NORMAL', 'CONFIG'],
+          enum: Object.values(FileType),
           default: 'NORMAL',
           description: 'Loại file',
         },
@@ -198,7 +198,7 @@ export class UploadController {
         },
         fileType: {
           type: 'string',
-          enum: ['NORMAL', 'CONFIG'],
+          enum: Object.values(FileType),
           default: 'NORMAL',
           description: 'Loại file',
         },

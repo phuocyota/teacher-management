@@ -28,6 +28,7 @@ import { runInTransaction } from 'src/common/database/transaction.utils';
 import { PaginationResponseDto } from 'src/common/dto/pagingation.dto';
 import { autoMapListToDto } from 'src/common/utils/auto-map.util';
 import { EMPTY_UUID } from 'src/common/constant/constant';
+import { UploadService } from 'src/upload/upload.service';
 
 @Injectable()
 export class LectureService {
@@ -38,6 +39,7 @@ export class LectureService {
     private readonly classService: ClassService,
     private readonly courseService: CourseService,
     private readonly groupService: GroupService,
+    private readonly uploadService: UploadService,
   ) {}
 
   async create(
@@ -306,6 +308,7 @@ export class LectureService {
     return await runInTransaction(this.entityManager, async (manager) => {
       const lecture = await manager.findOne(LectureEntity, {
         where: { id },
+        relations: ['resources'],
       });
 
       if (!lecture) {
@@ -319,6 +322,32 @@ export class LectureService {
         user.userType !== UserType.ADMIN
       ) {
         throw new ForbiddenException('Bạn không có quyền xoá bài giảng này');
+      }
+
+      // Xóa các file resources có source OFFLINE trước khi xóa lecture
+      if (lecture.resources && lecture.resources.length > 0) {
+        for (const resource of lecture.resources) {
+          if (resource.source === Source.OFFLINE && resource.url) {
+            try {
+              await this.uploadService.deleteFile(resource.url, user);
+            } catch (error) {
+              // Bỏ qua lỗi nếu file không tồn tại hoặc đã bị xóa
+              console.error(
+                `Failed to delete resource file: ${resource.url}`,
+                error,
+              );
+            }
+          }
+        }
+      }
+
+      // Xóa avatar nếu có
+      if (lecture.avatar) {
+        try {
+          await this.uploadService.deleteFile(lecture.avatar, user);
+        } catch (error) {
+          console.error(`Failed to delete avatar: ${lecture.avatar}`, error);
+        }
       }
 
       // Xoá lecture sẽ tự động xoá lecture_context và lecture_resource nhờ onDelete: CASCADE

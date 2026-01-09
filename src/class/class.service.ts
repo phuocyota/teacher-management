@@ -8,12 +8,15 @@ import {
   ENTITY_NAMES,
 } from 'src/common/constant/error-messages.constant';
 import { BaseService } from 'src/common/sql/base.service';
+import { UploadService } from 'src/upload/upload.service';
+import { JwtPayload } from 'src/common/interface/jwt-payload.interface';
 
 @Injectable()
 export class ClassService extends BaseService<ClassEntity> {
   constructor(
     @InjectRepository(ClassEntity)
     private readonly classRepo: Repository<ClassEntity>,
+    private readonly uploadService: UploadService,
   ) {
     super(classRepo);
   }
@@ -43,8 +46,11 @@ export class ClassService extends BaseService<ClassEntity> {
     return this.classRepo.save(updated);
   }
 
-  async remove(id: string): Promise<void> {
+  async remove(id: string, user: JwtPayload): Promise<void> {
     const record = await this.findOne(id);
+    if (record.currentImage) {
+      await this.uploadService.deleteFile(record.currentImage, user);
+    }
     await this.classRepo.remove(record);
   }
 }

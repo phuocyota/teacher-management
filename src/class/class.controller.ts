@@ -10,6 +10,8 @@ import {
 import { ApiTags, ApiBearerAuth } from '@nestjs/swagger';
 import { ClassService } from './class.service';
 import { CreateClassDto, UpdateClassDto } from './dto/create-class.dto';
+import type { JwtPayload } from 'src/common/interface/jwt-payload.interface';
+import { User } from 'src/common/decorator/user.decorator';
 
 @ApiTags('Class')
 @ApiBearerAuth('access-token')
@@ -38,7 +40,7 @@ export class ClassController {
   }
 
   @Delete(':id')
-  remove(@Param('id') id: string) {
-    return this.classService.remove(id);
+  remove(@Param('id') id: string, @User() user: JwtPayload) {
+    return this.classService.remove(id, user);
   }
 }

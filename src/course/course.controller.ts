@@ -18,6 +18,8 @@ import {
 import { CourseService } from './course.service';
 import { CreateCourseDto, UpdateCourseDto } from './dto/create-course.dto';
 import { CourseListResponseDto, CourseResponseDto } from './dto/course.dto';
+import { User } from 'src/common/decorator/user.decorator';
+import type { JwtPayload } from 'src/common/interface/jwt-payload.interface';
 
 @ApiTags('Course')
 @ApiBearerAuth('access-token')
@@ -69,7 +71,7 @@ export class CourseController {
   }
 
   @Delete(':id')
-  remove(@Param('id') id: string) {
-    return this.courseService.remove(id);
+  remove(@Param('id') id: string, @User() user: JwtPayload) {
+    return this.courseService.remove(id, user);
   }
 }

@@ -69,10 +69,33 @@ interface MulterFile {
                   }
                 }
                 const base = raw.split('/').filter(Boolean).pop() || 'file';
-                const safeName = base.replace(/[<>:\\"/\\|?*]+/g, '_').trim();
-                callback(null, safeName);
+                const ext = extname(base);
+                const nameWithoutExt = base
+                  .replace(ext, '')
+                  .replace(/[<>:\\"/\\|?*]+/g, '_')
+                  .trim();
+
+                // Get destination directory from previous callback
+                const dirPart = raw.includes('/')
+                  ? raw.split('/').slice(0, -1).join('/')
+                  : '';
+                const safeDir = dirPart
+                  .split('/')
+                  .filter((p) => p && p !== '..')
+                  .join('/');
+                const dest = safeDir ? join(uploadDir, safeDir) : uploadDir;
+
+                // Find unique filename by adding (1), (2), etc. if file exists
+                let finalName = `${nameWithoutExt}${ext}`;
+                let counter = 1;
+                while (existsSync(join(dest, finalName))) {
+                  finalName = `${nameWithoutExt} (${counter})${ext}`;
+                  counter++;
+                }
+
+                callback(null, finalName);
               } catch (e) {
-                callback(null, 'file');
+                callback(null, `file_${Date.now()}.bin`);
               }
             },
           }),

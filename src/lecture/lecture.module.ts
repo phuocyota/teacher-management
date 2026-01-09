@@ -9,6 +9,7 @@ import { UserModule } from 'src/user/user.module';
 import { ClassModule } from 'src/class/class.module';
 import { GroupModule } from 'src/group/group.module';
 import { CourseModule } from 'src/course/course.module';
+import { UploadModule } from 'src/upload/upload.module';
 
 @Module({
   imports: [
@@ -21,6 +22,7 @@ import { CourseModule } from 'src/course/course.module';
     ClassModule,
     GroupModule,
     CourseModule,
+    UploadModule,
   ],
   providers: [LectureService],
   controllers: [LectureController],

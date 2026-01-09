@@ -12,6 +12,8 @@ import {
   ERROR_MESSAGES,
   ENTITY_NAMES,
 } from 'src/common/constant/error-messages.constant';
+import { UploadService } from 'src/upload/upload.service';
+import { JwtPayload } from 'src/common/interface/jwt-payload.interface';
 
 @Injectable()
 export class CourseService {
@@ -20,6 +22,7 @@ export class CourseService {
     private readonly courseRepo: Repository<CourseEntity>,
     @InjectRepository(ClassEntity)
     private readonly classRepo: Repository<ClassEntity>,
+    private readonly uploadService: UploadService,
   ) {}
 
   async create(dto: CreateCourseDto): Promise<CourseEntity> {
@@ -129,8 +132,11 @@ export class CourseService {
     return this.courseRepo.save(updated);
   }
 
-  async remove(id: string): Promise<void> {
+  async remove(id: string, user: JwtPayload): Promise<void> {
     const record = await this.findOne(id);
+    if (record.image) {
+      await this.uploadService.deleteFile(record.image, user);
+    }
     await this.courseRepo.remove(record);
   }
 }
