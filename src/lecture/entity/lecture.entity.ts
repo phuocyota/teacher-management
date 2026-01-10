@@ -2,6 +2,7 @@ import { Entity, Column, OneToMany, Index } from 'typeorm';
 import { BaseEntity } from '../../common/sql/base.entity';
 import { LectureResourceEntity } from './lecture_resource.entity';
 import { LectureContextEntity } from './lecture_context.entity';
+import { LectureContextUserEntity } from './lecture_context_user.entity';
 
 @Entity('lecture')
 export class LectureEntity extends BaseEntity {
@@ -32,4 +33,8 @@ export class LectureEntity extends BaseEntity {
     cascade: true,
   })
   contexts?: LectureContextEntity[];
+
+  /** Links to users via join table `lecture_context_user` */
+  @OneToMany(() => LectureContextUserEntity, (lcu) => lcu.lecture)
+  userLinks?: LectureContextUserEntity[];
 }

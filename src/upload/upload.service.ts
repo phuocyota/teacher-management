@@ -15,7 +15,7 @@ import {
   createReadStream,
   statSync,
 } from 'fs';
-import { join, dirname, isAbsolute, normalize } from 'path';
+import { join, dirname, isAbsolute, normalize, basename } from 'path';
 import { FileEntity } from './entity/file.entity';
 import { FileAccessEntity } from './entity/file-access.entity';
 import { FileAccessType, FileType } from './enum/file-visibility.enum';
@@ -42,6 +42,7 @@ interface MulterFile {
 @Injectable()
 export class UploadService {
   private readonly uploadDir: string;
+  private readonly publicBaseUrl?: string;
 
   constructor(
     @InjectRepository(FileEntity)
@@ -51,6 +52,7 @@ export class UploadService {
     private readonly configService: ConfigService,
   ) {
     this.uploadDir = this.configService.get('UPLOAD_DIR') || 'uploads';
+    this.publicBaseUrl = this.configService.get('PUBLIC_BASE_URL');
     this.ensureUploadDirExists();
   }
 
@@ -78,6 +80,7 @@ export class UploadService {
     user: JwtPayload,
     fileType: FileType = FileType.NORMAL,
     description?: string,
+    preserveOriginalName = false,
   ): Promise<UploadFileResponseDto> {
     if (!file) {
       throw new BadRequestException('Không có file nào được upload');
@@ -85,19 +88,64 @@ export class UploadService {
 
     const originalName = this.normalizeOriginalName(file.originalname);
 
-    // Prioritize checking duplicate by stored filename, then by originalName
-    // const existingByName = await this.fileRepo.findOne({
-    //   where: { originalName },
-    // });
-    // if (existingByName) {
-    //   throw new BadRequestException('File đã tồn tại');
-    // }
+    // By default, use the stored filename from multer
+    let storedFilename = file.filename;
+    let dbPath = file.path;
+
+    if (preserveOriginalName) {
+      const safeName = basename(originalName);
+
+      // Destination relative path inside uploadDir
+      const destRelative = safeName;
+      const destDbPath = join(this.uploadDir, destRelative);
+      const destFsPath = join(process.cwd(), this.uploadDir, destRelative);
+
+      // Prevent overwrite on disk and in DB
+      if (existsSync(destFsPath)) {
+        throw new BadRequestException(`File ${safeName} đã tồn tại`);
+      }
+
+      const existsByFilename = await this.fileRepo.findOne({
+        where: { filename: safeName },
+      });
+      if (existsByFilename) {
+        throw new BadRequestException(`File ${safeName} đã tồn tại`);
+      }
+
+      // Ensure upload dir exists
+      try {
+        mkdirSync(dirname(destFsPath), { recursive: true });
+      } catch (err) {
+        throw new BadRequestException(err);
+      }
+
+      // Move/rename the temp file to the destination path
+      try {
+        const srcPath = isAbsolute(file.path)
+          ? file.path
+          : join(process.cwd(), file.path);
+        if (srcPath !== destFsPath) {
+          renameSync(srcPath, destFsPath);
+        }
+      } catch (err) {
+        // If rename fails, rethrow as bad request to avoid silent inconsistencies
+        throw new BadRequestException('Không thể lưu file với tên gốc');
+      }
+
+      storedFilename = safeName;
+      dbPath = destDbPath;
+    }
+
+    // If a public base URL is configured, expose the public URL as the stored path
+    const storedPath = this.publicBaseUrl
+      ? `${this.publicBaseUrl.replace(/\/$/, '')}/${storedFilename}`
+      : dbPath;
 
     const saved = await this.fileRepo.save(
       this.fileRepo.create({
         originalName,
-        filename: file.filename,
-        path: file.path,
+        filename: storedFilename,
+        path: storedPath,
         mimetype: file.mimetype,
         size: file.size,
         fileType,
@@ -196,10 +244,15 @@ export class UploadService {
 
       // Tạo entity và lưu vào DB
       const originalName = this.normalizeOriginalName(file.originalname);
+      const localPath = join(this.uploadDir, relativePath);
+      const publicPath = this.publicBaseUrl
+        ? `${this.publicBaseUrl.replace(/\/$/, '')}/${relativePath.replace(/\\/g, '/')}`
+        : localPath;
+
       const fileEntity = this.fileRepo.create({
         originalName,
-        filename: relativePath.split(/[\\/]/).pop(),
-        path: join(this.uploadDir, relativePath),
+        filename: storedFilename,
+        path: publicPath,
         mimetype: file.mimetype,
         size: file.size,
         fileType,
@@ -532,7 +585,7 @@ export class UploadService {
     }
 
     // Xóa file vật lý
-    const absolutePath = this.getAbsoluteFilePath(filename);
+    const absolutePath = this.getAbsoluteFilePath(file.path);
     if (existsSync(absolutePath)) {
       unlinkSync(absolutePath);
     }
@@ -555,12 +608,28 @@ export class UploadService {
       throw new Error('Filename is required');
     }
 
-    // If absolute, return normalized absolute path
+    // If absolute filesystem path, return normalized
     if (isAbsolute(filename)) {
       return normalize(filename);
     }
 
-    // Normalize separators
+    // If it's a URL (http/https), map URL pathname to local uploadDir
+    if (/^https?:\/\//i.test(filename)) {
+      try {
+        const url = new URL(filename);
+        let pathname = url.pathname.replace(/^\//, '');
+        const uploadPrefix = this.uploadDir.replace(/\\/g, '/');
+        // If pathname starts with uploadDir, strip it to avoid duplication
+        if (pathname.startsWith(uploadPrefix + '/')) {
+          pathname = pathname.substring(uploadPrefix.length + 1);
+        }
+        return join(process.cwd(), this.uploadDir, pathname);
+      } catch (err) {
+        throw new Error('Invalid URL stored for file path');
+      }
+    }
+
+    // Normalize separators for relative paths
     let normalized = filename.replace(/\\/g, '/');
 
     const uploadPrefix = this.uploadDir.replace(/\\/g, '/');

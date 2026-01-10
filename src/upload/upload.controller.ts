@@ -138,6 +138,7 @@ export class UploadController {
       user,
       fileType || FileType.NORMAL,
       description,
+      true,
     );
   }
 

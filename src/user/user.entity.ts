@@ -4,6 +4,7 @@ import { Entity, Column, OneToMany } from 'typeorm';
 import { Gender } from './enum/gender.enum.js';
 import { Status } from './enum/status.enum.js';
 import { UserGroupEntity } from '../user-group/entity/user-group.entity';
+import { LectureContextUserEntity } from 'src/lecture/entity/lecture_context_user.entity';
 
 @Entity('user')
 export class UserEntity extends BaseEntity {
@@ -99,4 +100,11 @@ export class UserEntity extends BaseEntity {
     (userGroup: UserGroupEntity) => userGroup.user,
   )
   groupMembers?: UserGroupEntity[];
+
+  /**
+   * Quan hệ one-to-many với LectureContextUserEntity
+   * Một user có thể liên kết tới nhiều lecture_context_user entries
+   */
+  @OneToMany(() => LectureContextUserEntity, (lcu) => lcu.user)
+  lectureContextLinks?: LectureContextUserEntity[];
 }

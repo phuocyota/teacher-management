@@ -1,20 +1,11 @@
-import {
-  IsNotEmpty,
-  IsOptional,
-  IsString,
-  IsInt,
-  Min,
-  IsEnum,
-  IsDateString,
-} from 'class-validator';
+import { IsNotEmpty, IsOptional, IsString } from 'class-validator';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { IsUUID } from 'class-validator';
-import { Status } from 'src/common/enum/status.enum';
 
 export class CreateCourseDto {
   @IsString()
   @IsNotEmpty()
-  @ApiProperty({ description: 'course code', example: 'CS101' })
+  @ApiProperty({ description: 'Course code', example: 'CS101' })
   code!: string;
 
   @IsString()
@@ -25,48 +16,13 @@ export class CreateCourseDto {
   })
   name!: string;
 
-  @IsOptional()
   @IsString()
-  @ApiPropertyOptional({
-    description: 'Course description',
-    example: 'Fundamental concepts of CS',
+  @IsNotEmpty()
+  @ApiProperty({
+    description: 'Image filename or URL',
+    example: '1767928564252-372536774.png',
   })
-  description?: string;
-
-  @IsOptional()
-  @IsInt()
-  @Min(0)
-  @ApiPropertyOptional({
-    description: 'Number of credits',
-    example: 3,
-    minimum: 0,
-  })
-  credits?: number;
-
-  @IsOptional()
-  @IsEnum(Status)
-  @ApiPropertyOptional({
-    description: 'Course status',
-    enum: Status,
-    default: Status.ACTIVE,
-  })
-  status?: Status;
-
-  @IsOptional()
-  @IsDateString()
-  @ApiPropertyOptional({
-    description: 'Start date (ISO 8601)',
-    example: '2025-01-15',
-  })
-  startDate?: string;
-  @IsOptional()
-  @IsString()
-  @ApiPropertyOptional({
-    description: 'Course image URL',
-    example: 'https://cdn.example.com/courses/cs101.png',
-  })
-  image?: string;
-  endDate?: string;
+  image!: string;
 
   @IsOptional()
   @IsString()
@@ -76,13 +32,13 @@ export class CreateCourseDto {
   })
   note?: string;
 
-  @IsOptional()
   @IsUUID()
-  @ApiPropertyOptional({
-    description: 'ID of the class this course belongs to',
-    example: '550e8400-e29b-41d4-a716-446655440000',
+  @IsNotEmpty()
+  @ApiProperty({
+    description: 'Class ID this course belongs to',
+    example: '2233abe3-1961-4af5-a482-542f1227d844',
   })
-  classId?: string;
+  classId!: string;
 }
 
 export class UpdateCourseDto {
@@ -97,47 +53,21 @@ export class UpdateCourseDto {
   @IsOptional()
   @IsString()
   @ApiPropertyOptional({
-    description: 'Course description',
-    example: 'Updated fundamentals',
+    description: 'Image filename or URL',
+    example: '1767928564252-372536774.png',
   })
-  description?: string;
+  image?: string;
 
   @IsOptional()
-  @IsInt()
-  @Min(0)
+  @IsString()
   @ApiPropertyOptional({
-    description: 'Number of credits',
-    example: 4,
-    minimum: 0,
+    description: 'Additional note',
+    example: 'Updated note',
   })
-  credits?: number;
-
-  @IsOptional()
-  @IsEnum(Status)
-  @ApiPropertyOptional({ description: 'Course status', enum: Status })
-  status?: Status;
-
-  @IsOptional()
-  @IsDateString()
-  @ApiPropertyOptional({
-    description: 'Start date (ISO 8601)',
-    example: '2025-01-20',
-  })
-  startDate?: string;
-
-  @IsOptional()
-  @IsDateString()
-  @ApiPropertyOptional({
-    description: 'End date (ISO 8601)',
-    example: '2025-06-01',
-  })
-  endDate?: string;
+  note?: string;
 
   @IsOptional()
   @IsUUID()
-  @ApiPropertyOptional({
-    description: 'ID of the class this course belongs to',
-    example: '550e8400-e29b-41d4-a716-446655440000',
-  })
+  @ApiPropertyOptional({ description: 'Class ID this course belongs to' })
   classId?: string;
 }
