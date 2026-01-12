@@ -19,7 +19,7 @@ import {
 export class LectureContextController {
   constructor(private readonly lectureContextService: LectureContextService) {}
 
-  @Post('/user')
+  @Post()
   @ApiOperation({ summary: 'Add multiple users to a lecture' })
   @ApiResponse({ status: 201, description: 'Users added to lecture' })
   async addUsersToLecture(
@@ -29,7 +29,7 @@ export class LectureContextController {
     await this.lectureContextService.create(dto, user);
   }
 
-  @Put('/user')
+  @Put()
   @ApiOperation({ summary: 'Update multiple users of a lecture' })
   @ApiResponse({ status: 200, description: 'Users updated for lecture' })
   async updateUsersToLecture(
