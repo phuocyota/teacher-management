@@ -28,7 +28,7 @@ export class UpdateLectureContextDto {
     example: 'a1b2c3d4-e5f6-7890-abcd-ef1234567890',
   })
   @IsUUID()
-  lectureId?: string;
+  lectureId: string;
 
   //optional userIds
   @ApiProperty({
@@ -37,7 +37,7 @@ export class UpdateLectureContextDto {
   })
   @IsArray()
   @IsUUID('4', { each: true })
-  userIds?: string[];
+  userIds: string[];
 }
 
 export class GetListLectureContextDto extends PaginationRequestDto {
