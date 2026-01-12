@@ -13,7 +13,7 @@ import {
   GetDownloadLogQueryDto,
 } from '../dto/download-log.dto';
 
-@ApiTags('LectureDownloadLog')
+@ApiTags('Lecture Download Log')
 @ApiBearerAuth('access-token')
 @Controller('lecture/download-log')
 export class LectureDownloadLogController {

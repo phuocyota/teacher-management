@@ -25,7 +25,4 @@ export class LectureDownloadLogEntity extends BaseEntity {
 
   @Column({ type: 'varchar', length: 100 })
   type: string; // Loại file (pdf, docx, etc.)
-
-  @Column({ type: 'varchar', length: 100 })
-  source: string; // Nguồn tải (web, mobile, api, etc.)
 }
