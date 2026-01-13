@@ -6,6 +6,7 @@ import {
   CreateDownloadLogDto,
   GetDownloadLogQueryDto,
 } from '../dto/download-log.dto';
+import { PaginationResponseDto } from 'src/common/dto/pagingation.dto';
 
 @Injectable()
 export class LectureDownloadLogService {
@@ -25,7 +26,9 @@ export class LectureDownloadLogService {
     await this.downloadLogRepository.save(log);
   }
 
-  async findAll(query: GetDownloadLogQueryDto) {
+  async findAll(
+    query: GetDownloadLogQueryDto,
+  ): Promise<PaginationResponseDto<LectureDownloadLogEntity>> {
     const { page = 1, size = 10, lectureId, userId } = query;
 
     const qb = this.downloadLogRepository
@@ -51,7 +54,6 @@ export class LectureDownloadLogService {
       total,
       page,
       size,
-      totalPages: Math.ceil(total / size),
     };
   }
 }
