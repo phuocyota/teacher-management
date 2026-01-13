@@ -29,7 +29,7 @@ export class LectureDownloadLogService {
   async findAll(
     query: GetDownloadLogQueryDto,
   ): Promise<PaginationResponseDto<LectureDownloadLogEntity>> {
-    const { page = 1, size = 10, lectureId, userId } = query;
+    const { page = 1, size = 10, lectureId, userId, courseId } = query;
 
     const qb = this.downloadLogRepository
       .createQueryBuilder('log')
@@ -42,7 +42,11 @@ export class LectureDownloadLogService {
     }
 
     if (userId) {
-      qb.andWhere('log.userId = :userId', { userId });
+      qb.andWhere('user.id = :userId', { userId });
+    }
+
+    if (courseId) {
+      qb.andWhere('lecture.id = :courseId', { courseId });
     }
 
     qb.skip((page - 1) * size).take(size);
