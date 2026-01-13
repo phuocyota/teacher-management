@@ -26,7 +26,7 @@ import {
 } from './dto/lecture.response.dto';
 import { User } from 'src/common/decorator/user.decorator';
 import type { JwtPayload } from 'src/common/interface/jwt-payload.interface';
-import { PaginationResponseDto } from 'src/common/dto/pagingation.dto';
+import { PaginationResponseDto } from 'src/common/dto/pagination.dto';
 
 @ApiTags('Lecture')
 @ApiBearerAuth('access-token')

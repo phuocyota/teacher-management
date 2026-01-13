@@ -12,7 +12,7 @@ import {
   Min,
 } from 'class-validator';
 import { Type } from 'class-transformer';
-import { PaginationRequestDto } from 'src/common/dto/pagingation.dto';
+import { PaginationRequestDto } from 'src/common/dto/pagination.dto';
 
 export class LectureResourceDto {
   @ApiProperty({

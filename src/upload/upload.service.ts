@@ -40,7 +40,7 @@ import { ERROR_MESSAGES } from 'src/common/constant/error-messages.constant';
 import {
   PaginationRequestDto,
   PaginationResponseDto,
-} from 'src/common/dto/pagingation.dto';
+} from 'src/common/dto/pagination.dto';
 import type { Request, Response } from 'express';
 
 // Interface cho Multer File

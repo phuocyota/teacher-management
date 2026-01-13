@@ -25,7 +25,7 @@ import { ClassService } from 'src/class/class.service';
 import { CourseService } from 'src/course/course.service';
 import { GroupService } from 'src/group/group.service';
 import { runInTransaction } from 'src/common/database/transaction.utils';
-import { PaginationResponseDto } from 'src/common/dto/pagingation.dto';
+import { PaginationResponseDto } from 'src/common/dto/pagination.dto';
 import { autoMapListToDto } from 'src/common/utils/auto-map.util';
 import { EMPTY_UUID } from 'src/common/constant/constant';
 import { UploadService } from 'src/upload/upload.service';

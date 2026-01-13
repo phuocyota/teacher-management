@@ -32,7 +32,10 @@ export class LectureDownloadLogController {
   @Get()
   @ApiOperation({ summary: 'Get download logs with pagination and filters' })
   @ApiResponse({ status: 200, description: 'List of download logs' })
-  async getDownloadLogs(@Query() query: GetDownloadLogQueryDto) {
-    return this.downloadLogService.findAll(query);
+  async getDownloadLogs(
+    @Query() query: GetDownloadLogQueryDto,
+    @User() user: JwtPayload,
+  ) {
+    return this.downloadLogService.findAll(query, user.userId);
   }
 }
