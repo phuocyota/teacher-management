@@ -15,7 +15,15 @@ import {
   createReadStream,
   statSync,
 } from 'fs';
-import { join, dirname, isAbsolute, normalize, basename } from 'path';
+import {
+  join,
+  dirname,
+  isAbsolute,
+  normalize,
+  basename,
+  resolve,
+  sep,
+} from 'path';
 import { FileEntity } from './entity/file.entity';
 import { FileAccessEntity } from './entity/file-access.entity';
 import { FileAccessType, FileType } from './enum/file-visibility.enum';
@@ -24,10 +32,15 @@ import {
   UploadMultipleFilesResponseDto,
   FileAccessResponseDto,
   UploadFolderResponseDto,
+  FolderPathResponseDto,
 } from './dto/upload.dto';
 import { JwtPayload } from 'src/common/interface/jwt-payload.interface';
 import { UserType } from 'src/common/enum/user-type.enum';
 import { ERROR_MESSAGES } from 'src/common/constant/error-messages.constant';
+import {
+  PaginationRequestDto,
+  PaginationResponseDto,
+} from 'src/common/dto/pagingation.dto';
 import type { Request, Response } from 'express';
 
 // Interface cho Multer File
@@ -558,6 +571,44 @@ export class UploadService {
     return sorted.map((file) => UploadFileResponseDto.fromEntity(file));
   }
 
+  async listFiles(
+    user: JwtPayload,
+    dto: PaginationRequestDto,
+  ): Promise<PaginationResponseDto<UploadFileResponseDto>> {
+    const page = dto.page ?? 1;
+    const size = dto.size ?? 10;
+    const keyword = dto.search?.trim().toLowerCase();
+
+    const sourceFiles =
+      user.userType === UserType.ADMIN
+        ? await this.getAllFiles()
+        : await this.getAccessibleFiles(user);
+
+    const filtered = keyword
+      ? sourceFiles.filter((file) => this.matchesSearchTerm(file, keyword))
+      : sourceFiles;
+
+    const startIndex = (page - 1) * size;
+    const paged = filtered.slice(startIndex, startIndex + size);
+
+    return {
+      page,
+      size,
+      total: filtered.length,
+      data: paged,
+    };
+  }
+
+  private matchesSearchTerm(
+    file: UploadFileResponseDto,
+    keyword: string,
+  ): boolean {
+    const haystack = `${file.originalName ?? ''} ${file.filename ?? ''} ${
+      file.description ?? ''
+    }`.toLowerCase();
+    return haystack.includes(keyword);
+  }
+
   /**
    * Lấy tất cả file (dành cho admin)
    */
@@ -657,6 +708,70 @@ export class UploadService {
     }
 
     return name;
+  }
+
+  async ensureFolderPath(relativePath: string): Promise<FolderPathResponseDto> {
+    const sanitizedPath = this.sanitizeFolderPath(relativePath);
+    const uploadBasePath = resolve(process.cwd(), this.uploadDir);
+    const targetPath = resolve(uploadBasePath, sanitizedPath);
+
+    if (!this.isPathInsideUploadDir(targetPath, uploadBasePath)) {
+      throw new BadRequestException('Đường dẫn thư mục không hợp lệ');
+    }
+
+    let created = false;
+    if (existsSync(targetPath)) {
+      const stats = statSync(targetPath);
+      if (!stats.isDirectory()) {
+        throw new BadRequestException('Một file cùng tên đã tồn tại');
+      }
+    } else {
+      try {
+        mkdirSync(targetPath, { recursive: true });
+        created = true;
+      } catch (err) {
+        throw new BadRequestException(
+          `Không thể tạo thư mục: ${err instanceof Error ? err.message : err}`,
+        );
+      }
+    }
+
+    const response = new FolderPathResponseDto();
+    response.relativePath = sanitizedPath;
+    response.absolutePath = targetPath;
+    response.created = created;
+    return response;
+  }
+
+  private sanitizeFolderPath(pathValue: string): string {
+    const trimmed = pathValue?.trim();
+    if (!trimmed) {
+      throw new BadRequestException('Đường dẫn thư mục không được để trống');
+    }
+
+    if (trimmed.includes('..')) {
+      throw new BadRequestException(
+        'Đường dẫn không được phép chứa phần tử cha (..)',
+      );
+    }
+
+    const normalized = trimmed
+      .replace(/\\/g, '/')
+      .replace(/\/+/g, '/')
+      .replace(/^\/+/, '');
+
+    if (!normalized) {
+      throw new BadRequestException('Đường dẫn thư mục không được để trống');
+    }
+
+    return normalized;
+  }
+
+  private isPathInsideUploadDir(targetPath: string, basePath: string): boolean {
+    const separatorAppended = basePath.endsWith(sep)
+      ? basePath
+      : `${basePath}${sep}`;
+    return targetPath === basePath || targetPath.startsWith(separatorAppended);
   }
 
   getFilePath(filename: string): string {

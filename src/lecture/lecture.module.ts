@@ -4,10 +4,13 @@ import { LectureService } from './services/lecture.service';
 import { LectureController } from './lecture.controller';
 import { LectureContextService } from './services/lecture_context.service';
 import { LectureContextController } from './controller/lecture_context.controller';
+import { LectureDownloadLogService } from './services/lecture_download_log.service';
+import { LectureDownloadLogController } from './controller/lecture_download_log.controller';
 import { LectureEntity } from './entity/lecture.entity';
 import { LectureContextEntity } from './entity/lecture_context.entity';
 import { LectureResourceEntity } from './entity/lecture_resource.entity';
 import { LectureContextUserEntity } from './entity/lecture_context_user.entity';
+import { LectureDownloadLogEntity } from './entity/lecture_download_log.entity';
 import { UserModule } from 'src/user/user.module';
 import { ClassModule } from 'src/class/class.module';
 import { GroupModule } from 'src/group/group.module';
@@ -21,6 +24,7 @@ import { UploadModule } from 'src/upload/upload.module';
       LectureResourceEntity,
       LectureContextEntity,
       LectureContextUserEntity,
+      LectureDownloadLogEntity,
     ]),
     UserModule,
     ClassModule,
@@ -28,8 +32,12 @@ import { UploadModule } from 'src/upload/upload.module';
     CourseModule,
     UploadModule,
   ],
-  providers: [LectureService, LectureContextService],
-  controllers: [LectureController, LectureContextController],
-  exports: [LectureService, LectureContextService],
+  providers: [LectureService, LectureContextService, LectureDownloadLogService],
+  controllers: [
+    LectureController,
+    LectureContextController,
+    LectureDownloadLogController,
+  ],
+  exports: [LectureService, LectureContextService, LectureDownloadLogService],
 })
 export class LectureModule {}

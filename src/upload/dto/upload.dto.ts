@@ -6,6 +6,7 @@ import {
   IsUUID,
   IsDateString,
   IsArray,
+  IsNotEmpty,
 } from 'class-validator';
 import { FileAccessType, FileType } from '../enum/file-visibility.enum';
 import { FileEntity } from '../entity/file.entity';
@@ -250,4 +251,34 @@ export class FileAccessResponseDto {
     dto.createdAt = entity.createdAt;
     return dto;
   }
+}
+
+export class CreateFolderPathDto {
+  @ApiProperty({
+    description: 'Đường dẫn tương đối tới thư mục cần đảm bảo tồn tại',
+    example: 'exports/2026/term1',
+  })
+  @IsString()
+  @IsNotEmpty()
+  path: string;
+}
+
+export class FolderPathResponseDto {
+  @ApiProperty({
+    description: 'Đường dẫn tương đối đến thư mục bên trong uploadDir',
+    example: 'exports/2026/term1',
+  })
+  relativePath: string;
+
+  @ApiProperty({
+    description: 'Đường dẫn tuyệt đối trên hệ thống tập tin',
+    example: '/var/app/uploads/exports/2026/term1',
+  })
+  absolutePath: string;
+
+  @ApiProperty({
+    description: 'True nếu thư mục vừa được tạo mới',
+    example: true,
+  })
+  created: boolean;
 }

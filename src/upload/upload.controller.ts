@@ -10,6 +10,7 @@ import {
   Delete,
   Body,
   Req,
+  Query,
 } from '@nestjs/common';
 import { FileInterceptor, FilesInterceptor } from '@nestjs/platform-express';
 import {
@@ -28,12 +29,18 @@ import {
   GrantFileAccessDto,
   GrantFileAccessToManyDto,
   FileAccessResponseDto,
+  UploadFolderResponseDto,
+  CreateFolderPathDto,
+  FolderPathResponseDto,
 } from './dto/upload.dto';
-import { UploadFolderResponseDto } from './dto/upload.dto';
 import { FileType } from './enum/file-visibility.enum';
 import { User } from 'src/common/decorator/user.decorator';
 import type { JwtPayload } from 'src/common/interface/jwt-payload.interface';
 import { UserType } from 'src/common/enum/user-type.enum';
+import {
+  PaginationRequestDto,
+  PaginationResponseDto,
+} from 'src/common/dto/pagingation.dto';
 
 // Interface cho Multer File đã được chuyển sang module, nhưng vẫn cần ở đây cho type hinting
 interface MulterFile {
@@ -224,6 +231,19 @@ export class UploadController {
     );
   }
 
+  @Post('folder/path')
+  @ApiOperation({ summary: 'Đảm bảo thư mục tồn tại trong storage' })
+  @ApiResponse({
+    status: 200,
+    description: 'Đường dẫn thư mục đã tồn tại hoặc được tạo',
+    type: FolderPathResponseDto,
+  })
+  async ensureFolderPath(
+    @Body() dto: CreateFolderPathDto,
+  ): Promise<FolderPathResponseDto> {
+    return this.uploadService.ensureFolderPath(dto.path);
+  }
+
   @Get(':fileId/access')
   @ApiOperation({ summary: 'Lấy danh sách quyền truy cập của file' })
   @ApiResponse({
@@ -292,15 +312,14 @@ export class UploadController {
   @ApiOperation({ summary: 'Lấy danh sách file user có quyền truy cập' })
   @ApiResponse({
     status: 200,
-    description: 'Danh sách file',
-    type: [UploadFileResponseDto],
+    description: 'Danh sách file phân trang',
+    type: PaginationResponseDto<UploadFileResponseDto>,
   })
-  async listFiles(@User() user: JwtPayload): Promise<UploadFileResponseDto[]> {
-    if (user.userType === UserType.ADMIN) {
-      return this.uploadService.getAllFiles();
-    }
-
-    return this.uploadService.getAccessibleFiles(user);
+  async listFiles(
+    @User() user: JwtPayload,
+    @Query() pagination: PaginationRequestDto,
+  ): Promise<PaginationResponseDto<UploadFileResponseDto>> {
+    return this.uploadService.listFiles(user, pagination);
   }
 
   @Get('download/:filename')
