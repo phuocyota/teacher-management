@@ -15,7 +15,7 @@ import {
   ParseIntPipe,
   BadRequestException,
 } from '@nestjs/common';
-import { readFileSync } from 'fs';
+import { readFileSync, existsSync, rmSync } from 'fs';
 import { FileInterceptor, FilesInterceptor } from '@nestjs/platform-express';
 import {
   ApiTags,
@@ -447,17 +447,39 @@ export class UploadController {
 
     // Đọc chunk data từ file (vì dùng diskStorage)
     let chunkData: Buffer;
+    let tempFilePath: string | undefined;
+
     if (file.buffer) {
       // Nếu có buffer (memoryStorage)
       chunkData = file.buffer;
     } else if (file.path) {
       // Đọc từ disk (diskStorage)
       chunkData = readFileSync(file.path);
+      tempFilePath = file.path; // Lưu để xóa sau
     } else {
       throw new BadRequestException('Không thể đọc chunk data');
     }
 
-    return this.uploadService.handleChunk(uploadId, chunkIndex, chunkData);
+    const result = await this.uploadService.handleChunk(
+      uploadId,
+      chunkIndex,
+      chunkData,
+    );
+
+    // Xóa file tạm của Multer sau khi đã lưu vào chunks
+    if (tempFilePath && existsSync(tempFilePath)) {
+      try {
+        rmSync(tempFilePath);
+        console.log(`[uploadChunk] Deleted temp file: ${tempFilePath}`);
+      } catch (err) {
+        console.error(
+          `[uploadChunk] Failed to delete temp file: ${tempFilePath}`,
+          err,
+        );
+      }
+    }
+
+    return result;
   }
 
   @Post('complete')
