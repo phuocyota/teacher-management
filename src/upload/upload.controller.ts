@@ -15,6 +15,7 @@ import {
   ParseIntPipe,
   BadRequestException,
 } from '@nestjs/common';
+import { readFileSync } from 'fs';
 import { FileInterceptor, FilesInterceptor } from '@nestjs/platform-express';
 import {
   ApiTags,
@@ -427,11 +428,36 @@ export class UploadController {
     @Param('uploadId') uploadId: string,
     @Param('chunkIndex', ParseIntPipe) chunkIndex: number,
     @UploadedFile() file: MulterFile,
+    @Req() req: Request,
   ): Promise<{ received: number; total: number }> {
-    if (!file || !file.buffer) {
-      throw new BadRequestException('Chunk không hợp lệ');
+    // Debug logging
+    console.log('=== Upload Chunk Debug ===');
+    console.log('uploadId:', uploadId);
+    console.log('chunkIndex:', chunkIndex);
+    console.log('file:', file);
+    console.log('content-type:', req.headers['content-type']);
+    console.log('body keys:', Object.keys(req.body || {}));
+    console.log('========================');
+
+    if (!file) {
+      throw new BadRequestException(
+        `Chunk không hợp lệ. File field name phải là "chunk". Content-Type: ${req.headers['content-type']}`,
+      );
     }
-    return this.uploadService.handleChunk(uploadId, chunkIndex, file.buffer);
+
+    // Đọc chunk data từ file (vì dùng diskStorage)
+    let chunkData: Buffer;
+    if (file.buffer) {
+      // Nếu có buffer (memoryStorage)
+      chunkData = file.buffer;
+    } else if (file.path) {
+      // Đọc từ disk (diskStorage)
+      chunkData = readFileSync(file.path);
+    } else {
+      throw new BadRequestException('Không thể đọc chunk data');
+    }
+
+    return this.uploadService.handleChunk(uploadId, chunkIndex, chunkData);
   }
 
   @Post('complete')
