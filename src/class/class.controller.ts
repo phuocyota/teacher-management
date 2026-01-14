@@ -6,6 +6,7 @@ import {
   Patch,
   Param,
   Delete,
+  ParseUUIDPipe,
 } from '@nestjs/common';
 import { ApiTags, ApiBearerAuth } from '@nestjs/swagger';
 import { ClassService } from './class.service';
@@ -30,17 +31,17 @@ export class ClassController {
   }
 
   @Get(':id')
-  findOne(@Param('id') id: string) {
+  findOne(@Param('id', ParseUUIDPipe) id: string) {
     return this.classService.findOne(id);
   }
 
   @Patch(':id')
-  update(@Param('id') id: string, @Body() dto: UpdateClassDto) {
+  update(@Param('id', ParseUUIDPipe) id: string, @Body() dto: UpdateClassDto) {
     return this.classService.update(id, dto);
   }
 
   @Delete(':id')
-  remove(@Param('id') id: string, @User() user: JwtPayload) {
+  remove(@Param('id', ParseUUIDPipe) id: string, @User() user: JwtPayload) {
     return this.classService.remove(id, user);
   }
 }

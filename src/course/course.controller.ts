@@ -7,6 +7,7 @@ import {
   Param,
   Delete,
   Query,
+  ParseUUIDPipe,
 } from '@nestjs/common';
 import {
   ApiTags,
@@ -60,18 +61,18 @@ export class CourseController {
 
   @Get(':id')
   @ApiOkResponse({ type: CourseResponseDto })
-  findOne(@Param('id') id: string) {
+  findOne(@Param('id', ParseUUIDPipe) id: string) {
     return this.courseService.findOne(id);
   }
 
   @Patch(':id')
   @ApiOkResponse({ type: CourseResponseDto })
-  update(@Param('id') id: string, @Body() dto: UpdateCourseDto) {
+  update(@Param('id', ParseUUIDPipe) id: string, @Body() dto: UpdateCourseDto) {
     return this.courseService.update(id, dto);
   }
 
   @Delete(':id')
-  remove(@Param('id') id: string, @User() user: JwtPayload) {
+  remove(@Param('id', ParseUUIDPipe) id: string, @User() user: JwtPayload) {
     return this.courseService.remove(id, user);
   }
 }
