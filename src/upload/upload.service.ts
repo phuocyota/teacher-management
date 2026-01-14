@@ -12,22 +12,14 @@ import {
   mkdirSync,
   unlinkSync,
   renameSync,
-  createReadStream,
   statSync,
   writeFileSync,
   appendFileSync,
   readFileSync,
   readdirSync,
+  rmdirSync,
 } from 'fs';
-import {
-  join,
-  dirname,
-  isAbsolute,
-  normalize,
-  basename,
-  resolve,
-  sep,
-} from 'path';
+import { join, dirname, isAbsolute, basename, resolve, sep } from 'path';
 import { FileEntity } from './entity/file.entity';
 import { FileAccessEntity } from './entity/file-access.entity';
 import { FileAccessType, FileType } from './enum/file-visibility.enum';
@@ -816,8 +808,8 @@ export class UploadService {
         files.forEach((file) => {
           unlinkSync(join(sessionDir, file));
         });
-        // Xóa thư mục session
-        unlinkSync(sessionDir);
+        // Xóa thư mục session (dùng rmdirSync cho directory)
+        rmdirSync(sessionDir);
       }
 
       // Xóa session khỏi memory
