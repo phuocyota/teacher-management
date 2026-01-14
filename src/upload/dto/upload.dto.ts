@@ -282,3 +282,79 @@ export class FolderPathResponseDto {
   })
   created: boolean;
 }
+
+// DTOs cho Chunked Upload
+export class InitUploadDto {
+  @ApiProperty({
+    description: 'Tên file gốc',
+    example: 'video.mp4',
+  })
+  @IsNotEmpty({ message: 'Tên file không được để trống' })
+  @IsString()
+  fileName: string;
+
+  @ApiProperty({
+    description: 'Kích thước file (bytes)',
+    example: 104857600,
+  })
+  @IsNotEmpty({ message: 'Kích thước file không được để trống' })
+  fileSize: number;
+
+  @ApiProperty({
+    description: 'Tổng số chunks',
+    example: 10,
+  })
+  @IsNotEmpty({ message: 'Tổng số chunks không được để trống' })
+  totalChunks: number;
+
+  @ApiPropertyOptional({
+    description: 'MIME type',
+    example: 'video/mp4',
+  })
+  @IsOptional()
+  @IsString()
+  mimeType?: string;
+
+  @ApiPropertyOptional({
+    description: 'Loại file',
+    enum: FileType,
+  })
+  @IsOptional()
+  @IsEnum(FileType)
+  fileType?: FileType;
+}
+
+export class InitUploadResponseDto {
+  @ApiProperty({
+    description: 'Upload session ID',
+    example: '550e8400-e29b-41d4-a716-446655440000',
+  })
+  uploadId: string;
+
+  @ApiProperty({
+    description: 'Tên file',
+  })
+  fileName: string;
+
+  @ApiProperty({
+    description: 'Tổng số chunks cần upload',
+  })
+  totalChunks: number;
+}
+
+export class CompleteUploadDto {
+  @ApiProperty({
+    description: 'Upload session ID',
+    example: '550e8400-e29b-41d4-a716-446655440000',
+  })
+  @IsNotEmpty({ message: 'Upload ID không được để trống' })
+  @IsUUID('4', { message: 'Upload ID phải là UUID hợp lệ' })
+  uploadId: string;
+}
+
+export class CompleteUploadResponseDto extends UploadFileResponseDto {
+  @ApiProperty({
+    description: 'Upload thành công',
+  })
+  success: boolean;
+}

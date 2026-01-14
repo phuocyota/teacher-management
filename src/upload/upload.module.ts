@@ -6,6 +6,7 @@ import { diskStorage } from 'multer';
 import { extname } from 'path';
 import { UploadController } from './upload.controller';
 import { UploadService } from './upload.service';
+import { StreamService } from './services/stream.service';
 import { FileEntity } from './entity/file.entity';
 import { FileAccessEntity } from './entity/file-access.entity';
 import { LectureEntity } from 'src/lecture/entity/lecture.entity';
@@ -91,7 +92,7 @@ interface MulterFile {
     }),
   ],
   controllers: [UploadController],
-  providers: [UploadService],
+  providers: [UploadService, StreamService],
   exports: [UploadService],
 })
 export class UploadModule {}

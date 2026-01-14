@@ -12,6 +12,8 @@ import {
   Req,
   Query,
   ParseUUIDPipe,
+  ParseIntPipe,
+  BadRequestException,
 } from '@nestjs/common';
 import { FileInterceptor, FilesInterceptor } from '@nestjs/platform-express';
 import {
@@ -21,6 +23,7 @@ import {
   ApiConsumes,
   ApiBody,
   ApiBearerAuth,
+  ApiParam,
 } from '@nestjs/swagger';
 import type { Response, Request } from 'express';
 import { UploadService } from './upload.service';
@@ -33,6 +36,10 @@ import {
   UploadFolderResponseDto,
   CreateFolderPathDto,
   FolderPathResponseDto,
+  InitUploadDto,
+  InitUploadResponseDto,
+  CompleteUploadDto,
+  CompleteUploadResponseDto,
 } from './dto/upload.dto';
 import { FileType } from './enum/file-visibility.enum';
 import { User } from 'src/common/decorator/user.decorator';
@@ -49,6 +56,7 @@ interface MulterFile {
   path: string;
   mimetype: string;
   size: number;
+  buffer?: Buffer;
 }
 
 @ApiTags('Upload')
@@ -362,5 +370,87 @@ export class UploadController {
   ): Promise<{ message: string; filename: string }> {
     await this.uploadService.deleteFile(filename, user);
     return { message: 'Xóa file thành công', filename };
+  }
+
+  // ====== CHUNKED UPLOAD APIs ======
+
+  @Post('init')
+  @ApiOperation({ summary: 'Khởi tạo chunked upload session' })
+  @ApiResponse({
+    status: 201,
+    description: 'Khởi tạo upload session thành công',
+    type: InitUploadResponseDto,
+  })
+  @ApiResponse({ status: 400, description: 'Dữ liệu không hợp lệ' })
+  async initChunkedUpload(
+    @Body() dto: InitUploadDto,
+    @User() user: JwtPayload,
+  ): Promise<InitUploadResponseDto> {
+    return this.uploadService.initChunkedUpload(dto, user);
+  }
+
+  @Post('chunk/:uploadId/:chunkIndex')
+  @ApiOperation({ summary: 'Upload một chunk' })
+  @ApiConsumes('multipart/form-data')
+  @ApiParam({ name: 'uploadId', description: 'ID của upload session' })
+  @ApiParam({
+    name: 'chunkIndex',
+    description: 'Index của chunk (bắt đầu từ 0)',
+    type: Number,
+  })
+  @ApiBody({
+    schema: {
+      type: 'object',
+      properties: {
+        chunk: {
+          type: 'string',
+          format: 'binary',
+          description: 'Chunk data',
+        },
+      },
+    },
+  })
+  @ApiResponse({
+    status: 201,
+    description: 'Upload chunk thành công',
+    schema: {
+      type: 'object',
+      properties: {
+        received: { type: 'number', description: 'Số chunk đã nhận' },
+        total: { type: 'number', description: 'Tổng số chunk' },
+      },
+    },
+  })
+  @ApiResponse({ status: 404, description: 'Upload session không tồn tại' })
+  @UseInterceptors(FileInterceptor('chunk'))
+  async uploadChunk(
+    @Param('uploadId') uploadId: string,
+    @Param('chunkIndex', ParseIntPipe) chunkIndex: number,
+    @UploadedFile() file: MulterFile,
+  ): Promise<{ received: number; total: number }> {
+    if (!file || !file.buffer) {
+      throw new BadRequestException('Chunk không hợp lệ');
+    }
+    return this.uploadService.handleChunk(uploadId, chunkIndex, file.buffer);
+  }
+
+  @Post('complete')
+  @ApiOperation({ summary: 'Hoàn thành chunked upload và merge các chunks' })
+  @ApiResponse({
+    status: 201,
+    description: 'Upload hoàn thành thành công',
+    type: CompleteUploadResponseDto,
+  })
+  @ApiResponse({ status: 404, description: 'Upload session không tồn tại' })
+  @ApiResponse({
+    status: 403,
+    description: 'Không có quyền hoàn thành upload này',
+  })
+  @ApiResponse({ status: 400, description: 'Chưa nhận đủ chunks' })
+  async completeChunkedUpload(
+    @Body() dto: CompleteUploadDto,
+    @User() user: JwtPayload,
+  ): Promise<CompleteUploadResponseDto> {
+    return this.uploadService.completeChunkedUpload(dto, user);
   }
 }

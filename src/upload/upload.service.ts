@@ -14,6 +14,10 @@ import {
   renameSync,
   createReadStream,
   statSync,
+  writeFileSync,
+  appendFileSync,
+  readFileSync,
+  readdirSync,
 } from 'fs';
 import {
   join,
@@ -27,12 +31,17 @@ import {
 import { FileEntity } from './entity/file.entity';
 import { FileAccessEntity } from './entity/file-access.entity';
 import { FileAccessType, FileType } from './enum/file-visibility.enum';
+import { StreamService } from './services/stream.service';
 import {
   UploadFileResponseDto,
   UploadMultipleFilesResponseDto,
   FileAccessResponseDto,
   UploadFolderResponseDto,
   FolderPathResponseDto,
+  InitUploadDto,
+  InitUploadResponseDto,
+  CompleteUploadDto,
+  CompleteUploadResponseDto,
 } from './dto/upload.dto';
 import { JwtPayload } from 'src/common/interface/jwt-payload.interface';
 import { UserType } from 'src/common/enum/user-type.enum';
@@ -56,6 +65,19 @@ interface MulterFile {
 export class UploadService {
   private readonly uploadDir: string;
   private readonly publicBaseUrl?: string;
+  private readonly chunksDir: string;
+  private uploadSessions: Map<
+    string,
+    {
+      fileName: string;
+      fileSize: number;
+      totalChunks: number;
+      receivedChunks: Set<number>;
+      mimeType?: string;
+      fileType?: FileType;
+      userId: string;
+    }
+  > = new Map();
 
   constructor(
     @InjectRepository(FileEntity)
@@ -63,10 +85,13 @@ export class UploadService {
     @InjectRepository(FileAccessEntity)
     private readonly fileAccessRepo: Repository<FileAccessEntity>,
     private readonly configService: ConfigService,
+    private readonly streamService: StreamService,
   ) {
     this.uploadDir = this.configService.get('UPLOAD_DIR') || 'uploads';
+    this.chunksDir = join(this.uploadDir, 'chunks');
     this.publicBaseUrl = this.configService.get('PUBLIC_BASE_URL');
     this.ensureUploadDirExists();
+    this.ensureChunksDirExists();
   }
 
   /**
@@ -81,6 +106,21 @@ export class UploadService {
       // Gracefully handle permission errors
       throw new Error(
         `Không thể tạo thư mục upload: ${this.uploadDir}. Vui lòng kiểm tra quyền truy cập., Error: ${error}`,
+      );
+    }
+  }
+
+  /**
+   * Đảm bảo thư mục chunks tồn tại
+   */
+  private ensureChunksDirExists(): void {
+    try {
+      if (!existsSync(this.chunksDir)) {
+        mkdirSync(this.chunksDir, { recursive: true });
+      }
+    } catch (error) {
+      throw new Error(
+        `Không thể tạo thư mục chunks: ${this.chunksDir}. Error: ${error}`,
       );
     }
   }
@@ -320,118 +360,21 @@ export class UploadService {
   }
 
   async download(fileId: string, res: Response) {
-    // 1️⃣ Lấy metadata file
-    const file = await this.fileRepo.findOne({ where: { id: fileId } });
-
-    if (!file) throw new NotFoundException('File not found');
-
-    // 2️⃣ Build local absolute path and validate
-    const absolutePath = this.getAbsoluteFilePath(file.path);
-    if (!existsSync(absolutePath)) {
-      throw new NotFoundException('File not found on storage');
-    }
-
-    const stats = statSync(absolutePath);
-    if (stats.isDirectory()) {
-      throw new BadRequestException('Downloading directories is not supported');
-    }
-
-    // 3️⃣ Set headers and stream file
-    res.setHeader(
-      'Content-Disposition',
-      `attachment; filename="${encodeURIComponent(file.originalName)}"`,
-    );
-    res.setHeader('Content-Type', file.mimetype || 'application/octet-stream');
-    res.setHeader('Content-Length', stats.size.toString());
-
-    const stream = createReadStream(absolutePath);
-    stream.on('error', (err) => {
-      res.status(500).end();
-    });
-    stream.pipe(res);
+    return this.streamService.download(fileId, res);
   }
 
   /**
    * Serve image file with appropriate content-type
    */
   async serveImage(filename: string, res: Response) {
-    const file = await this.getFileByFilename(filename);
-
-    const absolutePath = this.getAbsoluteFilePath(file.path);
-    if (!existsSync(absolutePath)) {
-      throw new NotFoundException('File not found on storage');
-    }
-
-    const stats = statSync(absolutePath);
-    if (stats.isDirectory()) {
-      throw new BadRequestException('Cannot serve a directory');
-    }
-
-    // Validate that file is an image
-    // if (!file.mimetype || !file.mimetype.startsWith('image/')) {
-    //   throw new BadRequestException('File is not an image');
-    // }
-
-    // Use sendFile for better performance and automatic content-type handling
-    res.sendFile(absolutePath, {
-      headers: {
-        'Content-Type': file.mimetype,
-        'Cache-Control': 'public, max-age=31536000',
-      },
-    });
+    return this.streamService.serveImage(filename, res);
   }
 
   /**
    * Stream file with support for Range requests (partial content)
    */
   async stream(fileId: string, req: Request, res: Response) {
-    const file = await this.fileRepo.findOne({ where: { id: fileId } });
-
-    if (!file) throw new NotFoundException('File not found');
-
-    const absolutePath = this.getAbsoluteFilePath(file.path);
-    if (!existsSync(absolutePath)) {
-      throw new NotFoundException('File not found on storage');
-    }
-
-    const stats = statSync(absolutePath);
-    if (stats.isDirectory()) {
-      throw new BadRequestException('Streaming directories is not supported');
-    }
-
-    const fileSize = stats.size;
-    const range = req.headers.range;
-    const contentType = file.mimetype || 'application/octet-stream';
-
-    if (range) {
-      const parts = (range as string).replace(/bytes=/, '').split('-');
-      const start = parseInt(parts[0], 10);
-      const end = parts[1] ? parseInt(parts[1], 10) : fileSize - 1;
-
-      if (isNaN(start) || isNaN(end) || start > end || start >= fileSize) {
-        res.status(416).setHeader('Content-Range', `bytes */${fileSize}`);
-        return res.end();
-      }
-
-      res.status(206);
-      res.setHeader('Content-Range', `bytes ${start}-${end}/${fileSize}`);
-      res.setHeader('Accept-Ranges', 'bytes');
-      res.setHeader('Content-Length', (end - start + 1).toString());
-      res.setHeader('Content-Type', contentType);
-
-      const stream = createReadStream(absolutePath, { start, end });
-      stream.on('error', () => res.status(500).end());
-      stream.pipe(res);
-    } else {
-      res.status(200);
-      res.setHeader('Content-Length', fileSize.toString());
-      res.setHeader('Content-Type', contentType);
-      res.setHeader('Accept-Ranges', 'bytes');
-
-      const stream = createReadStream(absolutePath);
-      stream.on('error', () => res.status(500).end());
-      stream.pipe(res);
-    }
+    return this.streamService.stream(fileId, req, res);
   }
 
   /**
@@ -636,7 +579,7 @@ export class UploadService {
     }
 
     // Xóa file vật lý
-    const absolutePath = this.getAbsoluteFilePath(file.path);
+    const absolutePath = this.streamService.getAbsoluteFilePath(file.path);
     if (existsSync(absolutePath)) {
       unlinkSync(absolutePath);
     }
@@ -645,51 +588,6 @@ export class UploadService {
     await this.fileRepo.delete({ id: file.id });
 
     return true;
-  }
-
-  /**
-   * Lấy đường dẫn đầy đủ của file
-   */
-  private getAbsoluteFilePath(filename: string): string {
-    // Handle cases where `filename` is:
-    // - an absolute path -> return as-is
-    // - already contains the uploadDir as prefix (eg 'uploads/xxx' or 'uploads\\xxx') -> strip prefix
-    // - a plain filename -> join with uploadDir
-    if (!filename) {
-      throw new Error('Filename is required');
-    }
-
-    // If absolute filesystem path, return normalized
-    if (isAbsolute(filename)) {
-      return normalize(filename);
-    }
-
-    // If it's a URL (http/https), map URL pathname to local uploadDir
-    if (/^https?:\/\//i.test(filename)) {
-      try {
-        const url = new URL(filename);
-        let pathname = url.pathname.replace(/^\//, '');
-        const uploadPrefix = this.uploadDir.replace(/\\/g, '/');
-        // If pathname starts with uploadDir, strip it to avoid duplication
-        if (pathname.startsWith(uploadPrefix + '/')) {
-          pathname = pathname.substring(uploadPrefix.length + 1);
-        }
-        return join(process.cwd(), this.uploadDir, pathname);
-      } catch (err) {
-        throw new Error('Invalid URL stored for file path');
-      }
-    }
-
-    // Normalize separators for relative paths
-    let normalized = filename.replace(/\\/g, '/');
-
-    const uploadPrefix = this.uploadDir.replace(/\\/g, '/');
-    if (normalized.startsWith(uploadPrefix + '/')) {
-      // remove leading uploadDir/
-      normalized = normalized.substring(uploadPrefix.length + 1);
-    }
-
-    return join(process.cwd(), this.uploadDir, normalized);
   }
 
   /**
@@ -781,5 +679,151 @@ export class UploadService {
   public downloadFile(filename: string): { filePath: string } {
     const filePath = this.getFilePath(filename);
     return { filePath };
+  }
+
+  /**
+   * Khởi tạo chunked upload session
+   */
+  async initChunkedUpload(
+    dto: InitUploadDto,
+    user: JwtPayload,
+  ): Promise<InitUploadResponseDto> {
+    const uploadId = `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+    const sessionDir = join(this.chunksDir, uploadId);
+
+    // Tạo thư mục cho session
+    mkdirSync(sessionDir, { recursive: true });
+
+    // Lưu thông tin session
+    this.uploadSessions.set(uploadId, {
+      fileName: dto.fileName,
+      fileSize: dto.fileSize,
+      totalChunks: dto.totalChunks,
+      receivedChunks: new Set(),
+      mimeType: dto.mimeType,
+      fileType: dto.fileType || FileType.NORMAL,
+      userId: user.userId,
+    });
+
+    return {
+      uploadId,
+      fileName: dto.fileName,
+      totalChunks: dto.totalChunks,
+    };
+  }
+
+  /**
+   * Nhận và lưu chunk
+   */
+  async handleChunk(
+    uploadId: string,
+    chunkIndex: number,
+    chunk: Buffer,
+  ): Promise<{ received: number; total: number }> {
+    const session = this.uploadSessions.get(uploadId);
+
+    if (!session) {
+      throw new NotFoundException(
+        'Upload session không tồn tại hoặc đã hết hạn',
+      );
+    }
+
+    const sessionDir = join(this.chunksDir, uploadId);
+    const chunkPath = join(sessionDir, `chunk-${chunkIndex}`);
+
+    // Lưu chunk
+    writeFileSync(chunkPath, chunk);
+    session.receivedChunks.add(chunkIndex);
+
+    return {
+      received: session.receivedChunks.size,
+      total: session.totalChunks,
+    };
+  }
+
+  /**
+   * Hoàn thành upload và merge các chunks
+   */
+  async completeChunkedUpload(
+    dto: CompleteUploadDto,
+    user: JwtPayload,
+  ): Promise<CompleteUploadResponseDto> {
+    const session = this.uploadSessions.get(dto.uploadId);
+
+    if (!session) {
+      throw new NotFoundException('Upload session không tồn tại');
+    }
+
+    if (session.userId !== user.userId) {
+      throw new ForbiddenException('Bạn không có quyền hoàn thành upload này');
+    }
+
+    if (session.receivedChunks.size !== session.totalChunks) {
+      throw new BadRequestException(
+        `Chưa nhận đủ chunks. Đã nhận: ${session.receivedChunks.size}/${session.totalChunks}`,
+      );
+    }
+
+    const sessionDir = join(this.chunksDir, dto.uploadId);
+    const timestamp = Date.now();
+    const finalFileName = `${timestamp}-${session.fileName}`;
+    const finalPath = join(this.uploadDir, finalFileName);
+
+    // Merge các chunks theo thứ tự
+    for (let i = 0; i < session.totalChunks; i++) {
+      const chunkPath = join(sessionDir, `chunk-${i}`);
+      const chunkData = readFileSync(chunkPath);
+      appendFileSync(finalPath, chunkData);
+    }
+
+    // Lấy kích thước file sau khi merge
+    const stats = statSync(finalPath);
+
+    // Lưu vào database
+    const fileEntity = this.fileRepo.create({
+      originalName: session.fileName,
+      filename: finalFileName,
+      path: finalPath,
+      mimetype: session.mimeType || 'application/octet-stream',
+      size: stats.size,
+      fileType: session.fileType,
+      uploadedBy: user.userId,
+      createdBy: user.userId,
+    });
+
+    const savedFile = await this.fileRepo.save(fileEntity);
+
+    // Dọn dẹp session và chunks
+    this.cleanupSession(dto.uploadId);
+
+    const response = UploadFileResponseDto.fromEntity(savedFile);
+    return {
+      ...response,
+      success: true,
+    };
+  }
+
+  /**
+   * Dọn dẹp upload session và xóa chunks
+   */
+  private cleanupSession(uploadId: string): void {
+    const sessionDir = join(this.chunksDir, uploadId);
+
+    try {
+      // Xóa tất cả chunks
+      if (existsSync(sessionDir)) {
+        const files = readdirSync(sessionDir);
+        files.forEach((file) => {
+          unlinkSync(join(sessionDir, file));
+        });
+        // Xóa thư mục session
+        unlinkSync(sessionDir);
+      }
+
+      // Xóa session khỏi memory
+      this.uploadSessions.delete(uploadId);
+    } catch (error) {
+      console.error(`Error cleaning up session ${uploadId}:`, error);
+    }
   }
 }
