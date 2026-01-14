@@ -1,6 +1,13 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 
 export class LectureResponse {
+  //courseId
+  @ApiPropertyOptional({
+    type: 'string',
+    format: 'uuid',
+  })
+  courseId?: string;
+
   //groupId
   @ApiPropertyOptional({
     type: 'string',

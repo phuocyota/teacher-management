@@ -86,11 +86,11 @@ export class LectureService {
   async findAll(
     dto: GetAllLectureDto,
   ): Promise<PaginationResponseDto<LectureResponse>> {
-    const { groupId, search, page = 1, size = 10 } = dto;
+    const { courseId, groupId, search, page = 1, size = 10 } = dto;
 
     const query = this.lectureRepository
       .createQueryBuilder('lecture')
-      .innerJoin('lecture.contexts', 'context')
+      .leftJoin('lecture.contexts', 'context')
       .select([
         'lecture.id AS id',
         'lecture.code AS code',
@@ -98,12 +98,17 @@ export class LectureService {
         'lecture.note AS note',
         'lecture.orderColumn AS "orderColumn"',
         'lecture.avatar AS avatar',
+        'lecture.courseId AS "courseId"',
         'context.groupId AS "groupId"',
       ])
       .orderBy('lecture.orderColumn', 'ASC')
       .skip((page - 1) * size)
       .take(size)
       .distinct(true);
+
+    if (courseId) {
+      query.andWhere('lecture.courseId = :courseId', { courseId });
+    }
 
     if (groupId) {
       query.andWhere('context.groupId = :groupId', { groupId });

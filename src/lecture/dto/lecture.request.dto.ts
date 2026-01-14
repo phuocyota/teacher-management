@@ -293,6 +293,16 @@ export class GetAllLectureDto extends PaginationRequestDto {
   @ApiPropertyOptional({
     type: 'string',
     format: 'uuid',
+    description: 'Lọc theo ID khóa học',
+  })
+  @IsOptional()
+  @IsUUID('4', { message: 'courseId phải là một UUID hợp lệ' })
+  courseId?: string;
+
+  @ApiPropertyOptional({
+    type: 'string',
+    format: 'uuid',
+    description: 'Lọc theo ID nhóm',
   })
   @IsOptional()
   @IsUUID('4', { message: 'groupId phải là một UUID hợp lệ' })
