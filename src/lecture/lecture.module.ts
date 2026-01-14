@@ -34,9 +34,9 @@ import { UploadModule } from 'src/upload/upload.module';
   ],
   providers: [LectureService, LectureContextService, LectureDownloadLogService],
   controllers: [
-    LectureController,
     LectureContextController,
     LectureDownloadLogController,
+    LectureController,
   ],
   exports: [LectureService, LectureContextService, LectureDownloadLogService],
 })
