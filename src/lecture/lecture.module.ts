@@ -2,6 +2,8 @@ import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { LectureService } from './services/lecture.service';
 import { LectureController } from './lecture.controller';
+import { LectureContextService as LectureContextUserService } from './services/lecture_context_user.service';
+import { LectureContextController as LectureContextUserController } from './controller/lecture_context_user.controller';
 import { LectureContextService } from './services/lecture_context.service';
 import { LectureContextController } from './controller/lecture_context.controller';
 import { LectureDownloadLogService } from './services/lecture_download_log.service';
@@ -32,12 +34,23 @@ import { UploadModule } from 'src/upload/upload.module';
     CourseModule,
     UploadModule,
   ],
-  providers: [LectureService, LectureContextService, LectureDownloadLogService],
+  providers: [
+    LectureService,
+    LectureContextUserService,
+    LectureContextService,
+    LectureDownloadLogService,
+  ],
   controllers: [
+    LectureContextUserController,
     LectureContextController,
     LectureDownloadLogController,
     LectureController,
   ],
-  exports: [LectureService, LectureContextService, LectureDownloadLogService],
+  exports: [
+    LectureService,
+    LectureContextUserService,
+    LectureContextService,
+    LectureDownloadLogService,
+  ],
 })
 export class LectureModule {}

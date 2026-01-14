@@ -1,53 +1,5 @@
-//viết dto cho lecture context trong đó bao gồm mảng userIds, lectureId
 import { ApiProperty } from '@nestjs/swagger';
 import { IsArray, IsUUID } from 'class-validator';
-import { PaginationRequestDto } from 'src/common/dto/pagination.dto';
-
-export class CreateLectureContextDto {
-  //thêm API doc swagger cho các field bên dưới
-  @ApiProperty({
-    description: 'ID của bài giảng',
-    example: 'a1b2c3d4-e5f6-7890-abcd-ef1234567890',
-  })
-  @IsUUID()
-  lectureId: string;
-
-  @ApiProperty({
-    description: 'Danh sách ID người dùng',
-    example: ['b1c2d3e4-f5g6-7890-abcd-ef1234567890'],
-  })
-  @IsArray()
-  @IsUUID('4', { each: true })
-  userIds: string[];
-}
-
-export class UpdateLectureContextDto {
-  //optional lectureId
-  @ApiProperty({
-    description: 'ID của bài giảng',
-    example: 'a1b2c3d4-e5f6-7890-abcd-ef1234567890',
-  })
-  @IsUUID()
-  lectureId: string;
-
-  //optional userIds
-  @ApiProperty({
-    description: 'Danh sách ID người dùng',
-    example: ['b1c2d3e4-f5g6-7890-abcd-ef1234567890'],
-  })
-  @IsArray()
-  @IsUUID('4', { each: true })
-  userIds: string[];
-}
-
-export class GetListLectureContextDto extends PaginationRequestDto {
-  @ApiProperty({
-    description: 'ID của bài giảng',
-    example: 'a1b2c3d4-e5f6-7890-abcd-ef1234567890',
-  })
-  @IsUUID()
-  lectureId: string;
-}
 
 export class BulkCreateLectureContextDto {
   @ApiProperty({
@@ -62,7 +14,7 @@ export class BulkCreateLectureContextDto {
   lectureIds: string[];
 
   @ApiProperty({
-    description: 'Danh sách ID người dùng',
+    description: 'Danh sách ID nhóm',
     example: [
       'c3d4e5f6-g7h8-9012-cdef-gh3456789012',
       'd4e5f6g7-h8i9-0123-defg-hi4567890123',
@@ -70,5 +22,5 @@ export class BulkCreateLectureContextDto {
   })
   @IsArray()
   @IsUUID('4', { each: true })
-  userIds: string[];
+  groupIds: string[];
 }
