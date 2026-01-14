@@ -11,6 +11,7 @@ import { LectureContextService } from 'src/lecture/services/lecture_context.serv
 import {
   CreateLectureContextDto,
   UpdateLectureContextDto,
+  BulkCreateLectureContextDto,
 } from 'src/lecture/dto/lecture_context.dto';
 
 @ApiTags('LectureContext')
@@ -37,5 +38,20 @@ export class LectureContextController {
     @User() user: JwtPayload,
   ): Promise<void> {
     await this.lectureContextService.update(dto, user);
+  }
+
+  @Post('bulk')
+  @ApiOperation({
+    summary: 'Bulk create: Add multiple users to multiple lectures',
+  })
+  @ApiResponse({
+    status: 201,
+    description: 'All lecture-user relations created successfully',
+  })
+  async bulkCreateLectureUsers(
+    @Body() dto: BulkCreateLectureContextDto,
+    @User() user: JwtPayload,
+  ): Promise<void> {
+    await this.lectureContextService.bulkCreate(dto, user);
   }
 }

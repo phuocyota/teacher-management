@@ -7,6 +7,7 @@ import { runInTransaction } from 'src/common/database/transaction.utils';
 import {
   CreateLectureContextDto,
   UpdateLectureContextDto,
+  BulkCreateLectureContextDto,
 } from '../dto/lecture_context.dto';
 import { diffArray } from 'src/common/utils/array-diff.utils';
 import { JwtPayload } from 'src/common/interface/jwt-payload.interface';
@@ -107,6 +108,34 @@ export class LectureContextService {
         if (ops.length > 0) {
           await Promise.all(ops);
         }
+      },
+    );
+  }
+
+  // Bulk create: tạo records cho nhiều lectures và nhiều users
+  async bulkCreate(
+    dto: BulkCreateLectureContextDto,
+    user: JwtPayload,
+  ): Promise<void> {
+    return runInTransaction(
+      this.lectureContextUserRepository.manager,
+      async (manager) => {
+        const repo = manager.getRepository(LectureContextUserEntity);
+        const entities: LectureContextUserEntity[] = [];
+
+        // Tạo cartesian product: mỗi lecture với mỗi user
+        for (const lectureId of dto.lectureIds) {
+          for (const userId of dto.userIds) {
+            const entity = new LectureContextUserEntity();
+            entity.lectureId = lectureId;
+            entity.userId = userId;
+            entity.createdBy = user.userId;
+            entities.push(entity);
+          }
+        }
+
+        // Lưu tất cả entities
+        await repo.save(entities);
       },
     );
   }

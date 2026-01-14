@@ -48,3 +48,27 @@ export class GetListLectureContextDto extends PaginationRequestDto {
   @IsUUID()
   lectureId: string;
 }
+
+export class BulkCreateLectureContextDto {
+  @ApiProperty({
+    description: 'Danh sách ID bài giảng',
+    example: [
+      'a1b2c3d4-e5f6-7890-abcd-ef1234567890',
+      'b2c3d4e5-f6g7-8901-bcde-fg2345678901',
+    ],
+  })
+  @IsArray()
+  @IsUUID('4', { each: true })
+  lectureIds: string[];
+
+  @ApiProperty({
+    description: 'Danh sách ID người dùng',
+    example: [
+      'c3d4e5f6-g7h8-9012-cdef-gh3456789012',
+      'd4e5f6g7-h8i9-0123-defg-hi4567890123',
+    ],
+  })
+  @IsArray()
+  @IsUUID('4', { each: true })
+  userIds: string[];
+}
