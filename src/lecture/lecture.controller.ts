@@ -27,6 +27,7 @@ import {
 import { User } from 'src/common/decorator/user.decorator';
 import type { JwtPayload } from 'src/common/interface/jwt-payload.interface';
 import { PaginationResponseDto } from 'src/common/dto/pagingation.dto';
+import { ParseUUIDPipe } from '@nestjs/common';
 
 @ApiTags('Lecture')
 @ApiBearerAuth('access-token')
@@ -70,7 +71,7 @@ export class LectureController {
     type: LectureResponseDto,
   })
   @ApiResponse({ status: 404, description: 'Lecture not found' })
-  findOne(@Param('id') id: string): Promise<LectureResponseDto> {
+  findOne(@Param('id', ParseUUIDPipe) id: string): Promise<LectureResponseDto> {
     return this.lectureService.findOne(id);
   }
 
