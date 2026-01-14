@@ -40,7 +40,7 @@ import { UserType } from 'src/common/enum/user-type.enum';
 import {
   PaginationRequestDto,
   PaginationResponseDto,
-} from 'src/common/dto/pagingation.dto';
+} from 'src/common/dto/pagination.dto';
 
 // Interface cho Multer File đã được chuyển sang module, nhưng vẫn cần ở đây cho type hinting
 interface MulterFile {

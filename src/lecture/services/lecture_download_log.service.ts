@@ -6,7 +6,7 @@ import {
   CreateDownloadLogDto,
   GetDownloadLogQueryDto,
 } from '../dto/download-log.dto';
-import { PaginationResponseDto } from 'src/common/dto/pagingation.dto';
+import { PaginationResponseDto } from 'src/common/dto/pagination.dto';
 
 @Injectable()
 export class LectureDownloadLogService {
@@ -28,8 +28,9 @@ export class LectureDownloadLogService {
 
   async findAll(
     query: GetDownloadLogQueryDto,
+    userId: string,
   ): Promise<PaginationResponseDto<LectureDownloadLogEntity>> {
-    const { page = 1, size = 10, lectureId, userId, courseId } = query;
+    const { page = 1, size = 10, courseId, lectureId } = query;
 
     const qb = this.downloadLogRepository
       .createQueryBuilder('log')
@@ -41,9 +42,7 @@ export class LectureDownloadLogService {
       qb.andWhere('log.lectureId = :lectureId', { lectureId });
     }
 
-    if (userId) {
-      qb.andWhere('user.id = :userId', { userId });
-    }
+    qb.andWhere('user.id = :userId', { userId });
 
     if (courseId) {
       qb.andWhere('lecture.id = :courseId', { courseId });

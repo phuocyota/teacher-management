@@ -1,7 +1,7 @@
 //viết dto cho lecture context trong đó bao gồm mảng userIds, lectureId
 import { ApiProperty } from '@nestjs/swagger';
 import { IsArray, IsUUID } from 'class-validator';
-import { PaginationRequestDto } from 'src/common/dto/pagingation.dto';
+import { PaginationRequestDto } from 'src/common/dto/pagination.dto';
 
 export class CreateLectureContextDto {
   //thêm API doc swagger cho các field bên dưới

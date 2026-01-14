@@ -7,6 +7,7 @@ import {
   Body,
   Param,
   Query,
+  ParseUUIDPipe,
 } from '@nestjs/common';
 import {
   ApiTags,
@@ -26,8 +27,7 @@ import {
 } from './dto/lecture.response.dto';
 import { User } from 'src/common/decorator/user.decorator';
 import type { JwtPayload } from 'src/common/interface/jwt-payload.interface';
-import { PaginationResponseDto } from 'src/common/dto/pagingation.dto';
-import { ParseUUIDPipe } from '@nestjs/common';
+import { PaginationResponseDto } from 'src/common/dto/pagination.dto';
 
 @ApiTags('Lecture')
 @ApiBearerAuth('access-token')
