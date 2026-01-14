@@ -8,19 +8,6 @@ export class LectureResponse {
   })
   groupId?: string;
 
-  //courseId
-  @ApiPropertyOptional({
-    type: 'string',
-    format: 'uuid',
-  })
-  courseId?: string;
-
-  //classId
-  @ApiPropertyOptional({
-    type: 'string',
-    format: 'uuid',
-  })
-  classId?: string;
   //code
   @ApiPropertyOptional({
     type: 'string',

@@ -1,4 +1,13 @@
-import { Body, Controller, Get, Post, Query } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Delete,
+  Get,
+  Param,
+  ParseUUIDPipe,
+  Post,
+  Query,
+} from '@nestjs/common';
 import {
   ApiBearerAuth,
   ApiOperation,
@@ -37,5 +46,23 @@ export class LectureDownloadLogController {
     @User() user: JwtPayload,
   ) {
     return this.downloadLogService.findAll(query, user.userId);
+  }
+
+  @Delete(':id')
+  @ApiOperation({ summary: 'Delete a download log' })
+  @ApiResponse({
+    status: 200,
+    description: 'Download log deleted successfully',
+  })
+  @ApiResponse({ status: 404, description: 'Download log not found' })
+  @ApiResponse({
+    status: 403,
+    description: 'Forbidden - Not allowed to delete this log',
+  })
+  async deleteDownloadLog(
+    @Param('id', ParseUUIDPipe) id: string,
+    @User() user: JwtPayload,
+  ): Promise<void> {
+    await this.downloadLogService.delete(id, user.userId, user.userType);
   }
 }

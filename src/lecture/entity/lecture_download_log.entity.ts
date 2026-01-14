@@ -1,10 +1,9 @@
 import { BaseEntity } from 'src/common/sql/base.entity';
-import { Column, Entity, JoinColumn, ManyToOne, Index } from 'typeorm';
+import { Column, Entity, JoinColumn, ManyToOne } from 'typeorm';
 import { LectureEntity } from './lecture.entity';
 import { UserEntity } from 'src/user/user.entity';
 
 @Entity('lecture_download_log')
-@Index(['lectureId', 'userId'])
 export class LectureDownloadLogEntity extends BaseEntity {
   @Column({ name: 'lecture_id', type: 'uuid' })
   lectureId: string;
@@ -13,11 +12,8 @@ export class LectureDownloadLogEntity extends BaseEntity {
   @JoinColumn({ name: 'lecture_id' })
   lecture?: LectureEntity;
 
-  @Column({ name: 'user_id', type: 'uuid' })
-  userId: string;
-
   @ManyToOne(() => UserEntity, { onDelete: 'CASCADE' })
-  @JoinColumn({ name: 'user_id' })
+  @JoinColumn({ name: 'created_by' })
   user?: UserEntity;
 
   @Column({ type: 'text' })

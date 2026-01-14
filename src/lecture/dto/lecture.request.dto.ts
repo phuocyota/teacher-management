@@ -10,6 +10,7 @@ import {
   MinLength,
   MaxLength,
   Min,
+  IsNotEmpty,
 } from 'class-validator';
 import { Type } from 'class-transformer';
 import { PaginationRequestDto } from 'src/common/dto/pagination.dto';
@@ -123,35 +124,15 @@ export class CreateLectureDto {
   @MaxLength(2000, { message: 'avatar không được vượt quá 2000 ký tự' })
   avatar?: string;
 
-  @ApiPropertyOptional({
-    type: 'string',
-    format: 'uuid',
-    example: 'a1b2c3d4-e5f6-7890-abcd-ef1234567890',
-    description: 'UUID của lớp học (nếu gán bài giảng vào lớp cụ thể)',
-  })
-  @IsOptional()
-  @IsUUID('4', { message: 'classId phải là một UUID hợp lệ' })
-  classId?: string;
-
-  @ApiPropertyOptional({
-    type: 'string',
-    format: 'uuid',
-    example: 'z9y8x7w6-v5u4-3210-tsrq-ponmlkjihgfe',
-    description: 'UUID của khóa học (nếu gán bài giảng vào khóa cụ thể)',
-  })
-  @IsOptional()
-  @IsUUID('4', { message: 'courseId phải là một UUID hợp lệ' })
-  courseId?: string;
-
-  @ApiPropertyOptional({
+  @ApiProperty({
     type: 'string',
     format: 'uuid',
     example: 'g1g2g3g4-g5g6-g7g8-g9g0-g1g2g3g4g5g6',
-    description: 'UUID của nhóm (nếu gán bài giảng vào nhóm cụ thể)',
+    description: 'UUID của nhóm (bắt buộc)',
   })
-  @IsOptional()
+  @IsNotEmpty({ message: 'groupId không được để trống' })
   @IsUUID('4', { message: 'groupId phải là một UUID hợp lệ' })
-  groupId?: string;
+  groupId: string;
 
   @ApiPropertyOptional({
     type: 'array',
@@ -244,26 +225,6 @@ export class UpdateLectureDto {
   @MaxLength(2000, { message: 'avatar không được vượt quá 2000 ký tự' })
   avatar?: string;
 
-  @ApiPropertyOptional({
-    type: 'string',
-    format: 'uuid',
-    example: 'a1b2c3d4-e5f6-7890-abcd-ef1234567890',
-    description: 'UUID của lớp học (nếu cập nhật phân bổ vào lớp cụ thể)',
-  })
-  @IsOptional()
-  @IsUUID('4', { message: 'classId phải là một UUID hợp lệ' })
-  classId?: string;
-
-  @ApiPropertyOptional({
-    type: 'string',
-    format: 'uuid',
-    example: 'z9y8x7w6-v5u4-3210-tsrq-ponmlkjihgfe',
-    description: 'UUID của khóa học (nếu cập nhật phân bổ vào khóa cụ thể)',
-  })
-  @IsOptional()
-  @IsUUID('4', { message: 'courseId phải là một UUID hợp lệ' })
-  courseId?: string;
-
   //userId
   @ApiPropertyOptional({
     type: 'string',
@@ -279,7 +240,7 @@ export class UpdateLectureDto {
     type: 'string',
     format: 'uuid',
     example: 'g1g2g3g4-g5g6-g7g8-g9g0-g1g2g3g4g5g6',
-    description: 'UUID của nhóm (nếu cập nhật phân bổ vào nhóm cụ thể)',
+    description: 'UUID của nhóm (nếu cập nhật phân bổ vào nhóm)',
   })
   @IsOptional()
   @IsUUID('4', { message: 'groupId phải là một UUID hợp lệ' })
@@ -319,22 +280,6 @@ export class UpdateLectureDto {
 
 // DTO dùng cho get danh sách bài giảng với phân trang và lọc
 export class GetAllLectureDto extends PaginationRequestDto {
-  @ApiPropertyOptional({
-    type: 'string',
-    format: 'uuid',
-  })
-  @IsOptional()
-  @IsUUID('4', { message: 'courseId phải là một UUID hợp lệ' })
-  courseId?: string;
-
-  @ApiPropertyOptional({
-    type: 'string',
-    format: 'uuid',
-  })
-  @IsOptional()
-  @IsUUID('4', { message: 'classId phải là một UUID hợp lệ' })
-  classId?: string;
-
   @ApiPropertyOptional({
     type: 'string',
     format: 'uuid',

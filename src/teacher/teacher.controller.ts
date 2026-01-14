@@ -6,6 +6,7 @@ import {
   Delete,
   Body,
   Param,
+  ParseUUIDPipe,
 } from '@nestjs/common';
 import {
   ApiTags,
@@ -44,7 +45,7 @@ export class TeacherController {
   @ApiOperation({ summary: 'Lấy thông tin giáo viên theo ID' })
   @ApiResponse({ status: 200, description: 'Tìm thấy giáo viên' })
   @ApiResponse({ status: 404, description: 'Giáo viên không tồn tại' })
-  findOne(@Param('id') id: string) {
+  findOne(@Param('id', ParseUUIDPipe) id: string) {
     return this.teacherService.findOne(id);
   }
 
@@ -53,7 +54,7 @@ export class TeacherController {
   @ApiResponse({ status: 200, description: 'Cập nhật giáo viên thành công' })
   @ApiResponse({ status: 404, description: 'Giáo viên không tồn tại' })
   update(
-    @Param('id') id: string,
+    @Param('id', ParseUUIDPipe) id: string,
     @Body() dto: UpdateTeacherDto,
     @User() user: JwtPayload,
   ) {
@@ -64,7 +65,7 @@ export class TeacherController {
   @ApiOperation({ summary: 'Xóa giáo viên' })
   @ApiResponse({ status: 200, description: 'Xóa giáo viên thành công' })
   @ApiResponse({ status: 404, description: 'Giáo viên không tồn tại' })
-  remove(@Param('id') id: string, @User() user: JwtPayload) {
+  remove(@Param('id', ParseUUIDPipe) id: string, @User() user: JwtPayload) {
     return this.teacherService.delete(id, user);
   }
 }

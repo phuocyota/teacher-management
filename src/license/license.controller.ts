@@ -6,6 +6,7 @@ import {
   Param,
   Put,
   Delete,
+  ParseUUIDPipe,
 } from '@nestjs/common';
 import { LicenseService } from './license.service';
 import { CreateLicenseDto, UpdateLicenseDto } from './dto/license.dto';
@@ -43,7 +44,7 @@ export class LicenseController {
   @ApiOperation({ summary: 'Get license by ID' })
   @ApiResponse({ status: 200, description: 'License found' })
   @ApiResponse({ status: 404, description: 'License not found' })
-  async findOne(@Param('id') id: string) {
+  async findOne(@Param('id', ParseUUIDPipe) id: string) {
     return this.licenseService.findOne(id);
   }
 
@@ -52,7 +53,7 @@ export class LicenseController {
   @ApiResponse({ status: 200, description: 'License updated successfully' })
   @ApiResponse({ status: 404, description: 'License not found' })
   async update(
-    @Param('id') id: string,
+    @Param('id', ParseUUIDPipe) id: string,
     @Body() dto: UpdateLicenseDto,
     @User() user: JwtPayload,
   ) {
@@ -63,7 +64,10 @@ export class LicenseController {
   @ApiOperation({ summary: 'Delete license' })
   @ApiResponse({ status: 204, description: 'License deleted successfully' })
   @ApiResponse({ status: 404, description: 'License not found' })
-  async delete(@Param('id') id: string, @User() user: JwtPayload) {
+  async delete(
+    @Param('id', ParseUUIDPipe) id: string,
+    @User() user: JwtPayload,
+  ) {
     await this.licenseService.delete(id, user);
   }
 }

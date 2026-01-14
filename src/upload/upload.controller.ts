@@ -11,6 +11,7 @@ import {
   Body,
   Req,
   Query,
+  ParseUUIDPipe,
 } from '@nestjs/common';
 import { FileInterceptor, FilesInterceptor } from '@nestjs/platform-express';
 import {
@@ -36,7 +37,6 @@ import {
 import { FileType } from './enum/file-visibility.enum';
 import { User } from 'src/common/decorator/user.decorator';
 import type { JwtPayload } from 'src/common/interface/jwt-payload.interface';
-import { UserType } from 'src/common/enum/user-type.enum';
 import {
   PaginationRequestDto,
   PaginationResponseDto,
@@ -253,7 +253,7 @@ export class UploadController {
   })
   @ApiResponse({ status: 403, description: 'Không có quyền' })
   async getFileAccessList(
-    @Param('fileId') fileId: string,
+    @Param('fileId', ParseUUIDPipe) fileId: string,
     @User() user: JwtPayload,
   ): Promise<FileAccessResponseDto[]> {
     return this.uploadService.getFileAccessList(fileId, user);
@@ -268,7 +268,7 @@ export class UploadController {
   })
   @ApiResponse({ status: 403, description: 'Không có quyền' })
   async grantFileAccess(
-    @Param('fileId') fileId: string,
+    @Param('fileId', ParseUUIDPipe) fileId: string,
     @Body() dto: GrantFileAccessDto,
     @User() user: JwtPayload,
   ): Promise<FileAccessResponseDto> {
@@ -304,7 +304,7 @@ export class UploadController {
   }
 
   @Get(':id/download')
-  async download(@Param('id') id: string, @Res() res: Response) {
+  async download(@Param('id', ParseUUIDPipe) id: string, @Res() res: Response) {
     return this.uploadService.download(id, res);
   }
 
@@ -324,7 +324,7 @@ export class UploadController {
 
   @Get('download/:filename')
   async downloadByFilename(
-    @Param('filename') filename: string,
+    @Param('filename', ParseUUIDPipe) filename: string,
     @Res() res: Response,
   ) {
     const file = await this.uploadService.getFileByFilename(filename);
@@ -333,7 +333,7 @@ export class UploadController {
 
   @Get('downloads/:filename/image')
   downloadFile(
-    @Param('filename') filename: string,
+    @Param('filename', ParseUUIDPipe) filename: string,
     @User() user: JwtPayload,
     @Res() res: Response,
   ): void {
@@ -343,7 +343,7 @@ export class UploadController {
 
   @Get('stream/:filename')
   async streamByFilename(
-    @Param('filename') filename: string,
+    @Param('filename', ParseUUIDPipe) filename: string,
     @Req() req: Request,
     @Res() res: Response,
   ) {
@@ -357,7 +357,7 @@ export class UploadController {
   @ApiResponse({ status: 403, description: 'Không có quyền xóa file' })
   @ApiResponse({ status: 404, description: 'File không tồn tại' })
   async deleteFile(
-    @Param('filename') filename: string,
+    @Param('filename', ParseUUIDPipe) filename: string,
     @User() user: JwtPayload,
   ): Promise<{ message: string; filename: string }> {
     await this.uploadService.deleteFile(filename, user);

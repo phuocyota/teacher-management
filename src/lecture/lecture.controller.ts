@@ -85,7 +85,7 @@ export class LectureController {
   @ApiResponse({ status: 404, description: 'Lecture not found' })
   @ApiResponse({ status: 403, description: 'Forbidden' })
   update(
-    @Param('id') id: string,
+    @Param('id', ParseUUIDPipe) id: string,
     @Body() dto: UpdateLectureDto,
     @User() user: JwtPayload,
   ): Promise<LectureResponseDto> {
@@ -97,7 +97,10 @@ export class LectureController {
   @ApiResponse({ status: 200, description: 'Lecture deleted successfully' })
   @ApiResponse({ status: 404, description: 'Lecture not found' })
   @ApiResponse({ status: 403, description: 'Forbidden' })
-  remove(@Param('id') id: string, @User() user: JwtPayload): Promise<void> {
+  remove(
+    @Param('id', ParseUUIDPipe) id: string,
+    @User() user: JwtPayload,
+  ): Promise<void> {
     return this.lectureService.remove(id, user);
   }
 }

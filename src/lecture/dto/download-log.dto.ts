@@ -35,12 +35,4 @@ export class GetDownloadLogQueryDto extends PaginationRequestDto {
   })
   @IsUUID()
   lectureId?: string;
-
-  @ApiProperty({
-    description: 'ID của khóa học',
-    example: 'a1b2c3d4-e5f6-7890-abcd-ef1234567890',
-    required: false,
-  })
-  @IsUUID()
-  courseId?: string;
 }

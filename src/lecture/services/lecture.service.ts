@@ -21,8 +21,6 @@ import { JwtPayload } from 'src/common/interface/jwt-payload.interface';
 import { UserType } from 'src/common/enum/user-type.enum';
 import { ERROR_MESSAGES } from 'src/common/constant/error-messages.constant';
 import { Type, Source } from '../enum/lecture-resource.enum';
-import { ClassService } from 'src/class/class.service';
-import { CourseService } from 'src/course/course.service';
 import { GroupService } from 'src/group/group.service';
 import { runInTransaction } from 'src/common/database/transaction.utils';
 import { PaginationResponseDto } from 'src/common/dto/pagination.dto';
@@ -36,8 +34,6 @@ export class LectureService {
     @InjectRepository(LectureEntity)
     private readonly lectureRepository: Repository<LectureEntity>,
     private readonly entityManager: EntityManager,
-    private readonly classService: ClassService,
-    private readonly courseService: CourseService,
     private readonly groupService: GroupService,
     private readonly uploadService: UploadService,
   ) {}
@@ -71,32 +67,14 @@ export class LectureService {
         }
       }
 
-      // Tạo context nếu có classId, courseId hoặc groupId
-      if (dto.classId || dto.courseId || dto.groupId) {
-        if (dto.classId) {
-          await this.classService.findOne(dto.classId);
-        }
+      // Tạo context với groupId (bắt buộc)
+      await this.groupService.checkById(dto.groupId);
 
-        if (dto.courseId) {
-          await this.courseService.findOne(dto.courseId);
-        }
-
-        if (dto.groupId) {
-          await this.groupService.checkById(dto.groupId);
-        }
-
-        if (!dto.groupId && dto.userId) {
-          dto.groupId = EMPTY_UUID;
-        }
-
-        await manager.save(LectureContextEntity, {
-          lectureId: saved.id,
-          classId: dto.classId || null,
-          courseId: dto.courseId || null,
-          groupId: dto.groupId || null,
-          createdBy: user.userId,
-        });
-      }
+      await manager.save(LectureContextEntity, {
+        lectureId: saved.id,
+        groupId: dto.groupId,
+        createdBy: user.userId,
+      });
 
       return saved;
     });
@@ -105,7 +83,7 @@ export class LectureService {
   async findAll(
     dto: GetAllLectureDto,
   ): Promise<PaginationResponseDto<LectureResponse>> {
-    const { courseId, classId, groupId, search, page = 1, size = 10 } = dto;
+    const { groupId, search, page = 1, size = 10 } = dto;
 
     const query = this.lectureRepository
       .createQueryBuilder('lecture')
@@ -118,21 +96,11 @@ export class LectureService {
         'lecture.orderColumn AS "orderColumn"',
         'lecture.avatar AS avatar',
         'context.groupId AS "groupId"',
-        'context.classId AS "classId"',
-        'context.courseId AS "courseId"',
       ])
       .orderBy('lecture.orderColumn', 'ASC')
       .skip((page - 1) * size)
       .take(size)
       .distinct(true);
-
-    if (courseId) {
-      query.andWhere('context.courseId = :courseId', { courseId });
-    }
-
-    if (classId) {
-      query.andWhere('context.classId = :classId', { classId });
-    }
 
     if (groupId) {
       query.andWhere('context.groupId = :groupId', { groupId });
@@ -251,19 +219,7 @@ export class LectureService {
       }
 
       // Cập nhật hoặc tạo context nếu có thay đổi
-      if (
-        dto.classId !== undefined ||
-        dto.courseId !== undefined ||
-        dto.groupId !== undefined
-      ) {
-        if (dto.classId) {
-          await this.classService.findOne(dto.classId);
-        }
-
-        if (dto.courseId) {
-          await this.courseService.findOne(dto.courseId);
-        }
-
+      if (dto.groupId !== undefined) {
         if (dto.groupId) {
           await this.groupService.checkById(dto.groupId);
         }
@@ -278,22 +234,15 @@ export class LectureService {
 
         if (existingContext) {
           // Cập nhật context hiện tại
-          if (dto.classId !== undefined)
-            existingContext.classId = dto.classId || null;
-          if (dto.courseId !== undefined)
-            existingContext.courseId = dto.courseId || null;
-          if (dto.groupId !== undefined)
-            existingContext.groupId = dto.groupId || null;
+          if (dto.groupId !== undefined) existingContext.groupId = dto.groupId;
           existingContext.updatedBy = user.userId;
           await manager.save(existingContext);
         } else {
           // Tạo context mới nếu có thông tin phân bổ
-          if (dto.classId || dto.courseId || dto.groupId) {
+          if (dto.groupId) {
             await manager.save(LectureContextEntity, {
               lectureId: id,
-              classId: dto.classId || null,
-              courseId: dto.courseId || null,
-              groupId: dto.groupId || null,
+              groupId: dto.groupId,
               createdBy: user.userId,
             });
           }
