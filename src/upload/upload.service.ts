@@ -10,14 +10,13 @@ import { Repository, In } from 'typeorm';
 import {
   existsSync,
   mkdirSync,
-  unlinkSync,
   renameSync,
   statSync,
   writeFileSync,
   appendFileSync,
   readFileSync,
   readdirSync,
-  rmdirSync,
+  rmSync,
 } from 'fs';
 import { join, dirname, isAbsolute, basename, resolve, sep } from 'path';
 import { FileEntity } from './entity/file.entity';
@@ -573,7 +572,7 @@ export class UploadService {
     // Xóa file vật lý
     const absolutePath = this.streamService.getAbsoluteFilePath(file.path);
     if (existsSync(absolutePath)) {
-      unlinkSync(absolutePath);
+      rmSync(absolutePath);
     }
 
     // Xóa trong database (cascade sẽ xóa cả file_access)
@@ -805,17 +804,19 @@ export class UploadService {
       // Xóa tất cả chunks
       if (existsSync(sessionDir)) {
         const files = readdirSync(sessionDir);
+
         files.forEach((file) => {
-          unlinkSync(join(sessionDir, file));
+          const filePath = join(sessionDir, file);
+          rmSync(filePath);
         });
-        // Xóa thư mục session (dùng rmdirSync cho directory)
-        rmdirSync(sessionDir);
+
+        // Xóa thư mục session (dùng rmSync cho directory)
+        rmSync(sessionDir, { recursive: true, force: true });
+      } else {
       }
 
       // Xóa session khỏi memory
       this.uploadSessions.delete(uploadId);
-    } catch (error) {
-      console.error(`Error cleaning up session ${uploadId}:`, error);
-    }
+    } catch (error) {}
   }
 }
