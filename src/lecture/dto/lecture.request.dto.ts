@@ -127,12 +127,22 @@ export class CreateLectureDto {
   @ApiProperty({
     type: 'string',
     format: 'uuid',
-    example: 'g1g2g3g4-g5g6-g7g8-g9g0-g1g2g3g4g5g6',
-    description: 'UUID của nhóm (bắt buộc)',
+    example: 'c1c2c3c4-c5c6-c7c8-c9c0-c1c2c3c4c5c6',
+    description: 'UUID của khóa học (bắt buộc)',
   })
-  @IsNotEmpty({ message: 'groupId không được để trống' })
+  @IsNotEmpty({ message: 'courseId không được để trống' })
+  @IsUUID('4', { message: 'courseId phải là một UUID hợp lệ' })
+  courseId: string;
+
+  @ApiPropertyOptional({
+    type: 'string',
+    format: 'uuid',
+    example: 'g1g2g3g4-g5g6-g7g8-g9g0-g1g2g3g4g5g6',
+    description: 'UUID của nhóm (tùy chọn)',
+  })
+  @IsOptional()
   @IsUUID('4', { message: 'groupId phải là một UUID hợp lệ' })
-  groupId: string;
+  groupId?: string;
 
   @ApiPropertyOptional({
     type: 'array',

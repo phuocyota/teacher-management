@@ -30,8 +30,8 @@ import { UserGroupModule } from './user-group/user-group.module';
 import { CourseModule } from './course/course.module';
 import { CourseEntity } from './course/course.entity';
 import { LectureResourceEntity } from './lecture/entity/lecture_resource.entity';
-import { LectureContextEntity } from './lecture/entity/lecture_context.entity';
-import { LectureContextUserEntity } from './lecture/entity/lecture_context_user.entity';
+import { LectureGroupEntity } from './lecture/entity/lecture_group.entity';
+import { LectureUserEntity } from './lecture/entity/lecture_user.entity';
 import { LectureDownloadLogEntity } from './lecture/entity/lecture_download_log.entity';
 import { MiddlewareConsumer } from '@nestjs/common';
 import { RequestLoggerMiddleware } from './common/middleware/request-logger-middleware';
@@ -65,8 +65,8 @@ import { RequestLoggerMiddleware } from './common/middleware/request-logger-midd
           GroupEntity,
           UserGroupEntity,
           LectureResourceEntity,
-          LectureContextEntity,
-          LectureContextUserEntity,
+          LectureGroupEntity,
+          LectureUserEntity,
           LectureDownloadLogEntity,
         ],
         synchronize: true,

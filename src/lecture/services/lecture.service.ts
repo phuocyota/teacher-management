@@ -6,7 +6,7 @@ import {
 import { InjectRepository } from '@nestjs/typeorm';
 import { EntityManager, Repository } from 'typeorm';
 import { LectureEntity } from '../entity/lecture.entity';
-import { LectureContextEntity } from '../entity/lecture_context.entity';
+import { LectureGroupEntity } from '../entity/lecture_group.entity';
 import { LectureResourceEntity } from '../entity/lecture_resource.entity';
 import {
   LectureResponse,
@@ -49,6 +49,7 @@ export class LectureService {
         note: dto.note,
         orderColumn: dto.orderColumn,
         avatar: dto.avatar,
+        courseId: dto.courseId,
         createdBy: user.userId,
       });
 
@@ -67,14 +68,16 @@ export class LectureService {
         }
       }
 
-      // Tạo context với groupId (bắt buộc)
-      await this.groupService.checkById(dto.groupId);
+      // Tạo context nếu có groupId
+      if (dto.groupId) {
+        await this.groupService.checkById(dto.groupId);
 
-      await manager.save(LectureContextEntity, {
-        lectureId: saved.id,
-        groupId: dto.groupId,
-        createdBy: user.userId,
-      });
+        await manager.save(LectureGroupEntity, {
+          lectureId: saved.id,
+          groupId: dto.groupId,
+          createdBy: user.userId,
+        });
+      }
 
       return saved;
     });
@@ -228,7 +231,7 @@ export class LectureService {
           dto.groupId = EMPTY_UUID;
         }
 
-        const existingContext = await manager.findOne(LectureContextEntity, {
+        const existingContext = await manager.findOne(LectureGroupEntity, {
           where: { lectureId: id },
         });
 
@@ -240,7 +243,7 @@ export class LectureService {
         } else {
           // Tạo context mới nếu có thông tin phân bổ
           if (dto.groupId) {
-            await manager.save(LectureContextEntity, {
+            await manager.save(LectureGroupEntity, {
               lectureId: id,
               groupId: dto.groupId,
               createdBy: user.userId,

@@ -1,8 +1,8 @@
 import { Entity, Column, OneToMany, Index } from 'typeorm';
 import { BaseEntity } from '../../common/sql/base.entity';
 import { LectureResourceEntity } from './lecture_resource.entity';
-import { LectureContextEntity } from './lecture_context.entity';
-import { LectureContextUserEntity } from './lecture_context_user.entity';
+import { LectureGroupEntity } from './lecture_group.entity';
+import { LectureUserEntity } from './lecture_user.entity';
 
 @Entity('lecture')
 export class LectureEntity extends BaseEntity {
@@ -22,6 +22,9 @@ export class LectureEntity extends BaseEntity {
   @Column({ name: 'avatar', type: 'text', nullable: true })
   avatar?: string; // Ảnh đại diện bài giảng
 
+  @Column({ name: 'course_id', type: 'uuid' })
+  courseId: string; // ID khóa học
+
   /* ===== Resources ===== */
   @OneToMany(() => LectureResourceEntity, (resource) => resource.lecture, {
     cascade: true,
@@ -29,12 +32,12 @@ export class LectureEntity extends BaseEntity {
   resources?: LectureResourceEntity[];
 
   //context
-  @OneToMany(() => LectureContextEntity, (context) => context.lecture, {
+  @OneToMany(() => LectureGroupEntity, (context) => context.lecture, {
     cascade: true,
   })
-  contexts?: LectureContextEntity[];
+  contexts?: LectureGroupEntity[];
 
   /** Links to users via join table `lecture_context_user` */
-  @OneToMany(() => LectureContextUserEntity, (lcu) => lcu.lecture)
-  userLinks?: LectureContextUserEntity[];
+  @OneToMany(() => LectureUserEntity, (lcu) => lcu.lecture)
+  userLinks?: LectureUserEntity[];
 }
