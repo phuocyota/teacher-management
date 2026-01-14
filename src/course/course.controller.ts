@@ -21,6 +21,7 @@ import { CreateCourseDto, UpdateCourseDto } from './dto/create-course.dto';
 import { CourseListResponseDto, CourseResponseDto } from './dto/course.dto';
 import { User } from 'src/common/decorator/user.decorator';
 import type { JwtPayload } from 'src/common/interface/jwt-payload.interface';
+import { PaginationResponseDto } from 'src/common/dto/pagination.dto';
 
 @ApiTags('Course')
 @ApiBearerAuth('access-token')
@@ -55,7 +56,7 @@ export class CourseController {
     @Query('size') size?: number,
     @Query('q') q?: string,
     @Query('classId') classId?: string,
-  ) {
+  ): Promise<PaginationResponseDto<CourseResponseDto>> {
     return this.courseService.findAll(page, size, q, classId);
   }
 

@@ -4,7 +4,7 @@ import {
   BadRequestException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, Like } from 'typeorm';
+import { Repository } from 'typeorm';
 import { CourseEntity } from './course.entity';
 import { CreateCourseDto, UpdateCourseDto } from './dto/create-course.dto';
 import { ClassEntity } from 'src/class/class.entity';
@@ -14,6 +14,8 @@ import {
 } from 'src/common/constant/error-messages.constant';
 import { UploadService } from 'src/upload/upload.service';
 import { JwtPayload } from 'src/common/interface/jwt-payload.interface';
+import { PaginationResponseDto } from 'src/common/dto/pagination.dto';
+import { CourseResponseDto } from './dto/course.dto';
 
 @Injectable()
 export class CourseService {
@@ -61,12 +63,7 @@ export class CourseService {
     size = 10,
     q?: string,
     classId?: string,
-  ): Promise<{
-    data: CourseEntity[];
-    page: number;
-    size: number;
-    total: number;
-  }> {
+  ): Promise<PaginationResponseDto<CourseResponseDto>> {
     const skip = (page - 1) * size;
 
     const qb = this.courseRepo.createQueryBuilder('course');
