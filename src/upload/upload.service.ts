@@ -17,8 +17,12 @@ import {
   readFileSync,
   readdirSync,
   rmSync,
+  createReadStream,
+  createWriteStream,
 } from 'fs';
 import { join, dirname, isAbsolute, basename, resolve, sep } from 'path';
+import { createUnzip } from 'zlib';
+import * as unzipper from 'unzipper';
 import { FileEntity } from './entity/file.entity';
 import { FileAccessEntity } from './entity/file-access.entity';
 import { FileAccessType, FileType } from './enum/file-visibility.enum';
@@ -787,10 +791,146 @@ export class UploadService {
     // Dọn dẹp session và chunks
     this.cleanupSession(dto.uploadId);
 
-    const response = UploadFileResponseDto.fromEntity(savedFile);
-    return {
-      ...response,
+    const response: CompleteUploadResponseDto = {
+      ...UploadFileResponseDto.fromEntity(savedFile),
       success: true,
+    };
+
+    // Xử lý unzip nếu được yêu cầu
+    if (dto.unzip && session.fileName.toLowerCase().endsWith('.zip')) {
+      try {
+        const unzipResult = await this.unzipFile(
+          finalPath,
+          user.userId,
+          dto.returnInformationLecture || false,
+        );
+
+        response.unzippedDir = unzipResult.unzippedDir;
+        response.unzippedFiles = unzipResult.files;
+
+        if (dto.returnInformationLecture) {
+          response.pdfFile = unzipResult.pdfFile;
+          response.htmlFile = unzipResult.htmlFile;
+          response.mp4File = unzipResult.mp4File;
+        }
+      } catch (error) {
+        // Không throw error, vẫn trả về file zip đã upload
+        // Có thể thêm field error message vào response nếu cần
+      }
+    }
+
+    return response;
+  }
+
+  /**
+   * Giải nén file zip
+   */
+  private async unzipFile(
+    zipFilePath: string,
+    userId: string,
+    returnInformationLecture: boolean = false,
+  ): Promise<{
+    unzippedDir: string;
+    files: string[];
+    pdfFile?: string;
+    htmlFile?: string;
+    mp4File?: string;
+  }> {
+    const zipFileName = basename(zipFilePath, '.zip');
+    const unzippedDirName = `${zipFileName}-unzipped`;
+    const unzippedDirPath = join(this.uploadDir, unzippedDirName);
+
+    // Tạo thư mục để giải nén
+    if (!existsSync(unzippedDirPath)) {
+      mkdirSync(unzippedDirPath, { recursive: true });
+    }
+
+    const extractedFiles: string[] = [];
+
+    // Giải nén file
+    await new Promise<void>((resolve, reject) => {
+      createReadStream(zipFilePath)
+        .pipe(unzipper.Extract({ path: unzippedDirPath }))
+        .on('close', () => resolve())
+        .on('error', (err) => reject(err));
+    });
+
+    // Lấy danh sách file đã giải nén
+    const getFilesRecursive = (
+      dir: string,
+      baseDir: string = dir,
+    ): string[] => {
+      const files: string[] = [];
+      const items = readdirSync(dir, { withFileTypes: true });
+
+      for (const item of items) {
+        const fullPath = join(dir, item.name);
+        const relativePath = fullPath.substring(baseDir.length + 1);
+
+        if (item.isDirectory()) {
+          files.push(...getFilesRecursive(fullPath, baseDir));
+        } else {
+          files.push(relativePath);
+        }
+      }
+
+      return files;
+    };
+
+    extractedFiles.push(...getFilesRecursive(unzippedDirPath));
+
+    // Tìm các file trong root level nếu được yêu cầu
+    let pdfFile: string | undefined;
+    let htmlFile: string | undefined;
+    let mp4File: string | undefined;
+
+    if (returnInformationLecture) {
+      console.log('[unzipFile] Searching for lecture files in root directory...');
+      const rootItems = readdirSync(unzippedDirPath, { withFileTypes: true });
+
+      for (const item of rootItems) {
+        if (item.isFile()) {
+          const fileName = item.name.toLowerCase();
+          const fullPath = join(unzippedDirPath, item.name);
+
+          if (fileName.endsWith('.pdf') && !pdfFile) {
+            pdfFile = fullPath;
+            console.log(`[unzipFile] Found PDF: ${item.name}`);
+          } else if (fileName.endsWith('.html') && !htmlFile) {
+            htmlFile = fullPath;
+            console.log(`[unzipFile] Found HTML: ${item.name}`);
+          } else if (fileName.endsWith('.mp4') && !mp4File) {
+            mp4File = fullPath;
+            console.log(`[unzipFile] Found MP4: ${item.name}`);
+          }
+        }
+      }
+
+      console.log('[unzipFile] Lecture files found:', {
+        pdf: !!pdfFile,
+        html: !!htmlFile,
+        mp4: !!mp4File,
+      });
+    }
+
+    // Xóa file zip gốc
+    try {
+      rmSync(zipFilePath);
+      console.log(`[unzipFile] Deleted original zip file: ${zipFilePath}`);
+
+      // Xóa record trong database
+      await this.fileRepo.delete({ path: zipFilePath });
+      console.log(`[unzipFile] Deleted file record from database`);
+    } catch (error) {
+      console.error('[unzipFile] Failed to delete zip file:', error);
+    }
+
+    return {
+      unzippedDir: unzippedDirPath,
+      files: extractedFiles,
+      pdfFile,
+      htmlFile,
+      mp4File,
     };
   }
 

@@ -43,7 +43,7 @@
     "socket.io": "^4.8.1",
     "swagger-ui-express": "^5.0.1",
     "typeorm": "^0.3.27",
-    "unzipper": "^0.10.11",
+    "unzipper": "^0.10.14",
     "yauzl": "^2.10.0"
   },
   "devDependencies": {
@@ -58,6 +58,7 @@
     "@types/multer": "^2.0.0",
     "@types/node": "^22.10.7",
     "@types/supertest": "^6.0.2",
+    "@types/unzipper": "^0.10.11",
     "eslint": "^9.18.0",
     "eslint-config-prettier": "^10.0.1",
     "eslint-plugin-prettier": "^5.2.2",

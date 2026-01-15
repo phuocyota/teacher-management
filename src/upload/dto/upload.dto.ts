@@ -7,6 +7,7 @@ import {
   IsDateString,
   IsArray,
   IsNotEmpty,
+  IsBoolean,
 } from 'class-validator';
 import { FileAccessType, FileType } from '../enum/file-visibility.enum';
 import { FileEntity } from '../entity/file.entity';
@@ -350,6 +351,23 @@ export class CompleteUploadDto {
   @IsNotEmpty({ message: 'Upload ID không được để trống' })
   @IsUUID('4', { message: 'Upload ID phải là UUID hợp lệ' })
   uploadId: string;
+
+  @ApiPropertyOptional({
+    description: 'Giải nén file sau khi upload (chỉ áp dụng cho file .zip)',
+    example: false,
+  })
+  @IsOptional()
+  @IsBoolean({ message: 'Unzip phải là giá trị boolean' })
+  unzip?: boolean;
+
+  @ApiPropertyOptional({
+    description:
+      'Trả về thông tin các file bài giảng (pdf, html, mp4) trong thư mục gốc sau khi unzip',
+    example: false,
+  })
+  @IsOptional()
+  @IsBoolean({ message: 'returnInformationLecture phải là giá trị boolean' })
+  returnInformationLecture?: boolean;
 }
 
 export class CompleteUploadResponseDto extends UploadFileResponseDto {
@@ -357,4 +375,29 @@ export class CompleteUploadResponseDto extends UploadFileResponseDto {
     description: 'Upload thành công',
   })
   success: boolean;
+
+  @ApiPropertyOptional({
+    description: 'Đường dẫn thư mục sau khi giải nén (nếu unzip = true)',
+  })
+  unzippedDir?: string;
+
+  @ApiPropertyOptional({
+    description: 'Danh sách file đã giải nén',
+  })
+  unzippedFiles?: string[];
+
+  @ApiPropertyOptional({
+    description: 'Đường dẫn file PDF trong thư mục gốc',
+  })
+  pdfFile?: string;
+
+  @ApiPropertyOptional({
+    description: 'Đường dẫn file HTML trong thư mục gốc',
+  })
+  htmlFile?: string;
+
+  @ApiPropertyOptional({
+    description: 'Đường dẫn file MP4 trong thư mục gốc',
+  })
+  mp4File?: string;
 }
