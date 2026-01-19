@@ -311,4 +311,23 @@ export class LectureService {
       await manager.delete(LectureEntity, { id });
     });
   }
+
+  async getMaxCode(): Promise<number> {
+    const result = await this.lectureRepository
+      .createQueryBuilder('lecture')
+      .select('MAX(lecture.code)', 'maxCode')
+      .getRawOne<{ maxCode: string | null }>();
+
+    if (!result?.maxCode) {
+      return 0;
+    }
+
+    // Parse code để lấy phần số (ví dụ: "BG0010" -> 10, "10" -> 10)
+    const match = result.maxCode.match(/\d+/);
+    if (match) {
+      return parseInt(match[0], 10);
+    }
+
+    return 0;
+  }
 }

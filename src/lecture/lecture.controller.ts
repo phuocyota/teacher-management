@@ -24,6 +24,7 @@ import {
 import {
   LectureResponse,
   LectureResponseDto,
+  MaxCodeResponseDto,
 } from './dto/lecture.response.dto';
 import { User } from 'src/common/decorator/user.decorator';
 import type { JwtPayload } from 'src/common/interface/jwt-payload.interface';
@@ -61,6 +62,18 @@ export class LectureController {
     @Query() dto: GetAllLectureDto,
   ): Promise<PaginationResponseDto<LectureResponse>> {
     return this.lectureService.findAll(dto);
+  }
+
+  @Get('max-code')
+  @ApiOperation({ summary: 'Lấy mã bài giảng lớn nhất hiện tại' })
+  @ApiResponse({
+    status: 200,
+    description: 'Lấy mã thành công',
+    type: MaxCodeResponseDto,
+  })
+  async getMaxCode(): Promise<MaxCodeResponseDto> {
+    const maxCode = await this.lectureService.getMaxCode();
+    return { maxCode };
   }
 
   @Get(':id')

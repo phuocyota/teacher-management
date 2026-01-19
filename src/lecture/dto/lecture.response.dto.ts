@@ -104,3 +104,11 @@ export class LectureResponseDto {
   @ApiProperty({ description: 'Thời gian cập nhật' })
   updatedAt?: Date;
 }
+
+export class MaxCodeResponseDto {
+  @ApiProperty({
+    description: 'Mã bài giảng lớn nhất hiện tại (dạng số)',
+    example: 10,
+  })
+  maxCode: number;
+}

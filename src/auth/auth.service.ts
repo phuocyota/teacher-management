@@ -33,7 +33,8 @@ export class AuthService {
     };
 
     const secret = process.env.JWT_SECRET || 'secretKey';
-    return jwt.sign(payload, secret, { expiresIn: '7d' });
+    // Token expires in 1 year (365 days) expressed in seconds
+    return jwt.sign(payload, secret, { expiresIn: 31536000 });
   }
 
   async login(dto: LoginDto) {
