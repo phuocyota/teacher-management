@@ -288,11 +288,17 @@ export class LectureService {
             try {
               await this.uploadService.deleteFile(resource.url, user);
             } catch (error) {
-              // Bỏ qua lỗi nếu file không tồn tại hoặc đã bị xóa
-              console.error(
-                `Failed to delete resource file: ${resource.url}`,
-                error,
-              );
+              // Bỏ qua lỗi nếu file không tồn tại trong database
+              if (error instanceof NotFoundException) {
+                console.log(
+                  `Resource file not found in database, skipping: ${resource.url}`,
+                );
+              } else {
+                console.error(
+                  `Failed to delete resource file: ${resource.url}`,
+                  error,
+                );
+              }
             }
           }
         }
@@ -303,7 +309,14 @@ export class LectureService {
         try {
           await this.uploadService.deleteFile(lecture.avatar, user);
         } catch (error) {
-          console.error(`Failed to delete avatar: ${lecture.avatar}`, error);
+          // Bỏ qua lỗi nếu file không tồn tại trong database
+          if (error instanceof NotFoundException) {
+            console.log(
+              `Avatar file not found in database, skipping: ${lecture.avatar}`,
+            );
+          } else {
+            console.error(`Failed to delete avatar: ${lecture.avatar}`, error);
+          }
         }
       }
 
