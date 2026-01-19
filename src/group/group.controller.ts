@@ -22,8 +22,8 @@ import {
   UpdateGroupDto,
   GroupResponseDto,
   GroupWithMemberCountDto,
-  MaxCodeResponseDto,
 } from './dto/group.dto';
+import { MaxCodeResponseDto } from 'src/common/dto/base.dto';
 import { User } from 'src/common/decorator/user.decorator';
 import type { JwtPayload } from 'src/common/interface/jwt-payload.interface';
 

@@ -85,6 +85,7 @@ export class LectureService {
 
   async findAll(
     dto: GetAllLectureDto,
+    user: JwtPayload,
   ): Promise<PaginationResponseDto<LectureResponse>> {
     const { courseId, groupId, search, page = 1, size = 10 } = dto;
 
@@ -105,6 +106,23 @@ export class LectureService {
       .skip((page - 1) * size)
       .take(size)
       .distinct(true);
+
+    // Phân quyền: user không phải admin chỉ xem được lecture được phân quyền
+    if (user.userType !== UserType.ADMIN) {
+      query.andWhere(
+        `(
+          lecture.id IN (
+            SELECT lecture_id FROM lecture_user WHERE user_id = :userId
+          )
+          OR lecture.id IN (
+            SELECT lg.lecture_id FROM lecture_group lg
+            INNER JOIN user_group ug ON lg.group_id = ug.group_id
+            WHERE ug.user_id = :userId
+          )
+        )`,
+        { userId: user.userId },
+      );
+    }
 
     if (courseId) {
       query.andWhere('lecture.courseId = :courseId', { courseId });
@@ -133,7 +151,7 @@ export class LectureService {
     };
   }
 
-  async findOne(id: string): Promise<LectureResponseDto> {
+  async findOne(id: string, user: JwtPayload): Promise<LectureResponseDto> {
     const lecture = await this.lectureRepository.findOne({
       where: { id },
       relations: ['resources'],
@@ -143,6 +161,33 @@ export class LectureService {
       throw new NotFoundException(
         ERROR_MESSAGES.NOT_FOUND_WITH_ID('Lecture', id),
       );
+    }
+
+    // Phân quyền: user không phải admin chỉ xem được lecture được phân quyền
+    if (user.userType !== UserType.ADMIN) {
+      const hasAccess = await this.lectureRepository
+        .createQueryBuilder('lecture')
+        .where('lecture.id = :id', { id })
+        .andWhere(
+          `(
+            lecture.id IN (
+              SELECT lecture_id FROM lecture_user WHERE user_id = :userId
+            )
+            OR lecture.id IN (
+              SELECT lg.lecture_id FROM lecture_group lg
+              INNER JOIN user_group ug ON lg.group_id = ug.group_id
+              WHERE ug.user_id = :userId
+            )
+          )`,
+          { userId: user.userId },
+        )
+        .getCount();
+
+      if (hasAccess === 0) {
+        throw new NotFoundException(
+          ERROR_MESSAGES.NOT_FOUND_WITH_ID('Lecture', id),
+        );
+      }
     }
 
     return lecture;

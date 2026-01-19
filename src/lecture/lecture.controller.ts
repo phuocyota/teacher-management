@@ -24,11 +24,11 @@ import {
 import {
   LectureResponse,
   LectureResponseDto,
-  MaxCodeResponseDto,
 } from './dto/lecture.response.dto';
 import { User } from 'src/common/decorator/user.decorator';
 import type { JwtPayload } from 'src/common/interface/jwt-payload.interface';
 import { PaginationResponseDto } from 'src/common/dto/pagination.dto';
+import { MaxCodeResponseDto } from 'src/common/dto/base.dto';
 
 @ApiTags('Lecture')
 @ApiBearerAuth('access-token')
@@ -60,8 +60,9 @@ export class LectureController {
   })
   findAll(
     @Query() dto: GetAllLectureDto,
+    @User() user: JwtPayload,
   ): Promise<PaginationResponseDto<LectureResponse>> {
-    return this.lectureService.findAll(dto);
+    return this.lectureService.findAll(dto, user);
   }
 
   @Get('max-code')
@@ -84,8 +85,12 @@ export class LectureController {
     type: LectureResponseDto,
   })
   @ApiResponse({ status: 404, description: 'Lecture not found' })
-  findOne(@Param('id', ParseUUIDPipe) id: string): Promise<LectureResponseDto> {
-    return this.lectureService.findOne(id);
+  @ApiResponse({ status: 403, description: 'Forbidden' })
+  findOne(
+    @Param('id', ParseUUIDPipe) id: string,
+    @User() user: JwtPayload,
+  ): Promise<LectureResponseDto> {
+    return this.lectureService.findOne(id, user);
   }
 
   @Put(':id')

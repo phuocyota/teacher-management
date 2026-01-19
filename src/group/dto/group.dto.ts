@@ -152,11 +152,6 @@ export class GroupWithMembersDto extends GroupResponseDto {
   members: GroupMemberDto[];
 }
 
-export class MaxCodeResponseDto {
-  @ApiProperty({ description: 'Mã group lớn nhất hiện tại', example: 10 })
-  maxCode: number;
-}
-
 export class GroupDto {
   @ApiProperty({
     description: 'ID của group',
