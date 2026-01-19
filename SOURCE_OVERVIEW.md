@@ -99,9 +99,14 @@ Lecture có nhiều sub-controller/service:
 - Controller mỏng; business logic đặt ở service.
 - Enum/constant mới đặt trong `enum/` hoặc `common/constant/`.
 
-## 10) Entry Points Quan Trọng
+## 10) Hỗ Trợ Tạo Stub Unit Test
+
+- Script `npm run test:build` quét `src/**/**/*.service.ts`, tìm public method và
+  tự thêm `it.todo('<method>')` vào `*.service.spec.ts` tương ứng.
+- Dùng `npm run test:build -- --dry-run` để xem trước thống kê mà không ghi file.
+
+## 11) Entry Points Quan Trọng
 
 - `src/main.ts` (bootstrap + Swagger + global interceptors)
 - `src/app.module.ts` (wiring modules + global providers)
 - `src/common/*` (shared behaviors)
-
