@@ -2,27 +2,41 @@
 /* eslint-disable @typescript-eslint/no-unsafe-assignment */
 type Constructor<T extends object> = new (...args: any[]) => T;
 
+const ISO_DATE_REGEX = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?Z$/;
+
 export function autoMapToDto<T extends object>(
   dtoClass: Constructor<T>,
   raw: Record<string, any>,
 ): T {
   const dto = new dtoClass();
 
-  for (const key of Object.keys(dto)) {
-    if (!(key in raw)) continue;
+  for (const [key, value] of Object.entries(raw)) {
+    if (value === null || value === undefined) {
+      (dto as any)[key] = value;
+      continue;
+    }
 
-    const value = raw[key];
-
-    if (typeof value === 'string' && !isNaN(Number(value))) {
+    // ===== NUMBER =====
+    if (typeof value === 'string' && /^[0-9]+(\.[0-9]+)?$/.test(value)) {
       (dto as any)[key] = Number(value);
       continue;
     }
 
-    if (
-      value &&
-      (key.toLowerCase().includes('date') || key.toLowerCase().includes('at'))
-    ) {
+    // ===== DATE (ISO ONLY) =====
+    if (typeof value === 'string' && ISO_DATE_REGEX.test(value)) {
       (dto as any)[key] = new Date(value);
+      continue;
+    }
+
+    // ===== KEEP STRING (UUID, URL, TEXT) =====
+    if (typeof value === 'string') {
+      (dto as any)[key] = value;
+      continue;
+    }
+
+    // ===== OBJECT / ARRAY =====
+    if (typeof value === 'object') {
+      (dto as any)[key] = value;
       continue;
     }
 

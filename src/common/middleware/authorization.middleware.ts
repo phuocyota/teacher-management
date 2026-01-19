@@ -25,7 +25,7 @@ export class AuthorizationMiddleware implements NestMiddleware {
       const decoded = jwt.verify(token, process.env.JWT_SECRET!) as JwtPayload;
 
       // --- Kiểm tra token phải có các trường bắt buộc ---
-      if (!decoded.userId || !decoded.userType || !decoded.deviceId) {
+      if (!decoded.userId || !decoded.userType) {
         throw new UnauthorizedException(ERROR_MESSAGES.INVALID_TOKEN_STRUCTURE);
       }
 

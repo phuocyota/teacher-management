@@ -3,10 +3,12 @@ import { NestFactory } from '@nestjs/core';
 import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
 import { AppModule } from './app.module';
 import { SuccessResponseInterceptor } from './common/interceptors/success-response.interceptor';
+import { ResponseLoggerInterceptor } from './common/interceptors/response-logger.interceptor';
+import { NestExpressApplication } from '@nestjs/platform-express';
+import { join } from 'path';
 
 async function bootstrap() {
-  const app = await NestFactory.create(AppModule);
-
+  const app = await NestFactory.create<NestExpressApplication>(AppModule);
   const config = new DocumentBuilder()
     .setTitle('Teacher Management API')
     .setDescription('API for managing teachers and lectures')
@@ -17,6 +19,8 @@ async function bootstrap() {
     .addTag('Auth', 'Authentication endpoints')
     .addTag('Device', 'Device management endpoints')
     .addTag('License', 'License management endpoints')
+    .addTag('Course', 'Course management endpoints')
+    .addTag('Upload', 'File upload endpoints')
     .addBearerAuth(
       {
         type: 'http',
@@ -33,8 +37,10 @@ async function bootstrap() {
   const document = SwaggerModule.createDocument(app, config);
   SwaggerModule.setup('swagger', app, document);
 
+  app.useGlobalInterceptors(new ResponseLoggerInterceptor());
   app.useGlobalInterceptors(new SuccessResponseInterceptor());
 
-  await app.listen(process.env.PORT ?? 3000, '0.0.0.0');
+  app.useStaticAssets(join(__dirname, '..', 'uploads'), { prefix: '/uploads' });
+  await app.listen(process.env.PORT ?? 3001, '0.0.0.0');
 }
 bootstrap();

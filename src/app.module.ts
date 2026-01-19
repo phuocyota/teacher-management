@@ -27,7 +27,14 @@ import { GroupModule } from './group/group.module';
 import { GroupEntity } from './group/entity/group.entity';
 import { UserGroupEntity } from './user-group/entity/user-group.entity';
 import { UserGroupModule } from './user-group/user-group.module';
-import { TeacherLecturePermissionEntity } from './lecture/entity/teacher-lecture-permission.entity';
+import { CourseModule } from './course/course.module';
+import { CourseEntity } from './course/course.entity';
+import { LectureResourceEntity } from './lecture/entity/lecture_resource.entity';
+import { LectureGroupEntity } from './lecture/entity/lecture_group.entity';
+import { LectureUserEntity } from './lecture/entity/lecture_user.entity';
+import { LectureDownloadLogEntity } from './lecture/entity/lecture_download_log.entity';
+import { MiddlewareConsumer } from '@nestjs/common';
+import { RequestLoggerMiddleware } from './common/middleware/request-logger-middleware';
 
 @Module({
   imports: [
@@ -52,11 +59,15 @@ import { TeacherLecturePermissionEntity } from './lecture/entity/teacher-lecture
           ApprovedDeviceEntity,
           DeviceRequest,
           ClassEntity,
+          CourseEntity,
           FileEntity,
           FileAccessEntity,
           GroupEntity,
           UserGroupEntity,
-          TeacherLecturePermissionEntity,
+          LectureResourceEntity,
+          LectureGroupEntity,
+          LectureUserEntity,
+          LectureDownloadLogEntity,
         ],
         synchronize: true,
       }),
@@ -69,6 +80,7 @@ import { TeacherLecturePermissionEntity } from './lecture/entity/teacher-lecture
     SocketModule,
     AuthModule,
     ClassModule,
+    CourseModule,
     UploadModule,
     GroupModule,
     UserGroupModule,
@@ -85,4 +97,8 @@ import { TeacherLecturePermissionEntity } from './lecture/entity/teacher-lecture
     },
   ],
 })
-export class AppModule {}
+export class AppModule {
+  configure(consumer: MiddlewareConsumer) {
+    consumer.apply(RequestLoggerMiddleware).forRoutes('*');
+  }
+}

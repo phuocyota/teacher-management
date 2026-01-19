@@ -1,4 +1,8 @@
-import { Injectable, ForbiddenException } from '@nestjs/common';
+import {
+  Injectable,
+  ForbiddenException,
+  NotFoundException,
+} from '@nestjs/common';
 import { EntityManager } from 'typeorm';
 import { GroupEntity } from './entity/group.entity';
 import {
@@ -19,6 +23,16 @@ export class GroupService {
     private readonly groupRepoService: GroupRepositoryService,
     private readonly entityManager: EntityManager,
   ) {}
+
+  async checkById(id: string): Promise<GroupResponseDto> {
+    const group = await this.groupRepoService.findOneById(id);
+    if (!group) {
+      throw new NotFoundException(
+        ERROR_MESSAGES.NOT_FOUND_WITH_ID('Group', id),
+      );
+    }
+    return autoMapToDto(GroupResponseDto, group);
+  }
 
   /**
    * Tạo group mới

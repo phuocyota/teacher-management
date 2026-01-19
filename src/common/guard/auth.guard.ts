@@ -41,10 +41,9 @@ export class AuthGuard implements CanActivate {
       const decoded = jwt.verify(token, secret) as JwtPayload;
 
       // Validate required fields
-      if (!decoded.userId || !decoded.userType || !decoded.deviceId) {
+      if (!decoded.userId || !decoded.userType) {
         throw new UnauthorizedException(ERROR_MESSAGES.INVALID_TOKEN_STRUCTURE);
       }
-
       // Attach user to request
       request.user = decoded;
 

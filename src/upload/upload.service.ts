@@ -4,19 +4,48 @@ import {
   NotFoundException,
   ForbiddenException,
 } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, In } from 'typeorm';
-import { existsSync, mkdirSync, unlinkSync } from 'fs';
-import { join } from 'path';
+import {
+  existsSync,
+  mkdirSync,
+  renameSync,
+  statSync,
+  writeFileSync,
+  appendFileSync,
+  readFileSync,
+  readdirSync,
+  rmSync,
+  createReadStream,
+  createWriteStream,
+} from 'fs';
+import { join, dirname, isAbsolute, basename, resolve, sep } from 'path';
+import { createUnzip } from 'zlib';
+import * as unzipper from 'unzipper';
 import { FileEntity } from './entity/file.entity';
 import { FileAccessEntity } from './entity/file-access.entity';
-import { FileVisibility, FileAccessType } from './enum/file-visibility.enum';
-import { LectureEntity } from 'src/lecture/entity/lecture.entity';
-import { TeacherLecturePermissionEntity } from 'src/lecture/entity/teacher-lecture-permission.entity';
-import { PermissionType } from 'src/lecture/enum/permission-type.enum';
+import { FileAccessType, FileType } from './enum/file-visibility.enum';
+import { StreamService } from './services/stream.service';
+import {
+  UploadFileResponseDto,
+  UploadMultipleFilesResponseDto,
+  FileAccessResponseDto,
+  UploadFolderResponseDto,
+  FolderPathResponseDto,
+  InitUploadDto,
+  InitUploadResponseDto,
+  CompleteUploadDto,
+  CompleteUploadResponseDto,
+} from './dto/upload.dto';
 import { JwtPayload } from 'src/common/interface/jwt-payload.interface';
 import { UserType } from 'src/common/enum/user-type.enum';
 import { ERROR_MESSAGES } from 'src/common/constant/error-messages.constant';
+import {
+  PaginationRequestDto,
+  PaginationResponseDto,
+} from 'src/common/dto/pagination.dto';
+import type { Request, Response } from 'express';
 
 // Interface cho Multer File
 interface MulterFile {
@@ -29,29 +58,65 @@ interface MulterFile {
 
 @Injectable()
 export class UploadService {
-  private readonly uploadDir = 'uploads';
+  private readonly uploadDir: string;
+  private readonly publicBaseUrl?: string;
+  private readonly chunksDir: string;
+  private uploadSessions: Map<
+    string,
+    {
+      fileName: string;
+      fileSize: number;
+      totalChunks: number;
+      receivedChunks: Set<number>;
+      mimeType?: string;
+      fileType?: FileType;
+      userId: string;
+    }
+  > = new Map();
 
   constructor(
     @InjectRepository(FileEntity)
     private readonly fileRepo: Repository<FileEntity>,
     @InjectRepository(FileAccessEntity)
     private readonly fileAccessRepo: Repository<FileAccessEntity>,
-    @InjectRepository(LectureEntity)
-    private readonly lectureRepo: Repository<LectureEntity>,
-    @InjectRepository(TeacherLecturePermissionEntity)
-    private readonly permissionRepo: Repository<TeacherLecturePermissionEntity>,
+    private readonly configService: ConfigService,
+    private readonly streamService: StreamService,
   ) {
-    // Tạo thư mục uploads nếu chưa tồn tại
+    this.uploadDir = this.configService.get('UPLOAD_DIR') || 'uploads';
+    this.chunksDir = join(this.uploadDir, 'chunks');
+    this.publicBaseUrl = this.configService.get('PUBLIC_BASE_URL');
     this.ensureUploadDirExists();
+    this.ensureChunksDirExists();
   }
 
   /**
    * Đảm bảo thư mục upload tồn tại
    */
   private ensureUploadDirExists(): void {
-    const uploadPath = join(process.cwd(), this.uploadDir);
-    if (!existsSync(uploadPath)) {
-      mkdirSync(uploadPath, { recursive: true });
+    try {
+      if (!existsSync(this.uploadDir)) {
+        mkdirSync(this.uploadDir, { recursive: true });
+      }
+    } catch (error) {
+      // Gracefully handle permission errors
+      throw new Error(
+        `Không thể tạo thư mục upload: ${this.uploadDir}. Vui lòng kiểm tra quyền truy cập., Error: ${error}`,
+      );
+    }
+  }
+
+  /**
+   * Đảm bảo thư mục chunks tồn tại
+   */
+  private ensureChunksDirExists(): void {
+    try {
+      if (!existsSync(this.chunksDir)) {
+        mkdirSync(this.chunksDir, { recursive: true });
+      }
+    } catch (error) {
+      throw new Error(
+        `Không thể tạo thư mục chunks: ${this.chunksDir}. Error: ${error}`,
+      );
     }
   }
 
@@ -61,26 +126,84 @@ export class UploadService {
   async handleFileUpload(
     file: MulterFile,
     user: JwtPayload,
-    visibility: FileVisibility = FileVisibility.PRIVATE,
+    fileType: FileType = FileType.NORMAL,
     description?: string,
-  ): Promise<FileEntity> {
+    preserveOriginalName = false,
+  ): Promise<UploadFileResponseDto> {
     if (!file) {
       throw new BadRequestException('Không có file nào được upload');
     }
 
-    const fileEntity = this.fileRepo.create({
-      originalName: file.originalname,
-      filename: file.filename,
-      path: file.path,
-      mimetype: file.mimetype,
-      size: file.size,
-      visibility,
-      uploadedBy: user.userId,
-      description,
-      createdBy: user.userId,
-    });
+    const originalName = this.normalizeOriginalName(file.originalname);
 
-    return this.fileRepo.save(fileEntity);
+    // By default, use the stored filename from multer
+    let storedFilename = file.filename;
+    let dbPath = file.path;
+
+    if (preserveOriginalName) {
+      const safeName = basename(originalName);
+
+      // Destination relative path inside uploadDir
+      const destRelative = safeName;
+      const destDbPath = join(this.uploadDir, destRelative);
+      const destFsPath = join(process.cwd(), this.uploadDir, destRelative);
+
+      // Prevent overwrite on disk and in DB
+      if (existsSync(destFsPath)) {
+        throw new BadRequestException(`File ${safeName} đã tồn tại`);
+      }
+
+      const existsByFilename = await this.fileRepo.findOne({
+        where: { filename: safeName },
+      });
+      if (existsByFilename) {
+        throw new BadRequestException(`File ${safeName} đã tồn tại`);
+      }
+
+      // Ensure upload dir exists
+      try {
+        mkdirSync(dirname(destFsPath), { recursive: true });
+      } catch (err) {
+        throw new BadRequestException(err);
+      }
+
+      // Move/rename the temp file to the destination path
+      try {
+        const srcPath = isAbsolute(file.path)
+          ? file.path
+          : join(process.cwd(), file.path);
+        if (srcPath !== destFsPath) {
+          renameSync(srcPath, destFsPath);
+        }
+      } catch (err) {
+        // If rename fails, rethrow as bad request to avoid silent inconsistencies
+        throw new BadRequestException('Không thể lưu file với tên gốc');
+      }
+
+      storedFilename = safeName;
+      dbPath = destDbPath;
+    }
+
+    // If a public base URL is configured, expose the public URL as the stored path
+    const storedPath = this.publicBaseUrl
+      ? `${this.publicBaseUrl.replace(/\/$/, '')}/${storedFilename}`
+      : dbPath;
+
+    const saved = await this.fileRepo.save(
+      this.fileRepo.create({
+        originalName,
+        filename: storedFilename,
+        path: storedPath,
+        mimetype: file.mimetype,
+        size: file.size,
+        fileType,
+        description,
+        createdBy: user.userId,
+        uploadedBy: user.userId,
+      }),
+    );
+
+    return UploadFileResponseDto.fromEntity(saved);
   }
 
   /**
@@ -89,23 +212,122 @@ export class UploadService {
   async handleMultipleFilesUpload(
     files: MulterFile[],
     user: JwtPayload,
-    visibility: FileVisibility = FileVisibility.PRIVATE,
-  ): Promise<{ files: FileEntity[]; totalFiles: number }> {
+    fileType: FileType = FileType.NORMAL,
+  ): Promise<UploadMultipleFilesResponseDto> {
     if (!files || files.length === 0) {
       throw new BadRequestException('Không có file nào được upload');
     }
 
-    const savedFiles: FileEntity[] = [];
+    const savedFiles: UploadFileResponseDto[] = [];
 
     for (const file of files) {
-      const fileEntity = await this.handleFileUpload(file, user, visibility);
-      savedFiles.push(fileEntity);
+      const fileDto = await this.handleFileUpload(file, user, fileType);
+      savedFiles.push(fileDto);
     }
 
     return {
       files: savedFiles,
       totalFiles: savedFiles.length,
     };
+  }
+
+  /**
+   * Xử lý upload một thư mục (nhiều file), giữ nguyên cấu trúc thư mục nếu client gửi kèm đường dẫn
+   */
+  async handleFolderUpload(
+    files: MulterFile[],
+    user: JwtPayload,
+    fileType: FileType = FileType.NORMAL,
+  ): Promise<UploadFolderResponseDto> {
+    if (!files || files.length === 0) {
+      throw new BadRequestException('Không có file nào được upload');
+    }
+
+    const savedFiles: UploadFileResponseDto[] = [];
+
+    for (const file of files) {
+      // file.originalname có thể chứa đường dẫn tương đối do client (ví dụ webkitRelativePath)
+      // Lưu giữ cấu trúc bằng cách ghép với uploadDir
+      const relativePath = file.originalname || file.filename;
+      const destPath = join(this.uploadDir, relativePath);
+
+      // Tạo thư mục đích nếu chưa tồn tại
+      try {
+        mkdirSync(dirname(destPath), { recursive: true });
+      } catch (err) {
+        throw new BadRequestException(err);
+      }
+
+      // If destination already exists on disk or in DB, reject to avoid overwrite
+      if (existsSync(destPath)) {
+        throw new BadRequestException(`File ${relativePath} đã tồn tại`);
+      }
+      const dbPath = join(this.uploadDir, relativePath);
+      const existing = await this.fileRepo.findOne({ where: { path: dbPath } });
+      if (existing) {
+        throw new BadRequestException(`File ${relativePath} đã tồn tại`);
+      }
+
+      // Also check stored filename duplicate first
+      const storedFilename = relativePath.split(/[\\/]/).pop();
+      if (storedFilename) {
+        const existsByFilename = await this.fileRepo.findOne({
+          where: { filename: storedFilename },
+        });
+        if (existsByFilename) {
+          throw new BadRequestException(
+            `Tên file ${storedFilename} đã tồn tại`,
+          );
+        }
+      }
+
+      // Di chuyển file tạm của multer tới vị trí đích nếu cần
+      try {
+        if (file.path && file.path !== destPath) {
+          renameSync(file.path, destPath);
+        }
+      } catch (err) {
+        // Nếu không thể rename, ignore và tiếp tục — multer có thể đã lưu đúng chỗ
+      }
+
+      // Tạo entity và lưu vào DB
+      const originalName = this.normalizeOriginalName(file.originalname);
+      const localPath = join(this.uploadDir, relativePath);
+      const publicPath = this.publicBaseUrl
+        ? `${this.publicBaseUrl.replace(/\/$/, '')}/${relativePath.replace(/\\/g, '/')}`
+        : localPath;
+
+      const fileEntity = this.fileRepo.create({
+        originalName,
+        filename: storedFilename,
+        path: publicPath,
+        mimetype: file.mimetype,
+        size: file.size,
+        fileType,
+        uploadedBy: user.userId,
+        createdBy: user.userId,
+      });
+
+      const saved = await this.fileRepo.save(fileEntity);
+      savedFiles.push(UploadFileResponseDto.fromEntity(saved));
+    }
+
+    // Tìm thư mục gốc chung (nếu có)
+    const paths = files.map((f) => f.originalname || f.filename);
+    const splitPaths = paths.map((p) => p.split(/[\\/]+/).filter(Boolean));
+    let commonParts: string[] = [];
+    if (splitPaths.length > 0) {
+      for (let i = 0; ; i++) {
+        const part = splitPaths[0][i];
+        if (!part) break;
+        if (splitPaths.every((sp) => sp[i] === part)) {
+          commonParts.push(part);
+        } else break;
+      }
+    }
+    const folderPath = commonParts.join('/');
+
+    return UploadFolderResponseDto.from(savedFiles, folderPath);
   }
 
   /**
@@ -132,97 +354,22 @@ export class UploadService {
     return file;
   }
 
-  /**
-   * Kiểm tra quyền truy cập file
-   */
-  async checkFileAccess(
-    fileId: string,
-    user: JwtPayload,
-    requiredAccess: FileAccessType = FileAccessType.VIEW,
-  ): Promise<boolean> {
-    const file = await this.getFileById(fileId);
-
-    // Admin có toàn quyền
-    if (user.userType === UserType.ADMIN) {
-      return true;
-    }
-
-    // Người upload có toàn quyền
-    if (file.uploadedBy === user.userId) {
-      return true;
-    }
-
-    // File công khai - ai cũng xem được
-    if (file.visibility === FileVisibility.PUBLIC) {
-      return requiredAccess === FileAccessType.VIEW;
-    }
-
-    // File riêng tư - chỉ người upload mới xem được
-    if (file.visibility === FileVisibility.PRIVATE) {
-      return false;
-    }
-
-    // File restricted - kiểm tra quyền được cấp
-    if (file.visibility === FileVisibility.RESTRICTED) {
-      const access = await this.fileAccessRepo.findOne({
-        where: {
-          fileId,
-          userId: user.userId,
-        },
-      });
-
-      if (!access) {
-        return false;
-      }
-
-      // Kiểm tra hết hạn
-      if (access.expiresAt && new Date(access.expiresAt) < new Date()) {
-        return false;
-      }
-
-      // Kiểm tra loại quyền
-      if (requiredAccess === FileAccessType.VIEW) {
-        return true; // Mọi quyền đều có thể xem
-      }
-
-      if (requiredAccess === FileAccessType.DOWNLOAD) {
-        return (
-          access.accessType === FileAccessType.DOWNLOAD ||
-          access.accessType === FileAccessType.FULL
-        );
-      }
-
-      if (requiredAccess === FileAccessType.FULL) {
-        return access.accessType === FileAccessType.FULL;
-      }
-    }
-
-    return false;
+  async download(fileId: string, res: Response) {
+    return this.streamService.download(fileId, res);
   }
 
   /**
-   * Tải file về (có kiểm tra quyền)
+   * Serve image file with appropriate content-type
    */
-  async downloadFile(
-    filename: string,
-    user: JwtPayload,
-  ): Promise<{ filePath: string; file: FileEntity }> {
-    const file = await this.getFileByFilename(filename);
+  async serveImage(filename: string, res: Response) {
+    return this.streamService.serveImage(filename, res);
+  }
 
-    const hasAccess = await this.checkFileAccess(
-      file.id,
-      user,
-      FileAccessType.DOWNLOAD,
-    );
-
-    if (!hasAccess) {
-      throw new ForbiddenException('Bạn không có quyền tải file này');
-    }
-
-    return {
-      filePath: this.getFilePath(filename),
-      file,
-    };
+  /**
+   * Stream file with support for Range requests (partial content)
+   */
+  async stream(fileId: string, req: Request, res: Response) {
+    return this.streamService.stream(fileId, req, res);
   }
 
   /**
@@ -234,7 +381,7 @@ export class UploadService {
     accessType: FileAccessType,
     grantedBy: JwtPayload,
     expiresAt?: Date,
-  ): Promise<FileAccessEntity> {
+  ): Promise<FileAccessResponseDto> {
     const file = await this.getFileById(fileId);
 
     // Chỉ owner hoặc admin mới có thể cấp quyền
@@ -269,7 +416,8 @@ export class UploadService {
       });
     }
 
-    return this.fileAccessRepo.save(access);
+    const saved = await this.fileAccessRepo.save(access);
+    return FileAccessResponseDto.fromEntity(saved);
   }
 
   /**
@@ -281,8 +429,8 @@ export class UploadService {
     accessType: FileAccessType,
     grantedBy: JwtPayload,
     expiresAt?: Date,
-  ): Promise<FileAccessEntity[]> {
-    const results: FileAccessEntity[] = [];
+  ): Promise<FileAccessResponseDto[]> {
+    const results: FileAccessResponseDto[] = [];
 
     for (const userId of userIds) {
       const access = await this.grantFileAccess(
@@ -299,92 +447,33 @@ export class UploadService {
   }
 
   /**
-   * Thu hồi quyền truy cập file
-   */
-  async revokeFileAccess(
-    fileId: string,
-    userId: string,
-    revokedBy: JwtPayload,
-  ): Promise<void> {
-    const file = await this.getFileById(fileId);
-
-    // Chỉ owner hoặc admin mới có thể thu hồi quyền
-    if (
-      file.uploadedBy !== revokedBy.userId &&
-      revokedBy.userType !== UserType.ADMIN
-    ) {
-      throw new ForbiddenException(
-        'Bạn không có quyền thu hồi quyền truy cập file này',
-      );
-    }
-
-    await this.fileAccessRepo.delete({ fileId, userId });
-  }
-
-  /**
    * Lấy danh sách quyền truy cập của file
    */
   async getFileAccessList(
     fileId: string,
     user: JwtPayload,
-  ): Promise<FileAccessEntity[]> {
+  ): Promise<FileAccessResponseDto[]> {
     const file = await this.getFileById(fileId);
 
-    // Chỉ owner hoặc admin mới có thể xem danh sách quyền
+    // Chỉ owner hoặc admin mới xem được danh sách quyền
     if (file.uploadedBy !== user.userId && user.userType !== UserType.ADMIN) {
       throw new ForbiddenException(
-        'Bạn không có quyền xem danh sách quyền truy cập',
+        'Bạn không có quyền xem danh sách quyền truy cập file này',
       );
     }
 
-    return this.fileAccessRepo.find({
+    const accessList = await this.fileAccessRepo.find({
       where: { fileId },
       relations: ['file'],
     });
-  }
 
-  /**
-   * Cập nhật visibility của file
-   */
-  async updateFileVisibility(
-    fileId: string,
-    visibility: FileVisibility,
-    user: JwtPayload,
-  ): Promise<FileEntity> {
-    const file = await this.getFileById(fileId);
-
-    // Chỉ owner hoặc admin mới có thể thay đổi visibility
-    if (file.uploadedBy !== user.userId && user.userType !== UserType.ADMIN) {
-      throw new ForbiddenException(
-        'Bạn không có quyền thay đổi visibility của file này',
-      );
-    }
-
-    file.visibility = visibility;
-    file.updatedBy = user.userId;
-
-    return this.fileRepo.save(file);
-  }
-
-  /**
-   * Lấy danh sách file của user
-   */
-  async getMyFiles(user: JwtPayload): Promise<FileEntity[]> {
-    return this.fileRepo.find({
-      where: { uploadedBy: user.userId },
-      order: { createdAt: 'DESC' },
-    });
+    return accessList.map((access) => FileAccessResponseDto.fromEntity(access));
   }
 
   /**
    * Lấy danh sách file user có quyền truy cập
    */
-  async getAccessibleFiles(user: JwtPayload): Promise<FileEntity[]> {
-    // Lấy file công khai
-    const publicFiles = await this.fileRepo.find({
-      where: { visibility: FileVisibility.PUBLIC },
-    });
-
+  async getAccessibleFiles(user: JwtPayload): Promise<UploadFileResponseDto[]> {
     // Lấy file user upload
     const myFiles = await this.fileRepo.find({
       where: { uploadedBy: user.userId },
@@ -407,21 +496,76 @@ export class UploadService {
     }
 
     // Gộp và loại bỏ trùng lặp
-    const allFiles = [...publicFiles, ...myFiles, ...restrictedFiles];
+    const allFiles = [...myFiles, ...restrictedFiles];
     const uniqueFiles = allFiles.filter(
       (file, index, self) => index === self.findIndex((f) => f.id === file.id),
     );
 
-    return uniqueFiles.sort(
+    const sorted = uniqueFiles.sort(
       (a, b) =>
         new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
     );
+
+    return sorted.map((file) => UploadFileResponseDto.fromEntity(file));
+  }
+
+  async listFiles(
+    user: JwtPayload,
+    dto: PaginationRequestDto,
+  ): Promise<PaginationResponseDto<UploadFileResponseDto>> {
+    const page = dto.page ?? 1;
+    const size = dto.size ?? 10;
+    const keyword = dto.search?.trim().toLowerCase();
+
+    const sourceFiles =
+      user.userType === UserType.ADMIN
+        ? await this.getAllFiles()
+        : await this.getAccessibleFiles(user);
+
+    const filtered = keyword
+      ? sourceFiles.filter((file) => this.matchesSearchTerm(file, keyword))
+      : sourceFiles;
+
+    const startIndex = (page - 1) * size;
+    const paged = filtered.slice(startIndex, startIndex + size);
+
+    return {
+      page,
+      size,
+      total: filtered.length,
+      data: paged,
+    };
+  }
+
+  private matchesSearchTerm(
+    file: UploadFileResponseDto,
+    keyword: string,
+  ): boolean {
+    const haystack = `${file.originalName ?? ''} ${file.filename ?? ''} ${
+      file.description ?? ''
+    }`.toLowerCase();
+    return haystack.includes(keyword);
+  }
+
+  /**
+   * Lấy tất cả file (dành cho admin)
+   */
+  async getAllFiles(): Promise<UploadFileResponseDto[]> {
+    const files = await this.fileRepo.find();
+    const sorted = files.sort(
+      (a, b) =>
+        new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
+    );
+    return sorted.map((file) => UploadFileResponseDto.fromEntity(file));
   }
 
   /**
    * Xóa file (có kiểm tra quyền)
    */
-  async deleteFile(filename: string, user: JwtPayload): Promise<boolean> {
+  public async deleteFile(
+    filename: string,
+    user: JwtPayload,
+  ): Promise<boolean> {
     const file = await this.getFileByFilename(filename);
 
     // Chỉ owner hoặc admin mới có thể xóa
@@ -430,9 +574,9 @@ export class UploadService {
     }
 
     // Xóa file vật lý
-    const filePath = join(process.cwd(), this.uploadDir, filename);
-    if (existsSync(filePath)) {
-      unlinkSync(filePath);
+    const absolutePath = this.streamService.getAbsoluteFilePath(file.path);
+    if (existsSync(absolutePath)) {
+      rmSync(absolutePath);
     }
 
     // Xóa trong database (cascade sẽ xóa cả file_access)
@@ -442,103 +586,377 @@ export class UploadService {
   }
 
   /**
-   * Lấy đường dẫn đầy đủ của file
+   * Normalize original filename to UTF-8 when common garbling (latin1 interpretation) occurs.
    */
+  private normalizeOriginalName(name?: string): string {
+    if (!name) return 'unknown';
+    // If name contains common mojibake markers (Ã, Â, Ä), attempt latin1->utf8 conversion
+    if (/[ÃÂÄ]/.test(name)) {
+      try {
+        const converted = Buffer.from(name, 'latin1').toString('utf8');
+        return converted;
+      } catch (err) {
+        return name;
+      }
+    }
+
+    return name;
+  }
+
+  async ensureFolderPath(relativePath: string): Promise<FolderPathResponseDto> {
+    const sanitizedPath = this.sanitizeFolderPath(relativePath);
+    const uploadBasePath = resolve(process.cwd(), this.uploadDir);
+    const targetPath = resolve(uploadBasePath, sanitizedPath);
+
+    if (!this.isPathInsideUploadDir(targetPath, uploadBasePath)) {
+      throw new BadRequestException('Đường dẫn thư mục không hợp lệ');
+    }
+
+    let created = false;
+    if (existsSync(targetPath)) {
+      const stats = statSync(targetPath);
+      if (!stats.isDirectory()) {
+        throw new BadRequestException('Một file cùng tên đã tồn tại');
+      }
+    } else {
+      try {
+        mkdirSync(targetPath, { recursive: true });
+        created = true;
+      } catch (err) {
+        throw new BadRequestException(
+          `Không thể tạo thư mục: ${err instanceof Error ? err.message : err}`,
+        );
+      }
+    }
+
+    const response = new FolderPathResponseDto();
+    response.relativePath = sanitizedPath;
+    response.absolutePath = targetPath;
+    response.created = created;
+    return response;
+  }
+
+  private sanitizeFolderPath(pathValue: string): string {
+    const trimmed = pathValue?.trim();
+    if (!trimmed) {
+      throw new BadRequestException('Đường dẫn thư mục không được để trống');
+    }
+
+    if (trimmed.includes('..')) {
+      throw new BadRequestException(
+        'Đường dẫn không được phép chứa phần tử cha (..)',
+      );
+    }
+
+    const normalized = trimmed
+      .replace(/\\/g, '/')
+      .replace(/\/+/g, '/')
+      .replace(/^\/+/, '');
+
+    if (!normalized) {
+      throw new BadRequestException('Đường dẫn thư mục không được để trống');
+    }
+
+    return normalized;
+  }
+
+  private isPathInsideUploadDir(targetPath: string, basePath: string): boolean {
+    const separatorAppended = basePath.endsWith(sep)
+      ? basePath
+      : `${basePath}${sep}`;
+    return targetPath === basePath || targetPath.startsWith(separatorAppended);
+  }
+
   getFilePath(filename: string): string {
     return join(process.cwd(), this.uploadDir, filename);
   }
 
+  public downloadFile(filename: string): { filePath: string } {
+    const filePath = this.getFilePath(filename);
+    return { filePath };
+  }
+
   /**
-   * Upload file dưới dạng bài giảng
-   * Luồng: Upload file → Tạo record file → Tạo record lecture → Cấp quyền cho giáo viên
-   * Sử dụng transaction để đảm bảo tính nhất quán của dữ liệu
+   * Khởi tạo chunked upload session
    */
-  async uploadLectureFile(
-    file: MulterFile,
-    lectureTitle: string,
-    lectureDescription: string | undefined,
-    teacherIds: string[] | undefined,
+  async initChunkedUpload(
+    dto: InitUploadDto,
     user: JwtPayload,
-    fileDescription?: string,
-  ): Promise<{
-    fileId: string;
-    lectureId: string;
-    filename: string;
-    originalName: string;
-    size: number;
-    lectureTitle: string;
-    teachersGranted: number;
-    createdAt: Date;
-  }> {
-    if (!file) {
-      throw new BadRequestException('Không có file nào được upload');
+  ): Promise<InitUploadResponseDto> {
+    const uploadId = `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+    const sessionDir = join(this.chunksDir, uploadId);
+
+    // Tạo thư mục cho session
+    mkdirSync(sessionDir, { recursive: true });
+
+    // Lưu thông tin session
+    this.uploadSessions.set(uploadId, {
+      fileName: dto.fileName,
+      fileSize: dto.fileSize,
+      totalChunks: dto.totalChunks,
+      receivedChunks: new Set(),
+      mimeType: dto.mimeType,
+      fileType: dto.fileType || FileType.NORMAL,
+      userId: user.userId,
+    });
+
+    return {
+      uploadId,
+      fileName: dto.fileName,
+      totalChunks: dto.totalChunks,
+    };
+  }
+
+  /**
+   * Nhận và lưu chunk
+   */
+  async handleChunk(
+    uploadId: string,
+    chunkIndex: number,
+    chunk: Buffer,
+  ): Promise<{ received: number; total: number }> {
+    const session = this.uploadSessions.get(uploadId);
+
+    if (!session) {
+      throw new NotFoundException(
+        'Upload session không tồn tại hoặc đã hết hạn',
+      );
     }
 
-    // Sử dụng transaction để đảm bảo tính nhất quán
-    return this.fileRepo.manager.connection.transaction(async (manager) => {
-      // Bước 1: Tạo record file
-      const fileEntity = this.fileRepo.create({
-        originalName: file.originalname,
-        filename: file.filename,
-        path: file.path,
-        mimetype: file.mimetype,
-        size: file.size,
-        visibility: FileVisibility.PRIVATE,
-        uploadedBy: user.userId,
-        description: fileDescription,
-        createdBy: user.userId,
-      });
+    const sessionDir = join(this.chunksDir, uploadId);
+    const chunkPath = join(sessionDir, `chunk-${chunkIndex}`);
 
-      const savedFile = await manager.save(fileEntity);
+    // Lưu chunk
+    writeFileSync(chunkPath, chunk);
+    session.receivedChunks.add(chunkIndex);
 
-      // Bước 2: Tạo record lecture
-      const lecture = this.lectureRepo.create({
-        title: lectureTitle,
-        description: lectureDescription,
-        fileId: savedFile.id,
-        createdBy: user.userId,
-      });
+    return {
+      received: session.receivedChunks.size,
+      total: session.totalChunks,
+    };
+  }
 
-      const savedLecture = await manager.save(lecture);
+  /**
+   * Hoàn thành upload và merge các chunks
+   */
+  async completeChunkedUpload(
+    dto: CompleteUploadDto,
+    user: JwtPayload,
+  ): Promise<CompleteUploadResponseDto> {
+    const session = this.uploadSessions.get(dto.uploadId);
 
-      // Bước 3: Cấp quyền cho giáo viên (nếu có)
-      let teachersGranted = 0;
-      if (teacherIds && teacherIds.length > 0) {
-        // Kiểm tra giáo viên tồn tại
-        // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
-        const teachers = await manager.query(
-          `SELECT id FROM "user" WHERE id = ANY($1)`,
-          [teacherIds],
+    if (!session) {
+      throw new NotFoundException('Upload session không tồn tại');
+    }
+
+    if (session.userId !== user.userId) {
+      throw new ForbiddenException('Bạn không có quyền hoàn thành upload này');
+    }
+
+    if (session.receivedChunks.size !== session.totalChunks) {
+      throw new BadRequestException(
+        `Chưa nhận đủ chunks. Đã nhận: ${session.receivedChunks.size}/${session.totalChunks}`,
+      );
+    }
+
+    const sessionDir = join(this.chunksDir, dto.uploadId);
+    const timestamp = Date.now();
+    const finalFileName = `${timestamp}-${session.fileName}`;
+    const finalPath = join(this.uploadDir, finalFileName);
+
+    // Merge các chunks theo thứ tự
+    for (let i = 0; i < session.totalChunks; i++) {
+      const chunkPath = join(sessionDir, `chunk-${i}`);
+      const chunkData = readFileSync(chunkPath);
+      appendFileSync(finalPath, chunkData);
+    }
+
+    // Lấy kích thước file sau khi merge
+    const stats = statSync(finalPath);
+
+    // Lưu vào database
+    const fileEntity = this.fileRepo.create({
+      originalName: session.fileName,
+      filename: finalFileName,
+      path: finalPath,
+      mimetype: session.mimeType || 'application/octet-stream',
+      size: stats.size,
+      fileType: session.fileType,
+      uploadedBy: user.userId,
+      createdBy: user.userId,
+    });
+
+    const savedFile = await this.fileRepo.save(fileEntity);
+
+    // Dọn dẹp session và chunks
+    this.cleanupSession(dto.uploadId);
+
+    const response: CompleteUploadResponseDto = {
+      ...UploadFileResponseDto.fromEntity(savedFile),
+      success: true,
+    };
+
+    // Xử lý unzip nếu được yêu cầu
+    if (dto.unzip && session.fileName.toLowerCase().endsWith('.zip')) {
+      try {
+        const unzipResult = await this.unzipFile(
+          finalPath,
+          user.userId,
+          dto.returnInformationLecture || false,
         );
 
-        // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
-        if (teachers.length !== teacherIds.length) {
-          throw new BadRequestException('Một số giáo viên không tồn tại');
-        }
+        response.unzippedDir = unzipResult.unzippedDir;
+        response.unzippedFiles = unzipResult.files;
 
-        // Tạo permission records
-        for (const teacherId of teacherIds) {
-          const permission = this.permissionRepo.create({
-            lectureId: savedLecture.id,
-            teacherId,
-            permissionType: PermissionType.VIEW,
-            grantedBy: user.userId,
-          });
-          await manager.save(permission);
-          teachersGranted++;
+        if (dto.returnInformationLecture) {
+          response.pdfFile = unzipResult.pdfFile;
+          response.htmlFile = unzipResult.htmlFile;
+          response.mp4File = unzipResult.mp4File;
+        }
+      } catch (error) {
+        // Không throw error, vẫn trả về file zip đã upload
+        // Có thể thêm field error message vào response nếu cần
+      }
+    }
+
+    return response;
+  }
+
+  /**
+   * Giải nén file zip
+   */
+  private async unzipFile(
+    zipFilePath: string,
+    userId: string,
+    returnInformationLecture: boolean = false,
+  ): Promise<{
+    unzippedDir: string;
+    files: string[];
+    pdfFile?: string;
+    htmlFile?: string;
+    mp4File?: string;
+  }> {
+    const zipFileName = basename(zipFilePath, '.zip');
+    const unzippedDirName = `${zipFileName}-unzipped`;
+    const unzippedDirPath = join(this.uploadDir, unzippedDirName);
+
+    // Tạo thư mục để giải nén
+    if (!existsSync(unzippedDirPath)) {
+      mkdirSync(unzippedDirPath, { recursive: true });
+    }
+
+    const extractedFiles: string[] = [];
+
+    // Giải nén file
+    await new Promise<void>((resolve, reject) => {
+      createReadStream(zipFilePath)
+        .pipe(unzipper.Extract({ path: unzippedDirPath }))
+        .on('close', () => resolve())
+        .on('error', (err) => reject(err));
+    });
+
+    // Lấy danh sách file đã giải nén
+    const getFilesRecursive = (
+      dir: string,
+      baseDir: string = dir,
+    ): string[] => {
+      const files: string[] = [];
+      const items = readdirSync(dir, { withFileTypes: true });
+
+      for (const item of items) {
+        const fullPath = join(dir, item.name);
+        const relativePath = fullPath.substring(baseDir.length + 1);
+
+        if (item.isDirectory()) {
+          files.push(...getFilesRecursive(fullPath, baseDir));
+        } else {
+          files.push(relativePath);
         }
       }
 
-      return {
-        fileId: savedFile.id,
-        lectureId: savedLecture.id,
-        filename: savedFile.filename,
-        originalName: savedFile.originalName,
-        size: savedFile.size,
-        lectureTitle: savedLecture.title,
-        teachersGranted,
-        createdAt: savedFile.createdAt,
-      };
-    });
+      return files;
+    };
+
+    extractedFiles.push(...getFilesRecursive(unzippedDirPath));
+
+    // Tìm các file trong root level nếu được yêu cầu
+    let pdfFile: string | undefined;
+    let htmlFile: string | undefined;
+    let mp4File: string | undefined;
+
+    if (returnInformationLecture) {
+      console.log('[unzipFile] Searching for lecture files in root directory...');
+      const rootItems = readdirSync(unzippedDirPath, { withFileTypes: true });
+
+      for (const item of rootItems) {
+        if (item.isFile()) {
+          const fileName = item.name.toLowerCase();
+          const fullPath = join(unzippedDirPath, item.name);
+
+          if (fileName.endsWith('.pdf') && !pdfFile) {
+            pdfFile = fullPath;
+            console.log(`[unzipFile] Found PDF: ${item.name}`);
+          } else if (fileName.endsWith('.html') && !htmlFile) {
+            htmlFile = fullPath;
+            console.log(`[unzipFile] Found HTML: ${item.name}`);
+          } else if (fileName.endsWith('.mp4') && !mp4File) {
+            mp4File = fullPath;
+            console.log(`[unzipFile] Found MP4: ${item.name}`);
+          }
+        }
+      }
+
+      console.log('[unzipFile] Lecture files found:', {
+        pdf: !!pdfFile,
+        html: !!htmlFile,
+        mp4: !!mp4File,
+      });
+    }
+
+    // Xóa file zip gốc
+    try {
+      rmSync(zipFilePath);
+      console.log(`[unzipFile] Deleted original zip file: ${zipFilePath}`);
+
+      // Xóa record trong database
+      await this.fileRepo.delete({ path: zipFilePath });
+      console.log(`[unzipFile] Deleted file record from database`);
+    } catch (error) {
+      console.error('[unzipFile] Failed to delete zip file:', error);
+    }
+
+    return {
+      unzippedDir: unzippedDirPath,
+      files: extractedFiles,
+      pdfFile,
+      htmlFile,
+      mp4File,
+    };
+  }
+
+  /**
+   * Dọn dẹp upload session và xóa chunks
+   */
+  private cleanupSession(uploadId: string): void {
+    const sessionDir = join(this.chunksDir, uploadId);
+
+    try {
+      // Xóa tất cả chunks
+      if (existsSync(sessionDir)) {
+        const files = readdirSync(sessionDir);
+
+        files.forEach((file) => {
+          const filePath = join(sessionDir, file);
+          rmSync(filePath);
+        });
+
+        // Xóa thư mục session (dùng rmSync cho directory)
+        rmSync(sessionDir, { recursive: true, force: true });
+      } else {
+      }
+
+      // Xóa session khỏi memory
+      this.uploadSessions.delete(uploadId);
+    } catch (error) {}
   }
 }

@@ -6,10 +6,13 @@ import {
   Patch,
   Param,
   Delete,
+  ParseUUIDPipe,
 } from '@nestjs/common';
 import { ApiTags, ApiBearerAuth } from '@nestjs/swagger';
 import { ClassService } from './class.service';
 import { CreateClassDto, UpdateClassDto } from './dto/create-class.dto';
+import type { JwtPayload } from 'src/common/interface/jwt-payload.interface';
+import { User } from 'src/common/decorator/user.decorator';
 
 @ApiTags('Class')
 @ApiBearerAuth('access-token')
@@ -28,17 +31,17 @@ export class ClassController {
   }
 
   @Get(':id')
-  findOne(@Param('id') id: string) {
+  findOne(@Param('id', ParseUUIDPipe) id: string) {
     return this.classService.findOne(id);
   }
 
   @Patch(':id')
-  update(@Param('id') id: string, @Body() dto: UpdateClassDto) {
+  update(@Param('id', ParseUUIDPipe) id: string, @Body() dto: UpdateClassDto) {
     return this.classService.update(id, dto);
   }
 
   @Delete(':id')
-  remove(@Param('id') id: string) {
-    return this.classService.remove(id);
+  remove(@Param('id', ParseUUIDPipe) id: string, @User() user: JwtPayload) {
+    return this.classService.remove(id, user);
   }
 }

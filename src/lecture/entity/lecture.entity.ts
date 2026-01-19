@@ -1,26 +1,43 @@
-import { Entity, Column, OneToMany } from 'typeorm';
+import { Entity, Column, OneToMany, Index } from 'typeorm';
 import { BaseEntity } from '../../common/sql/base.entity';
-import { TeacherLecturePermissionEntity } from './teacher-lecture-permission.entity';
+import { LectureResourceEntity } from './lecture_resource.entity';
+import { LectureGroupEntity } from './lecture_group.entity';
+import { LectureUserEntity } from './lecture_user.entity';
 
 @Entity('lecture')
 export class LectureEntity extends BaseEntity {
+  @Column({ unique: true, nullable: true })
+  @Index({ unique: true })
+  code!: string; // Mã bài giảng (unique)
+
   @Column()
-  title: string;
+  title: string; // Tiêu đề bài giảng
 
-  @Column({ nullable: true })
-  description: string;
+  @Column({ type: 'text', nullable: true })
+  note?: string; // Ghi chú thêm
 
-  @Column({ name: 'file_id', nullable: true })
-  fileId?: string;
+  @Column({ name: 'order_column', default: 0 })
+  orderColumn: number; // Thứ tự sắp xếp bài giảng
 
-  /**
-   * Quan hệ một-nhiều với TeacherLecturePermission
-   * Một bài giảng có nhiều quyền được cấp cho giáo viên
-   */
-  @OneToMany(
-    () => TeacherLecturePermissionEntity,
-    (permission) => permission.lecture,
-    { cascade: true },
-  )
-  teacherPermissions?: TeacherLecturePermissionEntity[];
+  @Column({ name: 'avatar', type: 'text', nullable: true })
+  avatar?: string; // Ảnh đại diện bài giảng
+
+  @Column({ name: 'course_id', type: 'uuid' })
+  courseId: string; // ID khóa học
+
+  /* ===== Resources ===== */
+  @OneToMany(() => LectureResourceEntity, (resource) => resource.lecture, {
+    cascade: true,
+  })
+  resources?: LectureResourceEntity[];
+
+  //context
+  @OneToMany(() => LectureGroupEntity, (context) => context.lecture, {
+    cascade: true,
+  })
+  contexts?: LectureGroupEntity[];
+
+  /** Links to users via join table `lecture_context_user` */
+  @OneToMany(() => LectureUserEntity, (lcu) => lcu.lecture)
+  userLinks?: LectureUserEntity[];
 }
