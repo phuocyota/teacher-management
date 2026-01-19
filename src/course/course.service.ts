@@ -136,4 +136,23 @@ export class CourseService {
     }
     await this.courseRepo.remove(record);
   }
+
+  async getMaxCode(): Promise<number> {
+    const result = await this.courseRepo
+      .createQueryBuilder('course')
+      .select('MAX(course.code)', 'maxCode')
+      .getRawOne<{ maxCode: string | null }>();
+
+    if (!result?.maxCode) {
+      return 0;
+    }
+
+    // Parse code để lấy phần số
+    const match = result.maxCode.match(/\d+/);
+    if (match) {
+      return parseInt(match[0], 10);
+    }
+
+    return 0;
+  }
 }

@@ -8,11 +8,12 @@ import {
   Delete,
   ParseUUIDPipe,
 } from '@nestjs/common';
-import { ApiTags, ApiBearerAuth } from '@nestjs/swagger';
+import { ApiTags, ApiBearerAuth, ApiOkResponse } from '@nestjs/swagger';
 import { ClassService } from './class.service';
 import { CreateClassDto, UpdateClassDto } from './dto/create-class.dto';
 import type { JwtPayload } from 'src/common/interface/jwt-payload.interface';
 import { User } from 'src/common/decorator/user.decorator';
+import { MaxCodeResponseDto } from 'src/common/dto/base.dto';
 
 @ApiTags('Class')
 @ApiBearerAuth('access-token')
@@ -28,6 +29,13 @@ export class ClassController {
   @Get()
   findAll() {
     return this.classService.findAll();
+  }
+
+  @Get('max-code')
+  @ApiOkResponse({ type: MaxCodeResponseDto })
+  async getMaxCode(): Promise<MaxCodeResponseDto> {
+    const maxCode = await this.classService.getMaxCode();
+    return { maxCode };
   }
 
   @Get(':id')

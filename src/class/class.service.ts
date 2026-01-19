@@ -53,4 +53,23 @@ export class ClassService extends BaseService<ClassEntity> {
     }
     await this.classRepo.remove(record);
   }
+
+  async getMaxCode(): Promise<number> {
+    const result = await this.classRepo
+      .createQueryBuilder('class')
+      .select('MAX(class.code)', 'maxCode')
+      .getRawOne<{ maxCode: string | null }>();
+
+    if (!result?.maxCode) {
+      return 0;
+    }
+
+    // Parse code để lấy phần số
+    const match = result.maxCode.match(/\d+/);
+    if (match) {
+      return parseInt(match[0], 10);
+    }
+
+    return 0;
+  }
 }
