@@ -4,7 +4,7 @@ import { ClassService } from './class.service';
 describe('ClassService', () => {
   let service: ClassService;
   let classRepo: any;
-  let uploadService: { deleteFile: jest.Mock };
+  let uploadService: { deleteFileByPath: jest.Mock };
 
   beforeEach(() => {
     classRepo = {
@@ -15,7 +15,7 @@ describe('ClassService', () => {
       remove: jest.fn(),
       createQueryBuilder: jest.fn(),
     };
-    uploadService = { deleteFile: jest.fn() };
+    uploadService = { deleteFileByPath: jest.fn() };
     service = new ClassService(classRepo, uploadService as any);
   });
 
@@ -60,10 +60,7 @@ describe('ClassService', () => {
 
     await service.remove('c1', { userId: 'u1' } as any);
 
-    expect(uploadService.deleteFile).toHaveBeenCalledWith(
-      'img.png',
-      expect.anything(),
-    );
+    expect(uploadService.deleteFileByPath).toHaveBeenCalledWith('img.png');
     expect(classRepo.remove).toHaveBeenCalled();
   });
 

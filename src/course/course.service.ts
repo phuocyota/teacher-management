@@ -132,7 +132,7 @@ export class CourseService {
   async remove(id: string, user: JwtPayload): Promise<void> {
     const record = await this.findOne(id);
     if (record.image) {
-      await this.uploadService.deleteFile(record.image, user);
+      await this.uploadService.deleteFileByPath(record.image);
     }
     await this.courseRepo.remove(record);
   }

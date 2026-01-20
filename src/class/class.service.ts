@@ -49,7 +49,7 @@ export class ClassService extends BaseService<ClassEntity> {
   async remove(id: string, user: JwtPayload): Promise<void> {
     const record = await this.findOne(id);
     if (record.currentImage) {
-      await this.uploadService.deleteFile(record.currentImage, user);
+      await this.uploadService.deleteFileByPath(record.currentImage);
     }
     await this.classRepo.remove(record);
   }

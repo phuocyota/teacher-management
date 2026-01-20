@@ -17,7 +17,7 @@ describe('CourseService', () => {
   let service: CourseService;
   let courseRepo: any;
   let classRepo: any;
-  let uploadService: { deleteFile: jest.Mock };
+  let uploadService: { deleteFileByPath: jest.Mock };
 
   beforeEach(() => {
     courseRepo = {
@@ -30,7 +30,7 @@ describe('CourseService', () => {
     classRepo = {
       findOne: jest.fn(),
     };
-    uploadService = { deleteFile: jest.fn() };
+    uploadService = { deleteFileByPath: jest.fn() };
     service = new CourseService(courseRepo, classRepo, uploadService as any);
   });
 
@@ -105,7 +105,7 @@ describe('CourseService', () => {
 
     await service.remove('c1', { userId: 'u1' } as any);
 
-    expect(uploadService.deleteFile).toHaveBeenCalled();
+    expect(uploadService.deleteFileByPath).toHaveBeenCalledWith('img.png');
     expect(courseRepo.remove).toHaveBeenCalled();
   });
 

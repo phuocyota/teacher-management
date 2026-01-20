@@ -586,6 +586,39 @@ export class UploadService {
   }
 
   /**
+   * Delete file on disk by stored path or URL without DB lookup.
+   * Best-effort: returns false on any failure.
+   */
+  public async deleteFileByPath(pathValue: string): Promise<boolean> {
+    if (!pathValue) {
+      return false;
+    }
+
+    let absolutePath: string;
+    try {
+      absolutePath = this.streamService.getAbsoluteFilePath(pathValue);
+    } catch (error) {
+      return false;
+    }
+
+    if (!existsSync(absolutePath)) {
+      return false;
+    }
+
+    try {
+      const stats = statSync(absolutePath);
+      if (!stats.isFile()) {
+        return false;
+      }
+
+      rmSync(absolutePath);
+      return true;
+    } catch (error) {
+      return false;
+    }
+  }
+
+  /**
    * Normalize original filename to UTF-8 when common garbling (latin1 interpretation) occurs.
    */
   private normalizeOriginalName(name?: string): string {

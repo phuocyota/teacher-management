@@ -330,39 +330,14 @@ export class LectureService {
       if (lecture.resources && lecture.resources.length > 0) {
         for (const resource of lecture.resources) {
           if (resource.source === Source.OFFLINE && resource.url) {
-            try {
-              await this.uploadService.deleteFile(resource.url, user);
-            } catch (error) {
-              // Bỏ qua lỗi nếu file không tồn tại trong database
-              if (error instanceof NotFoundException) {
-                console.log(
-                  `Resource file not found in database, skipping: ${resource.url}`,
-                );
-              } else {
-                console.error(
-                  `Failed to delete resource file: ${resource.url}`,
-                  error,
-                );
-              }
-            }
+            await this.uploadService.deleteFileByPath(resource.url);
           }
         }
       }
 
       // Xóa avatar nếu có
       if (lecture.avatar) {
-        try {
-          await this.uploadService.deleteFile(lecture.avatar, user);
-        } catch (error) {
-          // Bỏ qua lỗi nếu file không tồn tại trong database
-          if (error instanceof NotFoundException) {
-            console.log(
-              `Avatar file not found in database, skipping: ${lecture.avatar}`,
-            );
-          } else {
-            console.error(`Failed to delete avatar: ${lecture.avatar}`, error);
-          }
-        }
+        await this.uploadService.deleteFileByPath(lecture.avatar);
       }
 
       // Xoá lecture sẽ tự động xoá lecture_context và lecture_resource nhờ onDelete: CASCADE

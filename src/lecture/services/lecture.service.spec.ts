@@ -30,7 +30,7 @@ describe('LectureService', () => {
     };
     entityManager = {};
     groupService = { checkById: jest.fn() };
-    uploadService = { deleteFile: jest.fn() };
+    uploadService = { deleteFileByPath: jest.fn() };
 
     service = new LectureService(
       lectureRepo,
@@ -149,8 +149,8 @@ describe('LectureService', () => {
 
     await service.remove('l1', { userId: 'u1', userType: UserType.ADMIN } as any);
 
-    expect(uploadService.deleteFile).toHaveBeenCalledWith('r1', expect.anything());
-    expect(uploadService.deleteFile).toHaveBeenCalledWith('a1', expect.anything());
+    expect(uploadService.deleteFileByPath).toHaveBeenCalledWith('r1');
+    expect(uploadService.deleteFileByPath).toHaveBeenCalledWith('a1');
     expect(manager.delete).toHaveBeenCalled();
   });
 
