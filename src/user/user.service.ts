@@ -48,15 +48,20 @@ export class UserService extends BaseService<UserEntity> {
   /**   * Kiểm tra userName và email đã tồn tại chưa
    */
   private async checkUserExisting(dto: CreateUserDto): Promise<void> {
+    const where = [{ userName: dto.userName }];
+    if (dto.email) {
+      where.push({ email: dto.email });
+    }
+
     const existing = await this.repo.findOne({
-      where: [{ userName: dto.userName }, { email: dto.email }],
+      where,
     });
 
     if (existing) {
       if (existing.userName === dto.userName) {
         throw new ConflictException(ERROR_MESSAGES.USERNAME_ALREADY_EXISTS);
       }
-      if (existing.email === dto.email) {
+      if (dto.email && existing.email === dto.email) {
         throw new ConflictException(ERROR_MESSAGES.EMAIL_ALREADY_EXISTS);
       }
       throw new ConflictException(ERROR_MESSAGES.USER_ALREADY_EXISTS);

@@ -15,8 +15,8 @@ export class UserEntity extends BaseEntity {
   @Column({ name: 'hash_password', type: 'text', nullable: false })
   hashPassword!: string;
 
-  @Column({ type: 'text', nullable: false, unique: true })
-  email!: string;
+  @Column({ type: 'text', nullable: true, unique: true })
+  email?: string;
 
   // ===== Thông tin cá nhân =====
   @Column({ name: 'full_name', type: 'text', nullable: true })
