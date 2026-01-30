@@ -6,11 +6,11 @@ export class CreateQuestionDto {
   @IsEnum(ContentTypes)
   @IsNotEmpty()
   @ApiProperty({
-    description: 'Loai dữ liệu của câu hỏi',
+    description: 'Loại dữ liệu của câu hỏi',
     enum: ContentTypes,
     example: ContentTypes.TEXT,
   })
-  questionType!: ContentTypes;
+  contentType!: ContentTypes;
 
   @IsString()
   @IsNotEmpty()

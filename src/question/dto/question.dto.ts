@@ -9,7 +9,7 @@ export class QuestionResponseDto extends BaseDto {
     enum: ContentTypes,
     example: ContentTypes.TEXT,
   })
-  questionType!: ContentTypes;
+  contentType!: ContentTypes;
 
   @ApiProperty({
     description: 'Nội dung của câu hỏi',

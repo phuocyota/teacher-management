@@ -40,6 +40,7 @@ import { QuestionModule } from './question/question.module';
 import { AnswerModule } from './answer/answer.module';
 import { StudentModule } from './student/student.module';
 import { SchoolModule } from './school/school.module';
+import { StudentGroupModule } from './student-group/student-group.module';
 
 @Module({
   imports: [
@@ -94,6 +95,7 @@ import { SchoolModule } from './school/school.module';
     AnswerModule,
     StudentModule,
     SchoolModule,
+    StudentGroupModule,
   ],
   providers: [
     AuthService,

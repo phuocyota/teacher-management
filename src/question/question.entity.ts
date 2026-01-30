@@ -7,12 +7,12 @@ import { AnswerEntity } from 'src/answer/answer.entity';
 @Entity('question')
 export class QuestionEntity extends BaseEntity {
   @Column({
-    name: 'question_type',
+    name: 'content_type',
     type: 'enum',
     enum: ContentTypes,
     nullable: false,
   })
-  questionType: ContentTypes; // Loại dữ liệu của câu hỏi
+  contentType: ContentTypes; // Loại dữ liệu của câu hỏi
 
   @Column({ name: 'content', type: 'text', nullable: false })
   content: string; // Nội dung câu hỏi

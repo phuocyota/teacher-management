@@ -10,7 +10,7 @@ export class CreateAnswerDto {
     enum: ContentTypes,
     example: ContentTypes.TEXT,
   })
-  answerType!: ContentTypes;
+  contentType!: ContentTypes;
 
   @IsString()
   @IsNotEmpty()

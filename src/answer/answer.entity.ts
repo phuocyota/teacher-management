@@ -8,8 +8,9 @@ export class AnswerEntity extends BaseEntity {
   @Column({
     type: 'enum',
     enum: ContentTypes,
+    name: 'content_type',
   })
-  answerType!: ContentTypes; // Loại dữ liệu của câu trả lời
+  contentType!: ContentTypes; // Loại dữ liệu của câu trả lời
 
   @Column({ type: 'text' })
   content!: string; // Nội dung của câu trả lời
