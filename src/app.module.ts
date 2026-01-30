@@ -35,6 +35,11 @@ import { LectureUserEntity } from './lecture/entity/lecture_user.entity';
 import { LectureDownloadLogEntity } from './lecture/entity/lecture_download_log.entity';
 import { MiddlewareConsumer } from '@nestjs/common';
 import { RequestLoggerMiddleware } from './common/middleware/request-logger-middleware';
+import { QuestionBankModule } from './question-bank/question-bank.module';
+import { QuestionModule } from './question/question.module';
+import { AnswerModule } from './answer/answer.module';
+import { StudentModule } from './student/student.module';
+import { SchoolModule } from './school/school.module';
 
 @Module({
   imports: [
@@ -84,6 +89,11 @@ import { RequestLoggerMiddleware } from './common/middleware/request-logger-midd
     UploadModule,
     GroupModule,
     UserGroupModule,
+    QuestionBankModule,
+    QuestionModule,
+    AnswerModule,
+    StudentModule,
+    SchoolModule,
   ],
   providers: [
     AuthService,

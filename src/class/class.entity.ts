@@ -2,6 +2,7 @@ import { BaseEntity } from 'src/common/sql/base.entity';
 import { Entity, Column, OneToMany } from 'typeorm';
 import { DisplayType } from './enum/display-type.enum';
 import { CourseEntity } from 'src/course/course.entity';
+import { QuestionBankEntity } from 'src/question-bank/question-bank.entity';
 
 @Entity('class')
 export class ClassEntity extends BaseEntity {
@@ -52,4 +53,7 @@ export class ClassEntity extends BaseEntity {
 
   @OneToMany(() => CourseEntity, (course) => course.class)
   courses?: CourseEntity[];
+
+  @OneToMany(() => QuestionBankEntity, (questionBank) => questionBank.class)
+  questionBanks?: QuestionBankEntity[];
 }

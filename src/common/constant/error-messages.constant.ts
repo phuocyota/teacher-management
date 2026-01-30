@@ -53,4 +53,7 @@ export const ENTITY_NAMES = {
   LECTURE: 'Bài giảng',
   GROUP: 'Nhóm',
   COURSE: 'Khóa học',
+  QUESTION_BANK: 'Ngân hàng câu hỏi',
+  QUESTION: 'Câu hỏi',
+  ANSWER: 'Câu trả lời',
 };
