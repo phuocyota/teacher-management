@@ -56,4 +56,7 @@ export const ENTITY_NAMES = {
   QUESTION_BANK: 'Ngân hàng câu hỏi',
   QUESTION: 'Câu hỏi',
   ANSWER: 'Câu trả lời',
+  STUDENT: 'Học sinh',
+  STUDENT_GROUP: 'Nhóm học sinh',
+  SCHOOL: 'Trường học',
 };

@@ -1,5 +1,5 @@
 import { Entity, Column, ManyToOne, JoinColumn, OneToMany } from 'typeorm';
-import { ClassEntity } from '../class/class.entity';
+import { ClassEntity } from 'src/class/class.entity';
 import { BaseEntity } from 'src/common/sql/base.entity';
 import { QuestionEntity } from 'src/question/question.entity';
 
@@ -11,10 +11,10 @@ export class QuestionBankEntity extends BaseEntity {
   @Column({ name: 'exam_date', type: 'date', nullable: false })
   examDate: string; // Ngày diễn ra kỳ thi
 
-  @Column()
-  classId: number;
+  @Column({ type: 'uuid' })
+  classId: string;
 
-  @ManyToOne(() => ClassEntity, (classEntity) => classEntity.questionBanks)
+  @ManyToOne(() => ClassEntity, (c) => c.questionBanks, { onDelete: 'CASCADE' })
   @JoinColumn({ name: 'classId' })
   class: ClassEntity;
 

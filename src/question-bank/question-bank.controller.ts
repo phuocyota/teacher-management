@@ -8,7 +8,10 @@ import {
   Delete,
   Query,
   ParseUUIDPipe,
+  UseInterceptors,
+  UploadedFile,
 } from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
 import {
   ApiTags,
   ApiBearerAuth,
@@ -16,6 +19,8 @@ import {
   ApiOkResponse,
   ApiCreatedResponse,
   ApiOperation,
+  ApiConsumes,
+  ApiBody,
 } from '@nestjs/swagger';
 import { QuestionBankService } from './question-bank.service';
 import {
@@ -27,6 +32,7 @@ import {
   QuestionBankResponseDto,
 } from './dto/question-bank.dto';
 import { PaginationResponseDto } from 'src/common/dto/pagination.dto';
+import { ImportExamResultDto } from './dto/import-exam.dto';
 
 @ApiTags('Question Bank')
 @ApiBearerAuth('access-token')
@@ -88,5 +94,36 @@ export class QuestionBankController {
   @ApiOperation({ summary: 'Xóa ngân hàng câu hỏi' })
   remove(@Param('id', ParseUUIDPipe) id: string) {
     return this.questionBankService.remove(id);
+  }
+
+  @Post(':id/import-pdf')
+  @ApiOperation({ summary: 'Import đề thi từ file PDF' })
+  @ApiConsumes('multipart/form-data')
+  @ApiBody({
+    schema: {
+      type: 'object',
+      properties: {
+        file: {
+          type: 'string',
+          format: 'binary',
+          description: 'File PDF chứa đề thi',
+        },
+      },
+      required: ['file'],
+    },
+  })
+  @ApiOkResponse({ type: ImportExamResultDto })
+  @UseInterceptors(FileInterceptor('file'))
+  async importPdf(
+    @Param('id', ParseUUIDPipe) questionBankId: string,
+    @UploadedFile() file: Express.Multer.File,
+  ): Promise<ImportExamResultDto> {
+    if (!file) {
+      throw new Error('No file uploaded');
+    }
+    return this.questionBankService.importExamFromPdf(
+      questionBankId,
+      file.buffer,
+    );
   }
 }

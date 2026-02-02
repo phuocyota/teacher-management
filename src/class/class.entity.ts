@@ -54,6 +54,6 @@ export class ClassEntity extends BaseEntity {
   @OneToMany(() => CourseEntity, (course) => course.class)
   courses?: CourseEntity[];
 
-  @OneToMany(() => QuestionBankEntity, (questionBank) => questionBank.class)
-  questionBanks?: QuestionBankEntity[];
+  @OneToMany(() => QuestionBankEntity, (qb) => qb.class)
+  questionBanks: QuestionBankEntity[];
 }

@@ -1,4 +1,9 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import {
+  Injectable,
+  NotFoundException,
+  Inject,
+  forwardRef,
+} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { QuestionEntity } from './question.entity';
@@ -20,6 +25,7 @@ export class QuestionService {
   constructor(
     @InjectRepository(QuestionEntity)
     private readonly questionRepo: Repository<QuestionEntity>,
+    @Inject(forwardRef(() => QuestionBankService))
     private readonly questionBankService: QuestionBankService,
   ) {}
 
@@ -96,5 +102,12 @@ export class QuestionService {
   async remove(id: string): Promise<void> {
     const record = await this.findOne(id);
     await this.questionRepo.remove(record);
+  }
+
+  async createBulk(
+    questions: Partial<QuestionEntity>[],
+  ): Promise<QuestionEntity[]> {
+    const records = this.questionRepo.create(questions);
+    return this.questionRepo.save(records);
   }
 }

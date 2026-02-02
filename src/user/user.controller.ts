@@ -100,7 +100,7 @@ export class UserController {
   @ApiOperation({ summary: 'Xóa người dùng' })
   @ApiResponse({ status: 200, description: 'Xóa thành công' })
   @ApiResponse({ status: 404, description: 'Không tìm thấy' })
-  delete(@Param('id', ParseUUIDPipe) id: string, @User() user: JwtPayload) {
-    return this.userService.delete(id, user);
+  delete(@Param('id', ParseUUIDPipe) id: string) {
+    return this.userService.hardDelete(id);
   }
 }

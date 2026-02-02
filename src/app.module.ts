@@ -41,6 +41,12 @@ import { AnswerModule } from './answer/answer.module';
 import { StudentModule } from './student/student.module';
 import { SchoolModule } from './school/school.module';
 import { StudentGroupModule } from './student-group/student-group.module';
+import { SchoolEntity } from './school/school.entity';
+import { StudentGroupEntity } from './student-group/student-group.entity';
+import { StudentEntity } from './student/student.entity';
+import { QuestionBankEntity } from './question-bank/question-bank.entity';
+import { QuestionEntity } from './question/question.entity';
+import { AnswerEntity } from './answer/answer.entity';
 
 @Module({
   imports: [
@@ -74,6 +80,12 @@ import { StudentGroupModule } from './student-group/student-group.module';
           LectureGroupEntity,
           LectureUserEntity,
           LectureDownloadLogEntity,
+          SchoolEntity,
+          StudentGroupEntity,
+          StudentEntity,
+          QuestionBankEntity,
+          QuestionEntity,
+          AnswerEntity,
         ],
         synchronize: true,
       }),

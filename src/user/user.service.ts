@@ -4,13 +4,13 @@ import {
   NotFoundException,
   BadRequestException,
 } from '@nestjs/common';
-import bcrypt from 'bcryptjs';
+import * as bcrypt from 'bcryptjs';
 import { InjectRepository } from '@nestjs/typeorm';
 import { EntityManager, Repository } from 'typeorm';
 import { UserEntity } from './user.entity';
 import { ChangePasswordDto, UserQueryDto } from './dto/user.dto';
-import { CreateUserDto } from './dto/create.dto.js';
-import { UpdateUserDto } from './dto/update.dto.js';
+import { CreateUserDto } from './dto/create.dto';
+import { UpdateUserDto } from './dto/update.dto';
 import { JwtPayload } from 'src/common/interface/jwt-payload.interface';
 import { BaseService } from 'src/common/sql/base.service';
 import { UserGroupService } from '../user-group/user-group.service';
@@ -48,7 +48,9 @@ export class UserService extends BaseService<UserEntity> {
   /**   * Kiểm tra userName và email đã tồn tại chưa
    */
   private async checkUserExisting(dto: CreateUserDto): Promise<void> {
-    const where = [{ userName: dto.userName }];
+    const where: Array<{ userName?: string; email?: string }> = [
+      { userName: dto.userName },
+    ];
     if (dto.email) {
       where.push({ email: dto.email });
     }
