@@ -11,7 +11,7 @@ import { Server, Socket } from 'socket.io';
 @WebSocketGateway({
   cors: {
     origin: process.env.ALLOWED_ORIGINS?.split(',') || [
-      'http://localhost:3000',
+      'http://localhost:3001',
     ],
     credentials: true,
   },
@@ -34,7 +34,6 @@ export class SocketGateway
       }
       next();
     });
-    console.log('Server initialized');
   }
 
   handleConnection(client: Socket) {
