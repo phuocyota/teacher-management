@@ -10,6 +10,7 @@ export const ERROR_MESSAGES = {
     'Cấu trúc token không hợp lệ (thiếu trường bắt buộc)',
   ACCESS_DENIED_ADMIN: 'Truy cập bị từ chối. Chỉ dành cho Admin.',
   ACCESS_DENIED_TEACHER: 'Truy cập bị từ chối. Chỉ dành cho Giáo viên.',
+  ACCESS_DENIED_STUDENT: 'Truy cập bị từ chối. Chỉ dành cho Học sinh.',
 
   // Not found errors
   NOT_FOUND: (entity: string) => `${entity} không tồn tại`,

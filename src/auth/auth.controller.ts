@@ -35,6 +35,18 @@ export class AuthController {
   }
 
   @Public()
+  @Post('login/student')
+  @ApiOperation({ summary: 'Student login' })
+  @ApiResponse({ status: 200, description: 'Login successful' })
+  @ApiResponse({
+    status: 401,
+    description: 'Invalid credentials or not a student',
+  })
+  async loginStudent(@Body() dto: LoginDto) {
+    return this.authService.loginStudent(dto);
+  }
+
+  @Public()
   @Post('register')
   @ApiOperation({ summary: 'User registration' })
   @ApiResponse({ status: 201, description: 'User registered successfully' })

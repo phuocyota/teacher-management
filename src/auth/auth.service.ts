@@ -97,6 +97,28 @@ export class AuthService {
   }
 
   /**
+   * Login for Student only
+   */
+  async loginStudent(dto: LoginDto) {
+    const user = await this.validateUser(dto.username, dto.password);
+    if (!user) {
+      throw new UnauthorizedException(ERROR_MESSAGES.INVALID_CREDENTIALS);
+    }
+
+    if (user.userType !== UserType.STUDENT) {
+      throw new UnauthorizedException(ERROR_MESSAGES.ACCESS_DENIED_STUDENT);
+    }
+
+    const token = this.generateToken(user, dto.deviceId);
+    return {
+      accessToken: token,
+      userId: user.id,
+      userType: user.userType,
+      deviceId: dto.deviceId,
+    };
+  }
+
+  /**
    * Register a new user. Password hashing is handled in UserService.createUser
    */
   register(dto: CreateUserDto) {
