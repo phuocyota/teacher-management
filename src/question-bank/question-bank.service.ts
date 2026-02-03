@@ -19,17 +19,34 @@ import {
 } from 'src/common/constant/error-messages.constant';
 import { PaginationResponseDto } from 'src/common/dto/pagination.dto';
 import { QuestionBankResponseDto } from './dto/question-bank.dto';
-import { autoMapListToDto, autoMapToDto } from 'src/common/utils/auto-map.util';
+import { autoMapListToDto } from 'src/common/utils/auto-map.util';
 import { QuestionService } from 'src/question/question.service';
 import { AnswerService } from 'src/answer/answer.service';
-import { QuestionEntity } from 'src/question/question.entity';
-import { AnswerEntity } from 'src/answer/answer.entity';
 import { ContentTypes } from 'src/common/enum/content-type.enum';
 import { ImportExamResultDto, ParsedQuestion } from './dto/import-exam.dto';
-import { QuestionResponseDto } from 'src/question/dto/question.dto';
 import * as fs from 'fs';
 import * as path from 'path';
 import { v4 as uuidv4 } from 'uuid';
+import * as pdfLib from 'pdf-lib';
+
+interface ImageWithPosition {
+  path: string;
+  page: number;
+  width?: number;
+  height?: number;
+}
+
+interface PdfData {
+  text: string;
+  numpages: number;
+}
+
+interface CreatedQuestionSummary {
+  id: string;
+  content: string;
+  contentType: ContentTypes;
+  answerCount: number;
+}
 
 @Injectable()
 export class QuestionBankService {
@@ -128,6 +145,38 @@ export class QuestionBankService {
     await this.questionBankRepo.remove(record);
   }
 
+  /**
+   * Tạo chuỗi nội dung cho câu hỏi hoặc câu trả lời
+   * Xử lý cả single và multiple parts với nextContent linking
+   */
+  private async createContentChain<
+    T extends { id: string; nextContent?: string },
+  >(
+    contentParts: Array<{ content: string; contentType: ContentTypes }>,
+    baseEntity: any,
+    createBulk: (entities: any[]) => Promise<T[]>,
+    updateBulk: (entities: T[]) => Promise<T[]>,
+  ): Promise<T[]> {
+    // Create all parts
+    const entities = contentParts.map((part) => ({
+      ...baseEntity,
+      content: part.content,
+      contentType: part.contentType,
+    }));
+
+    const savedEntities = await createBulk(entities);
+
+    // Link chain if multiple parts
+    if (savedEntities.length > 1) {
+      for (let i = 0; i < savedEntities.length - 1; i++) {
+        savedEntities[i].nextContent = savedEntities[i + 1].id;
+      }
+      await updateBulk(savedEntities);
+    }
+
+    return savedEntities;
+  }
+
   async importExamFromPdf(
     questionBankId: string,
     pdfBuffer: Buffer,
@@ -136,75 +185,32 @@ export class QuestionBankService {
     const questionBank = await this.findOne(questionBankId);
 
     try {
-      // Parse PDF - using dynamic require to avoid TypeScript issues
-      const pdfParser = require('pdf-parse');
-      const PDFDocument = require('pdf-lib').PDFDocument;
+      // Parse PDF
+      const PDFDocument = pdfLib.PDFDocument;
 
       // Extract text from PDF
-      const pdfData: any = await pdfParser(pdfBuffer);
-      const text: string = pdfData.text;
+      const pdfParserModule = await import('pdf-parse');
+      const pdfParserFn = pdfParserModule as any;
+      const pdfData: PdfData = await pdfParserFn(pdfBuffer);
+      const text = pdfData.text;
+      const numPages = pdfData.numpages;
 
-      // Extract images from PDF using pdf-lib
+      console.log(`PDF Import Info: ${numPages} pages detected`);
+
+      // Extract images from PDF
       const pdfDoc = await PDFDocument.load(pdfBuffer);
       const extractedImages = await this.extractImagesFromPdf(
         pdfDoc,
         questionBankId,
       );
 
-      // Parse questions from text and images
-      const parsedQuestions = await this.parseExamWithImages(
-        text,
-        extractedImages,
+      // Parse and create questions/answers on-the-fly
+      const { createdQuestions, totalAnswers } =
+        await this.parseAndCreateFromPdf(text, extractedImages, questionBank);
+
+      console.log(
+        `Created ${createdQuestions.length} questions with ${totalAnswers} answers`,
       );
-
-      if (parsedQuestions.length === 0) {
-        throw new BadRequestException(
-          'Không tìm thấy câu hỏi nào trong file PDF',
-        );
-      }
-
-      // Save questions and answers
-      const createdQuestions: Array<{
-        id: string;
-        content: string;
-        contentType: ContentTypes;
-        answerCount: number;
-      }> = [];
-      let totalAnswers = 0;
-
-      for (const parsedQ of parsedQuestions) {
-        // Create question
-        const question: Partial<QuestionEntity> = {
-          content: parsedQ.content,
-          contentType: parsedQ.contentType,
-          questionBank: questionBank,
-          questionBankId: questionBank.id,
-        };
-        const [savedQuestion] = await this.questionService.createBulk([
-          question,
-        ]);
-
-        // Create answers
-        const answers: Partial<AnswerEntity>[] = parsedQ.answers.map(
-          (answer) => ({
-            content: answer.content,
-            contentType: answer.contentType,
-            question: savedQuestion,
-            questionId: savedQuestion.id,
-          }),
-        );
-        const savedAnswers = await this.answerService.createBulk(answers);
-
-        // Map entity to DTO and add answerCount
-        const questionDto = autoMapToDto(QuestionResponseDto, savedQuestion);
-        createdQuestions.push({
-          id: questionDto.id,
-          content: questionDto.content,
-          contentType: questionDto.contentType,
-          answerCount: savedAnswers.length,
-        });
-        totalAnswers += savedAnswers.length;
-      }
 
       return {
         totalQuestions: createdQuestions.length,
@@ -216,67 +222,14 @@ export class QuestionBankService {
     }
   }
 
-  private parseExamText(text: string): ParsedQuestion[] {
-    const questions: ParsedQuestion[] = [];
-
-    // Split by question pattern: "Câu 1:", "Câu 2:", etc or "Question 1:", etc
-    const questionPattern =
-      /(?:Câu|Question)\s*(\d+)[:\.]?\s*(.*?)(?=(?:Câu|Question)\s*\d+|$)/gis;
-    const matches = [...text.matchAll(questionPattern)];
-
-    for (const match of matches) {
-      const questionNumber = match[1];
-      const questionContent = match[2].trim();
-
-      if (!questionContent) continue;
-
-      // Extract question text and answers
-      // Pattern for answers: A., B., C., D. or A), B), C), D)
-      const answerPattern = /[A-D][\.\)]\s*([^\n]+)/gi;
-      const answerMatches = [...questionContent.matchAll(answerPattern)];
-
-      if (answerMatches.length === 0) {
-        // No multiple choice answers found, treat entire content as question
-        questions.push({
-          content: questionContent,
-          contentType: ContentTypes.TEXT,
-          answers: [],
-        });
-        continue;
-      }
-
-      // Extract the question text (before first answer)
-      const firstAnswerIndex = questionContent.search(/[A-D][\.\)]/i);
-      const questionText = questionContent
-        .substring(0, firstAnswerIndex)
-        .trim();
-
-      // Extract answers
-      const answers = answerMatches.map((m) => ({
-        content: m[1].trim(),
-        contentType: ContentTypes.TEXT,
-      }));
-
-      if (questionText && answers.length > 0) {
-        questions.push({
-          content: `Câu ${questionNumber}: ${questionText}`,
-          contentType: ContentTypes.TEXT,
-          answers,
-        });
-      }
-    }
-
-    return questions;
-  }
-
   /**
-   * Extract images from PDF and save to uploads folder
+   * Trích xuất hình ảnh từ PDF cùng thông tin vị trí
    */
   private async extractImagesFromPdf(
     pdfDoc: any,
     questionBankId: string,
-  ): Promise<Map<number, string[]>> {
-    const imagesByPage = new Map<number, string[]>();
+  ): Promise<ImageWithPosition[]> {
+    const imagesWithPosition: ImageWithPosition[] = [];
     const uploadsDir = path.join(
       process.cwd(),
       'uploads',
@@ -284,54 +237,73 @@ export class QuestionBankService {
       questionBankId,
     );
 
-    // Create directory if not exists
+    // Tạo thư mục nếu chưa tồn tại
     if (!fs.existsSync(uploadsDir)) {
       fs.mkdirSync(uploadsDir, { recursive: true });
     }
 
     try {
       const pages = pdfDoc.getPages();
+      console.log(`Extracting images from ${pages.length} pages...`);
 
+      // Duyệt qua từng trang trong PDF
       for (let pageIndex = 0; pageIndex < pages.length; pageIndex++) {
         const page = pages[pageIndex];
-        const pageImages: string[] = [];
 
         try {
-          // Get resources from page
+          // Truy cập resources của trang (fonts, images, etc.)
           const resources = page.node.Resources();
           if (!resources) continue;
 
+          // Lấy XObject dictionary (chứa images và forms)
           const xObjects = resources.lookup(
             require('pdf-lib').PDFName.of('XObject'),
           );
           if (!xObjects) continue;
 
           const xObjectKeys = xObjects.dict.keys();
+          let imageIndexInPage = 0;
 
+          // Xử lý từng XObject trong trang
           for (const key of xObjectKeys) {
             try {
               const xObject = xObjects.lookup(key);
               if (!xObject) continue;
 
+              // Kiểm tra xem XObject có phải là image không (không phải form)
               const subtype = xObject.dict.lookup(
                 require('pdf-lib').PDFName.of('Subtype'),
               );
               if (subtype?.toString() !== '/Image') continue;
 
-              // Extract image data
+              // Lấy dữ liệu ảnh thô từ PDF
               const imageData = xObject.contents;
               if (!imageData) continue;
 
-              // Generate unique filename
+              // Tạo tên file duy nhất cho ảnh
               const imageId = uuidv4();
               const imagePath = path.join(uploadsDir, `${imageId}.png`);
               const relativeImagePath = `/uploads/question-banks/${questionBankId}/${imageId}.png`;
 
-              // Save image using sharp for conversion
+              // Convert và lưu ảnh dưới dạng PNG bằng Sharp
               const sharp = require('sharp');
-              await sharp(Buffer.from(imageData)).png().toFile(imagePath);
+              const sharpInstance = sharp(Buffer.from(imageData));
+              await sharpInstance.png().toFile(imagePath);
 
-              pageImages.push(relativeImagePath);
+              // Lấy kích thước thực tế từ ảnh đã convert
+              const metadata = await sharpInstance.metadata();
+              const imageWidth = metadata.width || 100;
+              const imageHeight = metadata.height || 100;
+
+              // Lưu ảnh theo thứ tự xuất hiện
+              imagesWithPosition.push({
+                path: relativeImagePath,
+                page: pageIndex,
+                width: imageWidth,
+                height: imageHeight,
+              });
+
+              imageIndexInPage++;
             } catch (imgError) {
               console.error(
                 `Error extracting image from page ${pageIndex}:`,
@@ -339,52 +311,312 @@ export class QuestionBankService {
               );
             }
           }
+
+          if (imageIndexInPage > 0) {
+            console.log(
+              `Page ${pageIndex + 1}: Extracted ${imageIndexInPage} images`,
+            );
+          }
         } catch (pageError) {
           console.error(`Error processing page ${pageIndex}:`, pageError);
         }
-
-        if (pageImages.length > 0) {
-          imagesByPage.set(pageIndex, pageImages);
-        }
       }
+
+      console.log(`Total: ${imagesWithPosition.length} images extracted`);
     } catch (error) {
       console.error('Error extracting images from PDF:', error);
     }
 
-    return imagesByPage;
+    return imagesWithPosition;
   }
 
   /**
-   * Parse exam text with image support
-   * Format: Câu X ... ? (question ends with ?)
-   * Then A. B. C. D. (answers)
+   * Parse PDF and create questions/answers on-the-fly
+   * When "?" is detected, create question chain immediately, then parse and create answers
    */
-  private async parseExamWithImages(
+  private async parseAndCreateFromPdf(
     text: string,
-    imagesByPage: Map<number, string[]>,
-  ): Promise<ParsedQuestion[]> {
-    const questions: ParsedQuestion[] = [];
+    imagesWithPosition: ImageWithPosition[],
+    questionBank: QuestionBankEntity,
+  ): Promise<{
+    createdQuestions: CreatedQuestionSummary[];
+    totalAnswers: number;
+  }> {
+    const createdQuestions: CreatedQuestionSummary[] = [];
+    let totalAnswers = 0;
 
-    // Get all images in order
-    const allImages: string[] = [];
-    imagesByPage.forEach((images) => allImages.push(...images));
-
-    let imageIndex = 0;
-
-    // Pattern: "Câu X" to "?" marks question end
+    // Parse questions from text
     const questionPattern =
       /(?:Câu|Question)\s*(\d+)[:\.]?\s*(.*?)(?=(?:Câu|Question)\s*\d+|$)/gis;
     const matches = [...text.matchAll(questionPattern)];
 
-    for (const match of matches) {
+    if (matches.length === 0) {
+      return { createdQuestions, totalAnswers };
+    }
+
+    console.log(
+      `Parsing ${matches.length} questions with ${imagesWithPosition.length} images`,
+    );
+
+    // Group images by page
+    const imagesByPage = new Map<number, ImageWithPosition[]>();
+    for (const img of imagesWithPosition) {
+      if (!imagesByPage.has(img.page)) {
+        imagesByPage.set(img.page, []);
+      }
+      imagesByPage.get(img.page)!.push(img);
+    }
+
+    const questionsPerPage = Math.ceil(matches.length / imagesByPage.size);
+    let globalImageIndex = 0;
+    const allImagesFlattened = imagesWithPosition.map((img) => img.path);
+    const imageMarkerPattern = /(\[IMG\]|\(hình\)|\[ảnh\]|\[image\])/gi;
+
+    for (let qIndex = 0; qIndex < matches.length; qIndex++) {
+      const match = matches[qIndex];
       const questionNumber = match[1];
       let questionContent = match[2].trim();
 
+      const estimatedPage = Math.floor(qIndex / questionsPerPage);
+      const pageImages = imagesByPage.get(estimatedPage) || [];
+
       if (!questionContent) {
-        // Pure image question
-        if (imageIndex < allImages.length) {
+        if (globalImageIndex < allImagesFlattened.length) {
+          const savedParts = await this.createContentChain(
+            [
+              {
+                content: allImagesFlattened[globalImageIndex++],
+                contentType: ContentTypes.IMAGE,
+              },
+            ],
+            { questionBank, questionBankId: questionBank.id },
+            this.questionService.createBulk.bind(this.questionService),
+            this.questionService.updateBulk.bind(this.questionService),
+          );
+
+          createdQuestions.push({
+            id: savedParts[0].id,
+            content: (savedParts[0] as any).content,
+            contentType: (savedParts[0] as any).contentType,
+            answerCount: 0,
+          });
+        }
+        continue;
+      }
+
+      // Find question end (?)
+      const questionEndIndex = questionContent.indexOf('?');
+      if (questionEndIndex === -1) continue;
+
+      const questionText = questionContent
+        .substring(0, questionEndIndex + 1)
+        .trim();
+      const remainingText = questionContent
+        .substring(questionEndIndex + 1)
+        .trim();
+
+      // Parse question content parts
+      const contentParts: { content: string; contentType: ContentTypes }[] = [];
+      const markers = questionText.match(imageMarkerPattern);
+      const hasImageMarkers = markers && markers.length > 0;
+
+      if (hasImageMarkers) {
+        const parts = questionText
+          .split(imageMarkerPattern)
+          .filter((p) => p && p.trim());
+
+        for (const part of parts) {
+          const trimmedPart = part.trim();
+
+          if (/\[IMG\]|\(hình\)|\[ảnh\]|\[image\]/i.test(trimmedPart)) {
+            if (
+              pageImages.length > 0 &&
+              globalImageIndex < allImagesFlattened.length
+            ) {
+              const pageImageIndex = globalImageIndex % pageImages.length;
+              contentParts.push({
+                content:
+                  pageImages[pageImageIndex]?.path ||
+                  allImagesFlattened[globalImageIndex],
+                contentType: ContentTypes.IMAGE,
+              });
+            } else if (globalImageIndex < allImagesFlattened.length) {
+              contentParts.push({
+                content: allImagesFlattened[globalImageIndex],
+                contentType: ContentTypes.IMAGE,
+              });
+            }
+            globalImageIndex++;
+          } else if (trimmedPart.length > 0) {
+            contentParts.push({
+              content: `Câu ${questionNumber}: ${trimmedPart}`,
+              contentType: ContentTypes.TEXT,
+            });
+          }
+        }
+      } else {
+        if (!questionText || questionText.length < 10) {
+          if (globalImageIndex < allImagesFlattened.length) {
+            contentParts.push({
+              content: allImagesFlattened[globalImageIndex++],
+              contentType: ContentTypes.IMAGE,
+            });
+          }
+        } else {
+          contentParts.push({
+            content: `Câu ${questionNumber}: ${questionText}`,
+            contentType: ContentTypes.TEXT,
+          });
+        }
+      }
+
+      if (contentParts.length === 0) {
+        contentParts.push({
+          content: `Câu ${questionNumber}: ${questionText}`,
+          contentType: ContentTypes.TEXT,
+        });
+      }
+
+      // Create question chain
+      const savedParts = await this.createContentChain(
+        contentParts,
+        { questionBank, questionBankId: questionBank.id },
+        this.questionService.createBulk.bind(this.questionService),
+        this.questionService.updateBulk.bind(this.questionService),
+      );
+
+      // Root question for answers
+      const rootQuestion = savedParts[0];
+
+      // Parse and create answers
+      const answerPattern = /([A-D])[\.\)]\s*([^\n]+)/gi;
+      const answerMatches = [...remainingText.matchAll(answerPattern)];
+      let answerCount = 0;
+
+      for (const answerMatch of answerMatches) {
+        const answerText = answerMatch[2].trim();
+
+        // Parse answer content parts
+        const answerParts: { content: string; contentType: ContentTypes }[] =
+          [];
+        const answerMarkers = answerText.match(imageMarkerPattern);
+        const hasAnswerMarkers = answerMarkers && answerMarkers.length > 0;
+
+        if (hasAnswerMarkers) {
+          const answerPartsSplit = answerText
+            .split(imageMarkerPattern)
+            .filter((p) => p && p.trim());
+
+          for (const part of answerPartsSplit) {
+            const trimmedPart = part.trim();
+
+            if (/\[IMG\]|\(hình\)|\[ảnh\]|\[image\]/i.test(trimmedPart)) {
+              if (globalImageIndex < allImagesFlattened.length) {
+                answerParts.push({
+                  content: allImagesFlattened[globalImageIndex++],
+                  contentType: ContentTypes.IMAGE,
+                });
+              }
+            } else if (trimmedPart.length > 0) {
+              answerParts.push({
+                content: trimmedPart,
+                contentType: ContentTypes.TEXT,
+              });
+            }
+          }
+        } else {
+          if (
+            answerText.length < 5 &&
+            globalImageIndex < allImagesFlattened.length
+          ) {
+            answerParts.push({
+              content: allImagesFlattened[globalImageIndex++],
+              contentType: ContentTypes.IMAGE,
+            });
+          } else {
+            answerParts.push({
+              content: answerText,
+              contentType: ContentTypes.TEXT,
+            });
+          }
+        }
+
+        if (answerParts.length > 0) {
+          // Create answer chain linked to root question
+          const savedAnswerParts = await this.createContentChain(
+            answerParts,
+            { question: rootQuestion, questionId: rootQuestion.id },
+            this.answerService.createBulk.bind(this.answerService),
+            this.answerService.updateBulk.bind(this.answerService),
+          );
+
+          totalAnswers += savedAnswerParts.length;
+          answerCount++;
+        }
+      }
+
+      createdQuestions.push({
+        id: rootQuestion.id,
+        content: (rootQuestion as any).content,
+        contentType: (rootQuestion as any).contentType,
+        answerCount,
+      });
+    }
+
+    console.log(`Successfully created ${createdQuestions.length} questions`);
+    return { createdQuestions, totalAnswers };
+  }
+
+  /**
+   * @deprecated - No longer used, replaced by parseAndCreateFromPdf
+   */
+  private async parseExamWithImages(
+    text: string,
+    imagesWithPosition: ImageWithPosition[],
+  ): Promise<ParsedQuestion[]> {
+    const questions: ParsedQuestion[] = [];
+
+    // Parse questions from text
+    const questionPattern =
+      /(?:Câu|Question)\s*(\d+)[:\.]?\s*(.*?)(?=(?:Câu|Question)\s*\d+|$)/gis;
+    const matches = [...text.matchAll(questionPattern)];
+
+    if (matches.length === 0) {
+      return questions;
+    }
+
+    console.log(
+      `Parsing ${matches.length} questions with ${imagesWithPosition.length} images`,
+    );
+
+    // Group images by page for easier lookup
+    const imagesByPage = new Map<number, ImageWithPosition[]>();
+    for (const img of imagesWithPosition) {
+      if (!imagesByPage.has(img.page)) {
+        imagesByPage.set(img.page, []);
+      }
+      imagesByPage.get(img.page)!.push(img);
+    }
+
+    // Estimate which page each question is on based on question number
+    const questionsPerPage = Math.ceil(matches.length / imagesByPage.size);
+    let globalImageIndex = 0;
+    const allImagesFlattened = imagesWithPosition.map((img) => img.path);
+
+    for (let qIndex = 0; qIndex < matches.length; qIndex++) {
+      const match = matches[qIndex];
+      const questionNumber = match[1];
+      let questionContent = match[2].trim();
+
+      // Estimate which page this question is on
+      const estimatedPage = Math.floor(qIndex / questionsPerPage);
+      const pageImages = imagesByPage.get(estimatedPage) || [];
+
+      if (!questionContent) {
+        // Pure image question - use next available image
+        if (globalImageIndex < allImagesFlattened.length) {
           questions.push({
-            content: allImages[imageIndex++],
+            content: allImagesFlattened[globalImageIndex++],
             contentType: ContentTypes.IMAGE,
             answers: [],
           });
@@ -404,29 +636,128 @@ export class QuestionBankService {
         remainingText = questionContent.substring(questionEndIndex + 1).trim();
       }
 
-      // Check if question has image marker or very short text (likely image)
-      let questionContentType = ContentTypes.TEXT;
-      let finalQuestionContent = `Câu ${questionNumber}: ${questionText}`;
+      // Check for image markers
+      const imageMarkerPattern = /(\[IMG\]|\(hình\)|\[ảnh\]|\[image\])/gi;
+      const markers = questionText.match(imageMarkerPattern);
+      const hasImageMarkers = markers && markers.length > 0;
 
-      if (!questionText || questionText.length < 10) {
-        // Likely an image question
-        if (imageIndex < allImages.length) {
-          finalQuestionContent = allImages[imageIndex++];
-          questionContentType = ContentTypes.IMAGE;
+      const contentParts: { content: string; contentType: ContentTypes }[] = [];
+
+      if (hasImageMarkers) {
+        // Parse with markers - more accurate
+        const parts = questionText
+          .split(imageMarkerPattern)
+          .filter((p) => p && p.trim());
+
+        for (const part of parts) {
+          const trimmedPart = part.trim();
+
+          if (/\[IMG\]|\(hình\)|\[ảnh\]|\[image\]/i.test(trimmedPart)) {
+            // Use image from estimated page first, fallback to global
+            if (
+              pageImages.length > 0 &&
+              globalImageIndex < allImagesFlattened.length
+            ) {
+              const pageImageIndex = globalImageIndex % pageImages.length;
+              contentParts.push({
+                content:
+                  pageImages[pageImageIndex]?.path ||
+                  allImagesFlattened[globalImageIndex],
+                contentType: ContentTypes.IMAGE,
+              });
+            } else if (globalImageIndex < allImagesFlattened.length) {
+              contentParts.push({
+                content: allImagesFlattened[globalImageIndex],
+                contentType: ContentTypes.IMAGE,
+              });
+            }
+            globalImageIndex++;
+          } else if (trimmedPart.length > 0) {
+            contentParts.push({
+              content: `Câu ${questionNumber}: ${trimmedPart}`,
+              contentType: ContentTypes.TEXT,
+            });
+          }
+        }
+      } else {
+        // No markers - pure text or very short (might be image)
+        if (!questionText || questionText.length < 10) {
+          if (globalImageIndex < allImagesFlattened.length) {
+            contentParts.push({
+              content: allImagesFlattened[globalImageIndex++],
+              contentType: ContentTypes.IMAGE,
+            });
+          }
+        } else {
+          contentParts.push({
+            content: `Câu ${questionNumber}: ${questionText}`,
+            contentType: ContentTypes.TEXT,
+          });
         }
       }
 
-      // Extract answers
+      // Fallback if no parts
+      if (contentParts.length === 0) {
+        contentParts.push({
+          content: `Câu ${questionNumber}: ${questionText}`,
+          contentType: ContentTypes.TEXT,
+        });
+      }
+
+      // Parse answers with position-based image matching
       const answerPattern = /([A-D])[\.\)]\s*([^\n]+)/gi;
       const answerMatches = [...remainingText.matchAll(answerPattern)];
 
       const answers = answerMatches.map((m) => {
         const answerText = m[2].trim();
 
-        // Check if answer is likely an image (very short text or special markers)
-        if (answerText.length < 5 && imageIndex < allImages.length) {
+        // Check for markers in answer
+        const answerMarkers = answerText.match(imageMarkerPattern);
+        const hasAnswerMarkers = answerMarkers && answerMarkers.length > 0;
+
+        if (hasAnswerMarkers) {
+          const answerParts: {
+            content: string;
+            contentType: ContentTypes;
+          }[] = [];
+          const answerPartsSplit = answerText
+            .split(imageMarkerPattern)
+            .filter((p) => p && p.trim());
+
+          for (const part of answerPartsSplit) {
+            const trimmedPart = part.trim();
+
+            if (/\[IMG\]|\(hình\)|\[ảnh\]|\[image\]/i.test(trimmedPart)) {
+              if (globalImageIndex < allImagesFlattened.length) {
+                answerParts.push({
+                  content: allImagesFlattened[globalImageIndex++],
+                  contentType: ContentTypes.IMAGE,
+                });
+              }
+            } else if (trimmedPart.length > 0) {
+              answerParts.push({
+                content: trimmedPart,
+                contentType: ContentTypes.TEXT,
+              });
+            }
+          }
+
+          if (answerParts.length > 0) {
+            return {
+              content: answerParts[0].content,
+              contentType: answerParts[0].contentType,
+              answerParts: answerParts.length > 1 ? answerParts : undefined,
+            };
+          }
+        }
+
+        // No markers - check if very short (likely image)
+        if (
+          answerText.length < 5 &&
+          globalImageIndex < allImagesFlattened.length
+        ) {
           return {
-            content: allImages[imageIndex++],
+            content: allImagesFlattened[globalImageIndex++],
             contentType: ContentTypes.IMAGE,
           };
         }
@@ -437,13 +768,18 @@ export class QuestionBankService {
         };
       });
 
+      // Use first content part as main content
+      const mainContent = contentParts[0];
+
       questions.push({
-        content: finalQuestionContent,
-        contentType: questionContentType,
+        content: mainContent.content,
+        contentType: mainContent.contentType,
         answers,
+        contentParts: contentParts.length > 1 ? contentParts : undefined,
       });
     }
 
+    console.log(`Successfully parsed ${questions.length} questions`);
     return questions;
   }
 }

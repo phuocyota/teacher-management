@@ -1,4 +1,10 @@
-import { IsNotEmpty, IsString, IsEnum, IsUUID } from 'class-validator';
+import {
+  IsNotEmpty,
+  IsString,
+  IsEnum,
+  IsUUID,
+  IsOptional,
+} from 'class-validator';
 import { ApiProperty, PartialType } from '@nestjs/swagger';
 import { ContentTypes } from 'src/common/enum/content-type.enum';
 
@@ -27,6 +33,16 @@ export class CreateAnswerDto {
     example: '2233abe3-1961-4af5-a482-542f1227d844',
   })
   questionId!: string;
+
+  @IsUUID()
+  @IsOptional()
+  @ApiProperty({
+    description:
+      'ID của nội dung tiếp theo (nếu câu trả lời vừa hình vừa chữ xen kẽ nhau)',
+    example: '550e8400-e29b-41d4-a716-446655440000',
+    required: false,
+  })
+  nextContent?: string;
 }
 
 export class UpdateAnswerDto extends PartialType(CreateAnswerDto) {}

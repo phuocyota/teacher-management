@@ -68,6 +68,17 @@ export class AnswerController {
     return this.answerService.findOne(id);
   }
 
+  @Get(':id/chain')
+  @ApiOperation({
+    summary: 'Lấy câu trả lời với toàn bộ chuỗi nội dung (text/image xen kẽ)',
+    description:
+      'Trả về mảng các phần nội dung của câu trả lời theo thứ tự nextContent',
+  })
+  @ApiOkResponse({ type: [AnswerResponseDto] })
+  getAnswerChain(@Param('id', ParseUUIDPipe) id: string) {
+    return this.answerService.getAnswerWithChain(id);
+  }
+
   @Patch(':id')
   @ApiOperation({ summary: 'Cập nhật thông tin câu trả lời' })
   @ApiOkResponse({ type: AnswerResponseDto })

@@ -64,8 +64,29 @@ export class QuestionService {
 
     const [data, total] = await qb.getManyAndCount();
 
+    // Load nextContentDetails for all questions that have nextContent
+    const questionsWithDetails = await Promise.all(
+      data.map(async (question) => {
+        if (question.nextContent) {
+          const nextContentEntity = await this.questionRepo.findOne({
+            where: { id: question.nextContent },
+            select: ['id', 'content', 'contentType'],
+          });
+
+          if (nextContentEntity) {
+            (question as any).nextContentDetails = {
+              id: nextContentEntity.id,
+              content: nextContentEntity.content,
+              contentType: nextContentEntity.contentType,
+            };
+          }
+        }
+        return question;
+      }),
+    );
+
     return {
-      data: autoMapListToDto(QuestionResponseDto, data),
+      data: autoMapListToDto(QuestionResponseDto, questionsWithDetails),
       page,
       size,
       total,
@@ -85,6 +106,23 @@ export class QuestionService {
         ),
       );
     }
+
+    // Load nextContent details if exists
+    if (record.nextContent) {
+      const nextContentEntity = await this.questionRepo.findOne({
+        where: { id: record.nextContent },
+        select: ['id', 'content', 'contentType'],
+      });
+
+      if (nextContentEntity) {
+        (record as any).nextContentDetails = {
+          id: nextContentEntity.id,
+          content: nextContentEntity.content,
+          contentType: nextContentEntity.contentType,
+        };
+      }
+    }
+
     return record;
   }
 
@@ -109,5 +147,50 @@ export class QuestionService {
   ): Promise<QuestionEntity[]> {
     const records = this.questionRepo.create(questions);
     return this.questionRepo.save(records);
+  }
+
+  async updateBulk(
+    questions: Partial<QuestionEntity>[],
+  ): Promise<QuestionEntity[]> {
+    return this.questionRepo.save(questions);
+  }
+
+  /**
+   * Get question with full content chain (following nextContent links)
+   * Returns array of question parts in order
+   */
+  async getQuestionWithChain(id: string): Promise<QuestionEntity[]> {
+    const chain: QuestionEntity[] = [];
+    let currentId: string | undefined = id;
+
+    // Follow the chain up to 10 levels (prevent infinite loops)
+    const maxDepth = 10;
+    let depth = 0;
+
+    while (currentId && depth < maxDepth) {
+      const question = await this.questionRepo.findOne({
+        where: { id: currentId },
+        relations: ['questionBank', 'answers'],
+      });
+
+      if (!question) {
+        break;
+      }
+
+      chain.push(question);
+      currentId = question.nextContent;
+      depth++;
+    }
+
+    if (chain.length === 0) {
+      throw new NotFoundException(
+        ERROR_MESSAGES.NOT_FOUND_WITH_ID(
+          ENTITY_NAMES.QUESTION ?? 'Câu hỏi',
+          id,
+        ),
+      );
+    }
+
+    return chain;
   }
 }

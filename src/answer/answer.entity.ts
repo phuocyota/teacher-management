@@ -15,6 +15,10 @@ export class AnswerEntity extends BaseEntity {
   @Column({ type: 'text' })
   content!: string; // Nội dung của câu trả lời
 
+  //next_content
+  @Column({ type: 'uuid', nullable: true })
+  nextContent?: string; // ID của nội dung tiếp theo (nếu có)
+
   @ManyToOne(() => QuestionEntity, (question) => question.answers, {
     onDelete: 'CASCADE',
   })

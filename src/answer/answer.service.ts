@@ -59,8 +59,29 @@ export class AnswerService {
 
     const [data, total] = await qb.getManyAndCount();
 
+    // Load nextContentDetails for all answers that have nextContent
+    const answersWithDetails = await Promise.all(
+      data.map(async (answer) => {
+        if (answer.nextContent) {
+          const nextContentEntity = await this.answerRepo.findOne({
+            where: { id: answer.nextContent },
+            select: ['id', 'content', 'contentType'],
+          });
+
+          if (nextContentEntity) {
+            (answer as any).nextContentDetails = {
+              id: nextContentEntity.id,
+              content: nextContentEntity.content,
+              contentType: nextContentEntity.contentType,
+            };
+          }
+        }
+        return answer;
+      }),
+    );
+
     return {
-      data: autoMapListToDto(AnswerResponseDto, data),
+      data: autoMapListToDto(AnswerResponseDto, answersWithDetails),
       page,
       size,
       total,
@@ -77,6 +98,23 @@ export class AnswerService {
         ERROR_MESSAGES.NOT_FOUND_WITH_ID(ENTITY_NAMES.ANSWER ?? 'Answer', id),
       );
     }
+
+    // Load nextContent details if exists
+    if (record.nextContent) {
+      const nextContentEntity = await this.answerRepo.findOne({
+        where: { id: record.nextContent },
+        select: ['id', 'content', 'contentType'],
+      });
+
+      if (nextContentEntity) {
+        (record as any).nextContentDetails = {
+          id: nextContentEntity.id,
+          content: nextContentEntity.content,
+          contentType: nextContentEntity.contentType,
+        };
+      }
+    }
+
     return record;
   }
 
@@ -99,5 +137,45 @@ export class AnswerService {
   async createBulk(answers: Partial<AnswerEntity>[]): Promise<AnswerEntity[]> {
     const records = this.answerRepo.create(answers);
     return this.answerRepo.save(records);
+  }
+
+  async updateBulk(answers: Partial<AnswerEntity>[]): Promise<AnswerEntity[]> {
+    return this.answerRepo.save(answers);
+  }
+
+  /**
+   * Get answer with full content chain (following nextContent links)
+   * Returns array of answer parts in order
+   */
+  async getAnswerWithChain(id: string): Promise<AnswerEntity[]> {
+    const chain: AnswerEntity[] = [];
+    let currentId: string | undefined = id;
+
+    // Follow the chain up to 10 levels (prevent infinite loops)
+    const maxDepth = 10;
+    let depth = 0;
+
+    while (currentId && depth < maxDepth) {
+      const answer = await this.answerRepo.findOne({
+        where: { id: currentId },
+        relations: ['question'],
+      });
+
+      if (!answer) {
+        break;
+      }
+
+      chain.push(answer);
+      currentId = answer.nextContent;
+      depth++;
+    }
+
+    if (chain.length === 0) {
+      throw new NotFoundException(
+        ERROR_MESSAGES.NOT_FOUND_WITH_ID(ENTITY_NAMES.ANSWER ?? 'Answer', id),
+      );
+    }
+
+    return chain;
   }
 }

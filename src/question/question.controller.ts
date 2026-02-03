@@ -79,6 +79,17 @@ export class QuestionController {
     return this.questionService.findOne(id);
   }
 
+  @Get(':id/chain')
+  @ApiOperation({
+    summary: 'Lấy câu hỏi với toàn bộ chuỗi nội dung (text/image xen kẽ)',
+    description:
+      'Trả về mảng các phần nội dung của câu hỏi theo thứ tự nextContent',
+  })
+  @ApiOkResponse({ type: [QuestionResponseDto] })
+  getQuestionChain(@Param('id', ParseUUIDPipe) id: string) {
+    return this.questionService.getQuestionWithChain(id);
+  }
+
   @Patch(':id')
   @ApiOperation({ summary: 'Cập nhật thông tin câu hỏi' })
   @ApiOkResponse({ type: QuestionResponseDto })

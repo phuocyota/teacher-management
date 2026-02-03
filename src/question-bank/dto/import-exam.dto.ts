@@ -16,6 +16,12 @@ export interface ParsedAnswer {
   content: string;
   contentType: ContentTypes;
   isCorrect?: boolean;
+  answerParts?: ContentPart[]; // Các phần nội dung xen kẽ (text/image) của câu trả lời
+}
+
+export interface ContentPart {
+  content: string;
+  contentType: ContentTypes;
 }
 
 export class ParsedQuestion {
@@ -23,6 +29,7 @@ export class ParsedQuestion {
   contentType: ContentTypes;
   answers: ParsedAnswer[];
   correctAnswer?: number; // Index của đáp án đúng (0-based)
+  contentParts?: ContentPart[]; // Các phần nội dung xen kẽ (text/image) của câu hỏi
 }
 
 export class ImportExamResultDto {

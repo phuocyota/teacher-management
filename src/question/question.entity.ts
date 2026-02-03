@@ -17,6 +17,10 @@ export class QuestionEntity extends BaseEntity {
   @Column({ name: 'content', type: 'text', nullable: false })
   content: string; // Nội dung câu hỏi
 
+  //next_content
+  @Column({ name: 'next_content', type: 'uuid', nullable: true })
+  nextContent?: string; // Nội dung tiếp theo sau câu hỏi (nếu câu hỏi đó vừa hình vừa chữ xen kẽ nhau)
+
   @Column()
   questionBankId: string;
 
