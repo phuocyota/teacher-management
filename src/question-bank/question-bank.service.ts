@@ -68,6 +68,7 @@ export class QuestionBankService {
       totalMarks: dto.totalMarks,
       examDate: dto.examDate,
       class: cls,
+      image: dto.image,
     });
     return this.questionBankRepo.save(record);
   }
@@ -137,6 +138,10 @@ export class QuestionBankService {
       record.examDate = dto.examDate;
     }
 
+    if (dto.image !== undefined) {
+      record.image = dto.image;
+    }
+
     return this.questionBankRepo.save(record);
   }
 
@@ -188,10 +193,10 @@ export class QuestionBankService {
       // Parse PDF
       const PDFDocument = pdfLib.PDFDocument;
 
-      // Extract text from PDF
-      const pdfParserModule = await import('pdf-parse');
-      const pdfParserFn = pdfParserModule as any;
-      const pdfData: PdfData = await pdfParserFn(pdfBuffer);
+      // Extract text from PDF using PDFParse class
+      const { PDFParse } = require('pdf-parse');
+      const parser = new PDFParse({ data: pdfBuffer });
+      const pdfData: PdfData = await parser.getText();
       const text = pdfData.text;
       const numPages = pdfData.numpages;
 

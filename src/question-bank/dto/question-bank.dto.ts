@@ -21,6 +21,13 @@ export class QuestionBankResponseDto extends BaseDto {
     required: false,
   })
   classId?: string;
+
+  @ApiProperty({
+    description: 'Hình ảnh liên quan đến ngân hàng câu hỏi',
+    example: 'https://example.com/image.jpg',
+    required: false,
+  })
+  image?: string;
 }
 
 export class QuestionBankListResponseDto extends PaginationResponseDto<QuestionBankResponseDto> {

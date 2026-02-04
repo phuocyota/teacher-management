@@ -20,4 +20,7 @@ export class QuestionBankEntity extends BaseEntity {
 
   @OneToMany(() => QuestionEntity, (question) => question.questionBank)
   questions: QuestionEntity[];
+
+  @Column({ name: 'image', type: 'text', nullable: true })
+  image: string; // Hình ảnh liên quan đến ngân hàng câu hỏi
 }

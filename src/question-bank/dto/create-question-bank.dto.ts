@@ -1,4 +1,12 @@
-import { IsNotEmpty, IsInt, IsDateString, IsUUID, Min } from 'class-validator';
+import {
+  IsNotEmpty,
+  IsInt,
+  IsDateString,
+  IsUUID,
+  Min,
+  IsOptional,
+  IsString,
+} from 'class-validator';
 import { ApiProperty, PartialType } from '@nestjs/swagger';
 
 export class CreateQuestionBankDto {
@@ -26,6 +34,15 @@ export class CreateQuestionBankDto {
     example: '2233abe3-1961-4af5-a482-542f1227d844',
   })
   classId!: string;
+
+  @IsString()
+  @IsOptional()
+  @ApiProperty({
+    description: 'Hình ảnh liên quan đến ngân hàng câu hỏi (base64 hoặc URL)',
+    example: 'https://example.com/image.jpg',
+    required: false,
+  })
+  image?: string;
 }
 
 export class UpdateQuestionBankDto extends PartialType(CreateQuestionBankDto) {}
