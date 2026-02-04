@@ -126,9 +126,13 @@ export class GroupRepositoryService extends BaseService<GroupEntity> {
    * Lấy mã group lớn nhất hiện tại
    */
   async getMaxCode(): Promise<number> {
+    // Sử dụng Postgres regex để lấy phần số và trả về MAX nhanh hơn
     const result = await this.groupRepository
       .createQueryBuilder('group')
-      .select('MAX(group.code)', 'maxCode')
+      .select(
+        "MAX(CASE WHEN regexp_replace(group.code, '\\D', '', 'g') = '' THEN 0 ELSE (regexp_replace(group.code, '\\D', '', 'g'))::int END)",
+        'maxCode',
+      )
       .getRawOne<{ maxCode: number | null }>();
 
     return result?.maxCode ?? 0;

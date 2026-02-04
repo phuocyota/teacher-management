@@ -55,21 +55,15 @@ export class ClassService extends BaseService<ClassEntity> {
   }
 
   async getMaxCode(): Promise<number> {
+    // Sử dụng Postgres regex để lấy phần số và trả về MAX nhanh hơn
     const result = await this.classRepo
       .createQueryBuilder('class')
-      .select('MAX(class.code)', 'maxCode')
-      .getRawOne<{ maxCode: string | null }>();
+      .select(
+        "MAX(CASE WHEN regexp_replace(class.code, '\\D', '', 'g') = '' THEN 0 ELSE (regexp_replace(class.code, '\\D', '', 'g'))::int END)",
+        'maxCode',
+      )
+      .getRawOne<{ maxCode: number | null }>();
 
-    if (!result?.maxCode) {
-      return 0;
-    }
-
-    // Parse code để lấy phần số
-    const match = result.maxCode.match(/\d+/);
-    if (match) {
-      return parseInt(match[0], 10);
-    }
-
-    return 0;
+    return result?.maxCode ?? 0;
   }
 }

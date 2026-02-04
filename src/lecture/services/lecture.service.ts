@@ -346,21 +346,15 @@ export class LectureService {
   }
 
   async getMaxCode(): Promise<number> {
+    // Sử dụng Postgres regex để lấy phần số và trả về MAX nhanh hơn
     const result = await this.lectureRepository
       .createQueryBuilder('lecture')
-      .select('MAX(lecture.code)', 'maxCode')
-      .getRawOne<{ maxCode: string | null }>();
+      .select(
+        "MAX(CASE WHEN regexp_replace(lecture.code, '\\D', '', 'g') = '' THEN 0 ELSE (regexp_replace(lecture.code, '\\D', '', 'g'))::int END)",
+        'maxCode',
+      )
+      .getRawOne<{ maxCode: number | null }>();
 
-    if (!result?.maxCode) {
-      return 0;
-    }
-
-    // Parse code để lấy phần số (ví dụ: "BG0010" -> 10, "10" -> 10)
-    const match = result.maxCode.match(/\d+/);
-    if (match) {
-      return parseInt(match[0], 10);
-    }
-
-    return 0;
+    return result?.maxCode ?? 0;
   }
 }
