@@ -11,6 +11,7 @@ import { BaseService } from 'src/common/sql/base.service';
 import { UploadService } from 'src/upload/upload.service';
 import { JwtPayload } from 'src/common/interface/jwt-payload.interface';
 import { UserType } from 'src/common/enum/user-type.enum';
+import { autoMapListToDto } from 'src/common/utils/auto-map.util';
 
 @Injectable()
 export class ClassService extends BaseService<ClassEntity> {
@@ -34,7 +35,18 @@ export class ClassService extends BaseService<ClassEntity> {
 
     const records = await this.classRepo.query(
       `
-      SELECT DISTINCT cl.*
+      SELECT
+        cl.id AS "id",
+        cl.created_at AS "createdAt",
+        cl.updated_at AS "updatedAt",
+        cl.updated_by AS "updatedBy",
+        cl.created_by AS "createdBy",
+        cl.code AS "code",
+        cl.name AS "name",
+        cl.order_number AS "orderNumber",
+        cl.display_type AS "displayType",
+        cl.current_image AS "currentImage",
+        cl.note AS "note"
       FROM class cl
       INNER JOIN course c ON cl.id = c.class_id
       INNER JOIN lecture l ON l.course_id = c.id
@@ -44,7 +56,18 @@ export class ClassService extends BaseService<ClassEntity> {
 
       UNION
 
-      SELECT DISTINCT cl.*
+      SELECT
+        cl.id AS "id",
+        cl.created_at AS "createdAt",
+        cl.updated_at AS "updatedAt",
+        cl.updated_by AS "updatedBy",
+        cl.created_by AS "createdBy",
+        cl.code AS "code",
+        cl.name AS "name",
+        cl.order_number AS "orderNumber",
+        cl.display_type AS "displayType",
+        cl.current_image AS "currentImage",
+        cl.note AS "note"
       FROM class cl
       INNER JOIN course c ON cl.id = c.class_id
       INNER JOIN lecture l ON l.course_id = c.id
