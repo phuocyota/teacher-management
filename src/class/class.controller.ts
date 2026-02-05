@@ -27,8 +27,8 @@ export class ClassController {
   }
 
   @Get()
-  findAll() {
-    return this.classService.findAll();
+  findAll(@User() user: JwtPayload) {
+    return this.classService.findAll(user);
   }
 
   @Get('max-code')

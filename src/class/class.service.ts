@@ -10,6 +10,7 @@ import {
 import { BaseService } from 'src/common/sql/base.service';
 import { UploadService } from 'src/upload/upload.service';
 import { JwtPayload } from 'src/common/interface/jwt-payload.interface';
+import { UserType } from 'src/common/enum/user-type.enum';
 
 @Injectable()
 export class ClassService extends BaseService<ClassEntity> {
@@ -26,8 +27,34 @@ export class ClassService extends BaseService<ClassEntity> {
     return this.classRepo.save(record);
   }
 
-  async findAll(): Promise<ClassEntity[]> {
-    return this.classRepo.find();
+  async findAll(user?: JwtPayload): Promise<ClassEntity[]> {
+    if (!user || user.userType !== UserType.TEACHER) {
+      return this.classRepo.find();
+    }
+
+    const records = await this.classRepo.query(
+      `
+      SELECT DISTINCT cl.*
+      FROM class cl
+      INNER JOIN course c ON cl.id = c.class_id
+      INNER JOIN lecture l ON l.course_id = c.id
+      INNER JOIN lecture_group lg ON lg.lecture_id = l.id
+      INNER JOIN user_group ug ON ug.group_id = lg.group_id
+      WHERE ug.user_id = $1
+
+      UNION
+
+      SELECT DISTINCT cl.*
+      FROM class cl
+      INNER JOIN course c ON cl.id = c.class_id
+      INNER JOIN lecture l ON l.course_id = c.id
+      INNER JOIN lecture_user lu ON lu.lecture_id = l.id
+      WHERE lu.user_id = $1
+      `,
+      [user.userId],
+    );
+
+    return records as ClassEntity[];
   }
 
   async findOne(id: string): Promise<ClassEntity> {
