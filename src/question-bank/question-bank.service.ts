@@ -62,6 +62,7 @@ export class QuestionBankService {
 
   async create(dto: CreateQuestionBankDto): Promise<QuestionBankEntity> {
     const record = this.questionBankRepo.create({
+      name: dto.name,
       totalMarks: dto.totalMarks,
       examDate: dto.examDate,
       classId: dto.classId,
@@ -125,6 +126,10 @@ export class QuestionBankService {
     if (dto.classId) {
       const cls = await this.classService.findOne(dto.classId);
       record.class = cls;
+    }
+
+    if (dto.name !== undefined) {
+      record.name = dto.name;
     }
 
     if (dto.totalMarks !== undefined) {

@@ -4,6 +4,13 @@ import { PaginationResponseDto } from 'src/common/dto/pagination.dto';
 
 export class QuestionBankResponseDto extends BaseDto {
   @ApiProperty({
+    description: 'Tên ngân hàng câu hỏi',
+    example: 'Đề thi học kỳ 1',
+  })
+  name!: string;
+
+
+  @ApiProperty({
     description: 'Tổng điểm của kỳ thi',
     example: 100,
   })

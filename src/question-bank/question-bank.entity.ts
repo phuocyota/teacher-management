@@ -5,6 +5,9 @@ import { QuestionEntity } from 'src/question/question.entity';
 
 @Entity('question_bank')
 export class QuestionBankEntity extends BaseEntity {
+  @Column({ name: 'name', type: 'varchar', length: 255, nullable: false })
+  name: string; // Tên ngân hàng câu hỏi
+
   @Column({ name: 'total_marks', type: 'int', nullable: false })
   totalMarks: number; // Tổng điểm của kỳ thi
 
