@@ -6,10 +6,20 @@ import {
   Min,
   IsOptional,
   IsString,
+  MaxLength,
 } from 'class-validator';
 import { ApiProperty, PartialType } from '@nestjs/swagger';
 
 export class CreateQuestionBankDto {
+  @IsString()
+  @IsNotEmpty()
+  @MaxLength(50)
+  @ApiProperty({
+    description: 'Mã ngân hàng câu hỏi (code)',
+    example: 'QB-1001',
+  })
+  code!: string;
+
   @IsString()
   @IsNotEmpty()
   @ApiProperty({
