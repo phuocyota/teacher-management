@@ -73,6 +73,16 @@ export class QuestionBankController {
     return this.questionBankService.findAll(page, size, classId, examDate);
   }
 
+  @Get('max-code')
+  @ApiOperation({ summary: 'Lấy code lớn nhất của ngân hàng câu hỏi' })
+  @ApiOkResponse({
+    schema: { type: 'object', properties: { maxCode: { type: 'number' } } },
+  })
+  async getMaxCode(): Promise<{ maxCode: number }> {
+    const maxCode = await this.questionBankService.getMaxCode();
+    return { maxCode };
+  }
+
   @Get(':id')
   @ApiOperation({ summary: 'Lấy thông tin ngân hàng câu hỏi theo ID' })
   @ApiOkResponse({ type: QuestionBankResponseDto })

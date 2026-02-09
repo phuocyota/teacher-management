@@ -62,6 +62,8 @@ export class QuestionBankService {
 
   async create(dto: CreateQuestionBankDto): Promise<QuestionBankEntity> {
     const record = this.questionBankRepo.create({
+      code: dto.code,
+      name: dto.name,
       totalMarks: dto.totalMarks,
       examDate: dto.examDate,
       classId: dto.classId,
@@ -103,6 +105,22 @@ export class QuestionBankService {
     };
   }
 
+  async getMaxCode(): Promise<number> {
+    const result = await this.questionBankRepo
+      .createQueryBuilder('qb')
+      .select(
+        "MAX(CASE WHEN regexp_replace(qb.code, '\\\\D', '', 'g') = '' THEN 0 ELSE (regexp_replace(qb.code, '\\\\D', '', 'g'))::int END)",
+        'maxCode',
+      )
+      .getRawOne<{ maxCode: number | null }>();
+
+    if (!result || result.maxCode === null || result.maxCode === undefined) {
+      return 0;
+    }
+
+    return Number(result.maxCode) || 0;
+  }
+
   async findOne(id: string): Promise<QuestionBankEntity> {
     const record = await this.questionBankRepo.findOne({
       where: { id },
@@ -125,6 +143,14 @@ export class QuestionBankService {
     if (dto.classId) {
       const cls = await this.classService.findOne(dto.classId);
       record.class = cls;
+    }
+
+    if (dto.name !== undefined) {
+      record.name = dto.name;
+    }
+
+    if (dto.code !== undefined) {
+      record.code = dto.code;
     }
 
     if (dto.totalMarks !== undefined) {
