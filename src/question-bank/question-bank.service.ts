@@ -83,7 +83,7 @@ export class QuestionBankService {
       .leftJoinAndSelect('qb.class', 'class');
 
     if (classId) {
-      qb.andWhere('qb.class_id = :classId', { classId });
+      qb.andWhere('qb.classId = :classId', { classId });
     }
 
     if (examDate) {
