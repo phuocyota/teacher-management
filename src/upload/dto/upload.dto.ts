@@ -8,6 +8,7 @@ import {
   IsArray,
   IsNotEmpty,
   IsBoolean,
+  IsUrl,
 } from 'class-validator';
 import { FileAccessType, FileType } from '../enum/file-visibility.enum';
 import { FileEntity } from '../entity/file.entity';
@@ -400,4 +401,38 @@ export class CompleteUploadResponseDto extends UploadFileResponseDto {
     description: 'Đường dẫn file MP4 trong thư mục gốc',
   })
   mp4File?: string;
+}
+
+export class UpdateVersionDto {
+  @ApiProperty({
+    description: 'Phiên bản mới nhất',
+    example: '2.0.5',
+  })
+  @IsString()
+  @IsNotEmpty()
+  latestVersion: string;
+
+  @ApiProperty({
+    description: 'Bắt buộc cập nhật',
+    example: true,
+  })
+  @IsBoolean()
+  forceUpdate: boolean;
+
+  @ApiProperty({
+    description: 'Link tải bản cài đặt',
+    example: 'http://160.250.132.143/uploads/ichiteacher/setup.exe',
+  })
+  @IsString()
+  @IsNotEmpty()
+  @IsUrl({ require_protocol: true })
+  downloadUrl: string;
+}
+
+export class UpdateVersionResponseDto extends UpdateVersionDto {
+  @ApiProperty({
+    description: 'Đường dẫn tương đối tới file version trong uploadDir',
+    example: 'ichiteacher/verson.json',
+  })
+  relativePath: string;
 }

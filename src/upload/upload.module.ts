@@ -5,6 +5,7 @@ import { ConfigService } from '@nestjs/config';
 import { diskStorage } from 'multer';
 import { extname } from 'path';
 import { UploadController } from './upload.controller';
+import { UpdateVersionController } from './update-version.controller';
 import { UploadService } from './upload.service';
 import { StreamService } from './services/stream.service';
 import { FileEntity } from './entity/file.entity';
@@ -91,7 +92,7 @@ interface MulterFile {
       },
     }),
   ],
-  controllers: [UploadController],
+  controllers: [UploadController, UpdateVersionController],
   providers: [UploadService, StreamService],
   exports: [UploadService],
 })

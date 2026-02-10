@@ -37,6 +37,8 @@ import {
   InitUploadResponseDto,
   CompleteUploadDto,
   CompleteUploadResponseDto,
+  UpdateVersionDto,
+  UpdateVersionResponseDto,
 } from './dto/upload.dto';
 import { JwtPayload } from 'src/common/interface/jwt-payload.interface';
 import { UserType } from 'src/common/enum/user-type.enum';
@@ -667,6 +669,45 @@ export class UploadService {
     response.absolutePath = targetPath;
     response.created = created;
     return response;
+  }
+
+  async updateVersionFile(
+    dto: UpdateVersionDto,
+  ): Promise<UpdateVersionResponseDto> {
+    const relativePath = 'ichiteacher/verson.json';
+    const uploadBasePath = resolve(process.cwd(), this.uploadDir);
+    const targetPath = resolve(uploadBasePath, relativePath);
+
+    if (!this.isPathInsideUploadDir(targetPath, uploadBasePath)) {
+      throw new BadRequestException('Đường dẫn file không hợp lệ');
+    }
+
+    try {
+      mkdirSync(dirname(targetPath), { recursive: true });
+    } catch (err) {
+      throw new BadRequestException(
+        `Không thể tạo thư mục: ${err instanceof Error ? err.message : err}`,
+      );
+    }
+
+    const payload = {
+      latestVersion: dto.latestVersion,
+      forceUpdate: dto.forceUpdate,
+      downloadUrl: dto.downloadUrl,
+    };
+
+    try {
+      writeFileSync(targetPath, JSON.stringify(payload, null, 2), 'utf8');
+    } catch (err) {
+      throw new BadRequestException(
+        `Không thể ghi file version: ${err instanceof Error ? err.message : err}`,
+      );
+    }
+
+    return {
+      ...payload,
+      relativePath,
+    };
   }
 
   private sanitizeFolderPath(pathValue: string): string {
