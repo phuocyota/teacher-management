@@ -1,4 +1,4 @@
-import { Body, Controller, HttpCode, Post } from '@nestjs/common';
+import { Body, Controller, Get, HttpCode, Post } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { UploadService } from './upload.service';
 import {
@@ -24,5 +24,16 @@ export class UpdateVersionController {
     @Body() dto: UpdateVersionDto,
   ): Promise<UpdateVersionResponseDto> {
     return this.uploadService.updateVersionFile(dto);
+  }
+
+  @Get('updateversion')
+  @ApiOperation({ summary: 'Lấy file version cho ichiteacher' })
+  @ApiResponse({
+    status: 200,
+    description: 'Lấy file version thành công',
+    type: UpdateVersionResponseDto,
+  })
+  async getVersion(): Promise<UpdateVersionResponseDto> {
+    return this.uploadService.getVersionFile();
   }
 }

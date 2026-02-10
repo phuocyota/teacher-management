@@ -710,6 +710,37 @@ export class UploadService {
     };
   }
 
+  async getVersionFile(): Promise<UpdateVersionResponseDto> {
+    const relativePath = 'ichiteacher/verson.json';
+    const uploadBasePath = resolve(process.cwd(), this.uploadDir);
+    const targetPath = resolve(uploadBasePath, relativePath);
+
+    if (!this.isPathInsideUploadDir(targetPath, uploadBasePath)) {
+      throw new BadRequestException('Đường dẫn file không hợp lệ');
+    }
+
+    if (!existsSync(targetPath)) {
+      throw new NotFoundException('File version không tồn tại');
+    }
+
+    let parsed: unknown;
+    try {
+      const raw = readFileSync(targetPath, 'utf8');
+      parsed = JSON.parse(raw);
+    } catch (err) {
+      throw new BadRequestException('File version không hợp lệ');
+    }
+
+    const payload = parsed as UpdateVersionDto;
+
+    return {
+      latestVersion: payload.latestVersion,
+      forceUpdate: payload.forceUpdate,
+      downloadUrl: payload.downloadUrl,
+      relativePath,
+    };
+  }
+
   private sanitizeFolderPath(pathValue: string): string {
     const trimmed = pathValue?.trim();
     if (!trimmed) {
