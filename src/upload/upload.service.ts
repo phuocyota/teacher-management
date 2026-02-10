@@ -674,7 +674,7 @@ export class UploadService {
   async updateVersionFile(
     dto: UpdateVersionDto,
   ): Promise<UpdateVersionResponseDto> {
-    const relativePath = 'ichiteacher/verson.json';
+    const relativePath = 'ichiteacher/version.json';
     const uploadBasePath = resolve(process.cwd(), this.uploadDir);
     const targetPath = resolve(uploadBasePath, relativePath);
 
@@ -711,7 +711,7 @@ export class UploadService {
   }
 
   async getVersionFile(): Promise<UpdateVersionResponseDto> {
-    const relativePath = 'ichiteacher/verson.json';
+    const relativePath = 'ichiteacher/version.json';
     const uploadBasePath = resolve(process.cwd(), this.uploadDir);
     const targetPath = resolve(uploadBasePath, relativePath);
 
@@ -990,7 +990,9 @@ export class UploadService {
     let mp4File: string | undefined;
 
     if (returnInformationLecture) {
-      console.log('[unzipFile] Searching for lecture files in root directory...');
+      console.log(
+        '[unzipFile] Searching for lecture files in root directory...',
+      );
       const rootItems = readdirSync(unzippedDirPath, { withFileTypes: true });
 
       for (const item of rootItems) {
