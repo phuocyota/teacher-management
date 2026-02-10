@@ -30,7 +30,7 @@ export class ClassService extends BaseService<ClassEntity> {
 
   async findAll(user?: JwtPayload): Promise<ClassEntity[]> {
     if (!user || user.userType !== UserType.TEACHER) {
-      return this.classRepo.find();
+      return this.classRepo.find({ order: { name: 'ASC' } });
     }
 
     const records = await this.classRepo.query(
@@ -73,6 +73,7 @@ export class ClassService extends BaseService<ClassEntity> {
       INNER JOIN lecture l ON l.course_id = c.id
       INNER JOIN lecture_user lu ON lu.lecture_id = l.id
       WHERE lu.user_id = $1
+      ORDER BY "name" ASC
       `,
       [user.userId],
     );
