@@ -7,10 +7,19 @@ import { UserService } from 'src/user/user.service';
 import { UserEntity } from 'src/user/user.entity';
 import { UserType } from 'src/common/enum/user-type.enum';
 import { ERROR_MESSAGES } from 'src/common/constant/error-messages.constant';
+import { InjectRepository } from '@nestjs/typeorm';
+import { Repository } from 'typeorm';
+import { TokenEntity } from './token.entity';
 
 @Injectable()
 export class AuthService {
-  constructor(private readonly userService: UserService) {}
+  private static readonly TOKEN_EXPIRES_IN_SECONDS = 31536000;
+
+  constructor(
+    private readonly userService: UserService,
+    @InjectRepository(TokenEntity)
+    private readonly tokenRepo: Repository<TokenEntity>,
+  ) {}
 
   async validateUser(
     identifier: string,
@@ -34,7 +43,44 @@ export class AuthService {
 
     const secret = process.env.JWT_SECRET || 'secretKey';
     // Token expires in 1 year (365 days) expressed in seconds
-    return jwt.sign(payload, secret, { expiresIn: 31536000 });
+    return jwt.sign(payload, secret, {
+      expiresIn: AuthService.TOKEN_EXPIRES_IN_SECONDS,
+    });
+  }
+
+  private async saveToken(userId: string, token: string): Promise<void> {
+    const expiredAt = new Date(
+      Date.now() + AuthService.TOKEN_EXPIRES_IN_SECONDS * 1000,
+    );
+    const record = this.tokenRepo.create({
+      token,
+      userId,
+      expiredAt,
+    });
+    await this.tokenRepo.save(record);
+  }
+
+  async isTokenAlive(
+    token: string,
+  ): Promise<{ alive: boolean; expiredAt?: Date }> {
+    try {
+      const secret = process.env.JWT_SECRET || 'secretKey';
+      jwt.verify(token, secret);
+    } catch {
+      return { alive: false };
+    }
+
+    const record = await this.tokenRepo.findOne({ where: { token } });
+    if (!record) {
+      return { alive: false };
+    }
+
+    if (record.expiredAt <= new Date()) {
+      await this.tokenRepo.delete({ id: record.id });
+      return { alive: false, expiredAt: record.expiredAt };
+    }
+
+    return { alive: true, expiredAt: record.expiredAt };
   }
 
   async login(dto: LoginDto) {
@@ -44,6 +90,7 @@ export class AuthService {
     }
 
     const token = this.generateToken(user, dto.deviceId);
+    await this.saveToken(user.id, token);
     return {
       accessToken: token,
       userId: user.id,
@@ -66,6 +113,7 @@ export class AuthService {
     }
 
     const token = this.generateToken(user, dto.deviceId);
+    await this.saveToken(user.id, token);
     return {
       accessToken: token,
       userId: user.id,
@@ -88,6 +136,7 @@ export class AuthService {
     }
 
     const token = this.generateToken(user, dto.deviceId);
+    await this.saveToken(user.id, token);
     return {
       accessToken: token,
       userId: user.id,
@@ -110,6 +159,7 @@ export class AuthService {
     }
 
     const token = this.generateToken(user, dto.deviceId);
+    await this.saveToken(user.id, token);
     return {
       accessToken: token,
       userId: user.id,

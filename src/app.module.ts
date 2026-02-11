@@ -10,7 +10,6 @@ import { UserModule } from './user/user.module';
 import { LicenseModule } from './license/license.module';
 import { DeviceModule } from './device/device.module';
 import { SocketModule } from './socket/socket.module';
-import { AuthService } from './auth/auth.service';
 import { AuthModule } from './auth/auth.module';
 import { AuthGuard } from './common/guard/auth.guard';
 import { AllExceptionsFilter } from './common/filter/all-exceptions.filter';
@@ -47,6 +46,7 @@ import { StudentEntity } from './student/student.entity';
 import { QuestionBankEntity } from './question-bank/question-bank.entity';
 import { QuestionEntity } from './question/question.entity';
 import { AnswerEntity } from './answer/answer.entity';
+import { TokenEntity } from './auth/token.entity';
 
 @Module({
   imports: [
@@ -86,6 +86,7 @@ import { AnswerEntity } from './answer/answer.entity';
           QuestionBankEntity,
           QuestionEntity,
           AnswerEntity,
+          TokenEntity,
         ],
         synchronize: true,
       }),
@@ -110,7 +111,6 @@ import { AnswerEntity } from './answer/answer.entity';
     StudentGroupModule,
   ],
   providers: [
-    AuthService,
     {
       provide: APP_FILTER,
       useClass: AllExceptionsFilter,
