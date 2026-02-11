@@ -5,15 +5,16 @@ import {
   UpdateVersionDto,
   UpdateVersionResponseDto,
 } from './dto/upload.dto';
+import { Public } from 'src/common/decorator/public.decorator';
 
 @ApiTags('Version')
-@ApiBearerAuth('access-token')
 @Controller()
 export class UpdateVersionController {
   constructor(private readonly uploadService: UploadService) {}
 
   @Post('updateversion')
   @HttpCode(200)
+  @ApiBearerAuth('access-token')
   @ApiOperation({ summary: 'Cập nhật file version cho ichiteacher' })
   @ApiResponse({
     status: 200,
@@ -27,6 +28,7 @@ export class UpdateVersionController {
   }
 
   @Get('updateversion')
+  @Public()
   @ApiOperation({ summary: 'Lấy file version cho ichiteacher' })
   @ApiResponse({
     status: 200,
@@ -37,3 +39,4 @@ export class UpdateVersionController {
     return this.uploadService.getVersionFile();
   }
 }
+
