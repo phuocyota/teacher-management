@@ -47,9 +47,14 @@ import { QuestionBankEntity } from './question-bank/question-bank.entity';
 import { QuestionEntity } from './question/question.entity';
 import { AnswerEntity } from './answer/answer.entity';
 import { TokenEntity } from './auth/token.entity';
+import { ServeStaticModule } from '@nestjs/serve-static';
 
 @Module({
   imports: [
+    ServeStaticModule.forRoot({
+      rootPath: '/var/www/teacher-management/uploads',
+      serveRoot: '/uploads',
+    }),
     ConfigModule.forRoot({
       isGlobal: true,
       envFilePath: '.env',
