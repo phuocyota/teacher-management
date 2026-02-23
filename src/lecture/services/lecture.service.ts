@@ -87,7 +87,15 @@ export class LectureService {
     dto: GetAllLectureDto,
     user: JwtPayload,
   ): Promise<PaginationResponseDto<LectureResponse>> {
-    const { courseId, classId, groupId, search, page = 1, size = 10 } = dto;
+    const {
+      courseId,
+      classId,
+      groupId,
+      userId,
+      search,
+      page = 1,
+      size = 10,
+    } = dto;
 
     const query = this.lectureRepository.createQueryBuilder('lecture');
 
@@ -99,6 +107,14 @@ export class LectureService {
 
     if (groupId) {
       query.leftJoin('lecture.contexts', 'context');
+    }
+
+    if (userId) {
+      query.leftJoin(
+        'lecture_user',
+        'lecture_user',
+        'lecture_user.lecture_id = lecture.id',
+      );
     }
 
     query
@@ -140,6 +156,10 @@ export class LectureService {
 
     if (classId) {
       query.andWhere('course.class_id = :classId', { classId });
+    }
+
+    if (userId) {
+      query.andWhere('lecture_user.user_id = :userId', { userId });
     }
 
     if (groupId) {

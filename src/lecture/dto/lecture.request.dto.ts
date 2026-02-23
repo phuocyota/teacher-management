@@ -316,4 +316,13 @@ export class GetAllLectureDto extends PaginationRequestDto {
   @IsOptional()
   @IsUUID('4', { message: 'groupId phải là một UUID hợp lệ' })
   groupId?: string;
+
+  @ApiPropertyOptional({
+    type: 'string',
+    format: 'uuid',
+    description: 'Lọc theo ID người dùng',
+  })
+  @IsOptional()
+  @IsUUID('4', { message: 'userId phải là một UUID hợp lệ' })
+  userId?: string;
 }
