@@ -89,9 +89,13 @@ export class LectureService {
   ): Promise<PaginationResponseDto<LectureResponse>> {
     const { courseId, groupId, search, page = 1, size = 10 } = dto;
 
-    const query = this.lectureRepository
-      .createQueryBuilder('lecture')
-      .leftJoin('lecture.contexts', 'context')
+    const query = this.lectureRepository.createQueryBuilder('lecture');
+
+    if (groupId) {
+      query.leftJoin('lecture.contexts', 'context');
+    }
+
+    query
       .select([
         'lecture.id AS id',
         'lecture.code AS code',
@@ -100,7 +104,7 @@ export class LectureService {
         'lecture.orderColumn AS "orderColumn"',
         'lecture.avatar AS avatar',
         'lecture.courseId AS "courseId"',
-        'context.groupId AS "groupId"',
+        groupId ? 'context.groupId AS "groupId"' : 'NULL::text AS "groupId"',
       ])
       .orderBy('lecture.orderColumn', 'ASC')
       .skip((page - 1) * size)
