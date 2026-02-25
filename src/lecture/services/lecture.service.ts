@@ -92,6 +92,7 @@ export class LectureService {
       classId,
       groupId,
       userId,
+      isGetResource,
       search,
       page = 1,
       size = 10,
@@ -117,6 +118,10 @@ export class LectureService {
       );
     }
 
+    if (isGetResource) {
+      query.leftJoin('lecture.resources', 'resource');
+    }
+
     query
       .select([
         'lecture.id AS id',
@@ -127,6 +132,14 @@ export class LectureService {
         'lecture.avatar AS avatar',
         'lecture.courseId AS "courseId"',
         groupId ? 'context.groupId AS "groupId"' : 'NULL::text AS "groupId"',
+        ...(isGetResource
+          ? [
+              'resource.id AS "resourceId"',
+              'resource.type AS "resourceType"',
+              'resource.source AS "resourceSource"',
+              'resource.url AS "resourceUrl"',
+            ]
+          : []),
       ])
       .orderBy('lecture.orderColumn', 'ASC')
       .skip((page - 1) * size)
@@ -170,6 +183,63 @@ export class LectureService {
       query.andWhere('lecture.title ILIKE :search', {
         search: `%${search}%`,
       });
+    }
+
+    if (isGetResource) {
+      type RawRow = {
+        id: string;
+        code?: string;
+        title: string;
+        note?: string;
+        orderColumn: number;
+        avatar?: string;
+        courseId: string;
+        groupId?: string | null;
+        resourceId?: string | null;
+        resourceType?: string;
+        resourceSource?: string;
+        resourceUrl?: string;
+      };
+
+      const raw = await query.getRawMany();
+      const dataMap = (raw as RawRow[]).reduce<Record<string, any>>(
+        (acc, row) => {
+          if (!acc[row.id]) {
+            acc[row.id] = {
+              id: row.id,
+              code: row.code,
+              title: row.title,
+              note: row.note,
+              orderColumn: row.orderColumn,
+              avatar: row.avatar,
+              courseId: row.courseId,
+              groupId: row.groupId ?? undefined,
+              resources: [],
+            };
+          }
+
+          if (row.resourceId) {
+            acc[row.id].resources.push({
+              id: row.resourceId,
+              type: row.resourceType,
+              source: row.resourceSource,
+              url: row.resourceUrl,
+            });
+          }
+
+          return acc;
+        },
+        {},
+      );
+
+      const data = Object.values(dataMap);
+
+      return {
+        page,
+        size,
+        total: data.length,
+        data: autoMapListToDto(LectureResponseDto, data),
+      };
     }
 
     const [raw, total] = await Promise.all([

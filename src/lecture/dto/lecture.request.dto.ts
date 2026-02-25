@@ -11,6 +11,7 @@ import {
   MaxLength,
   Min,
   IsNotEmpty,
+  IsBoolean,
 } from 'class-validator';
 import { Type } from 'class-transformer';
 import { PaginationRequestDto } from 'src/common/dto/pagination.dto';
@@ -325,4 +326,14 @@ export class GetAllLectureDto extends PaginationRequestDto {
   @IsOptional()
   @IsUUID('4', { message: 'userId phải là một UUID hợp lệ' })
   userId?: string;
+
+  @ApiPropertyOptional({
+    type: 'boolean',
+    description: 'Có lấy kèm tài nguyên (resource) hay không',
+    default: false,
+  })
+  @IsOptional()
+  @IsBoolean({ message: 'isGetResource phải là true hoặc false' })
+  @Type(() => Boolean)
+  isGetResource?: boolean;
 }
