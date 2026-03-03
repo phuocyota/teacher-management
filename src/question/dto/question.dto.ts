@@ -39,10 +39,11 @@ export class QuestionResponseDto extends BaseDto {
   content!: string;
 
   @ApiProperty({
-    description: 'ID Ngân hàng câu hỏi mà câu hỏi thuộc về',
+    description: 'ID đề thi nếu câu hỏi đang được truy vấn theo question bank',
     example: '2233abe3-1961-4af5-a482-542f1227d844',
+    required: false,
   })
-  questionBankId!: string;
+  questionBankId?: string;
 
   @ApiProperty({
     description:

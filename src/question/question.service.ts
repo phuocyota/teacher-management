@@ -19,22 +19,47 @@ import {
 import { PaginationResponseDto } from 'src/common/dto/pagination.dto';
 import { QuestionResponseDto } from './dto/question.dto';
 import { autoMapListToDto } from 'src/common/utils/auto-map.util';
+import { QuestionBankQuestionEntity } from 'src/question-bank-question/question-bank-question.entity';
 
 @Injectable()
 export class QuestionService {
   constructor(
     @InjectRepository(QuestionEntity)
     private readonly questionRepo: Repository<QuestionEntity>,
+    @InjectRepository(QuestionBankQuestionEntity)
+    private readonly questionBankQuestionRepo: Repository<QuestionBankQuestionEntity>,
     @Inject(forwardRef(() => QuestionBankService))
     private readonly questionBankService: QuestionBankService,
   ) {}
 
   async create(dto: CreateQuestionDto): Promise<QuestionEntity> {
-    // Validate questionBankId exists
-    await this.questionBankService.findOne(dto.questionBankId);
+    if (dto.questionBankId) {
+      await this.questionBankService.findOne(dto.questionBankId);
+    }
 
-    const record = this.questionRepo.create(dto);
-    return this.questionRepo.save(record);
+    const record = this.questionRepo.create({
+      contentType: dto.contentType,
+      content: dto.content,
+      nextContent: dto.nextContent,
+    });
+    const savedRecord = await this.questionRepo.save(record);
+
+    if (dto.questionBankId) {
+      const existingCount = await this.questionBankQuestionRepo.count({
+        where: { questionBankId: dto.questionBankId },
+      });
+
+      await this.questionBankQuestionRepo.save(
+        this.questionBankQuestionRepo.create({
+          questionBankId: dto.questionBankId,
+          questionId: savedRecord.id,
+          orderNo: existingCount + 1,
+          points: 0,
+        }),
+      );
+    }
+
+    return savedRecord;
   }
 
   async findAll(
@@ -45,28 +70,47 @@ export class QuestionService {
   ): Promise<PaginationResponseDto<QuestionResponseDto>> {
     const skip = (page - 1) * size;
 
-    const qb = this.questionRepo
-      .createQueryBuilder('question')
-      .leftJoinAndSelect('question.questionBank', 'questionBank');
+    const qb = this.questionRepo.createQueryBuilder('question');
 
     if (questionBankId) {
-      qb.andWhere('question.questionBankId = :questionBankId', {
-        questionBankId,
-      });
+      qb.innerJoin(
+        QuestionBankQuestionEntity,
+        'qbq',
+        'qbq.question_id = question.id AND qbq.question_bank_id = :questionBankId',
+        { questionBankId },
+      );
+      qb.addSelect('qbq.question_bank_id', 'questionBankId');
+      qb.addSelect('qbq.order_no', 'orderNo');
+    } else {
+      qb.leftJoin(
+        QuestionBankQuestionEntity,
+        'qbq',
+        'qbq.question_id = question.id',
+      );
+      qb.addSelect('qbq.question_bank_id', 'questionBankId');
+      qb.addSelect('qbq.order_no', 'orderNo');
     }
 
     if (questionType) {
-      qb.andWhere('question.questionType = :questionType', { questionType });
+      qb.andWhere('question.content_type = :questionType', { questionType });
     }
 
-    qb.orderBy('question.createdAt', 'DESC');
+    if (questionBankId) {
+      qb.orderBy('qbq.order_no', 'ASC');
+    } else {
+      qb.orderBy('question.createdAt', 'DESC');
+    }
     qb.skip(skip).take(size);
 
-    const [data, total] = await qb.getManyAndCount();
+    const { entities, raw } = await qb.getRawAndEntities();
+    const total = await qb.clone().skip(undefined).take(undefined).getCount();
 
-    // Load nextContentDetails for all questions that have nextContent
     const questionsWithDetails = await Promise.all(
-      data.map(async (question) => {
+      entities.map(async (question, index) => {
+        if (raw[index]?.questionBankId) {
+          (question as any).questionBankId = raw[index].questionBankId;
+        }
+
         if (question.nextContent) {
           const nextContentEntity = await this.questionRepo.findOne({
             where: { id: question.nextContent },
@@ -96,7 +140,6 @@ export class QuestionService {
   async findOne(id: string): Promise<QuestionEntity> {
     const record = await this.questionRepo.findOne({
       where: { id },
-      relations: ['questionBank'],
     });
     if (!record) {
       throw new NotFoundException(
@@ -123,17 +166,60 @@ export class QuestionService {
       }
     }
 
+    const questionBankLink = await this.questionBankQuestionRepo.findOne({
+      where: { questionId: record.id },
+      order: { orderNo: 'ASC' },
+    });
+
+    if (questionBankLink) {
+      (record as any).questionBankId = questionBankLink.questionBankId;
+    }
+
     return record;
   }
 
   async update(id: string, dto: UpdateQuestionDto): Promise<QuestionEntity> {
     const record = await this.findOne(id);
 
-    if (dto.questionBankId) {
+    if (dto.questionBankId !== undefined) {
       await this.questionBankService.findOne(dto.questionBankId);
+
+      const existingLink = await this.questionBankQuestionRepo.findOne({
+        where: { questionId: id },
+        order: { orderNo: 'ASC' },
+      });
+
+      if (existingLink) {
+        existingLink.questionBankId = dto.questionBankId;
+        await this.questionBankQuestionRepo.save(existingLink);
+      } else {
+        const existingCount = await this.questionBankQuestionRepo.count({
+          where: { questionBankId: dto.questionBankId },
+        });
+
+        await this.questionBankQuestionRepo.save(
+          this.questionBankQuestionRepo.create({
+            questionBankId: dto.questionBankId,
+            questionId: id,
+            orderNo: existingCount + 1,
+            points: 0,
+          }),
+        );
+      }
     }
 
-    Object.assign(record, dto);
+    if (dto.contentType !== undefined) {
+      record.contentType = dto.contentType;
+    }
+
+    if (dto.content !== undefined) {
+      record.content = dto.content;
+    }
+
+    if (dto.nextContent !== undefined) {
+      record.nextContent = dto.nextContent;
+    }
+
     return this.questionRepo.save(record);
   }
 
@@ -170,7 +256,7 @@ export class QuestionService {
     while (currentId && depth < maxDepth) {
       const question = await this.questionRepo.findOne({
         where: { id: currentId },
-        relations: ['questionBank', 'answers'],
+        relations: ['answers'],
       });
 
       if (!question) {

@@ -3,12 +3,10 @@ import {
   Column,
   ManyToOne,
   JoinColumn,
-  OneToMany,
   Index,
 } from 'typeorm';
 import { ClassEntity } from 'src/class/class.entity';
 import { BaseEntity } from 'src/common/sql/base.entity';
-import { QuestionEntity } from 'src/question/question.entity';
 
 @Entity('question_bank')
 export class QuestionBankEntity extends BaseEntity {
@@ -37,9 +35,6 @@ export class QuestionBankEntity extends BaseEntity {
   @ManyToOne(() => ClassEntity, (c) => c.questionBanks, { onDelete: 'CASCADE' })
   @JoinColumn({ name: 'classId' })
   class: ClassEntity;
-
-  @OneToMany(() => QuestionEntity, (question) => question.questionBank)
-  questions: QuestionEntity[];
 
   @Column({ name: 'image', type: 'text', nullable: true })
   image: string; // Hình ảnh liên quan đến ngân hàng câu hỏi

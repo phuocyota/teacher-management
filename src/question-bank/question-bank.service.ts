@@ -28,6 +28,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { v4 as uuidv4 } from 'uuid';
 import * as pdfLib from 'pdf-lib';
+import { QuestionBankQuestionEntity } from 'src/question-bank-question/question-bank-question.entity';
 
 interface ImageWithPosition {
   path: string;
@@ -53,6 +54,8 @@ export class QuestionBankService {
   constructor(
     @InjectRepository(QuestionBankEntity)
     private readonly questionBankRepo: Repository<QuestionBankEntity>,
+    @InjectRepository(QuestionBankQuestionEntity)
+    private readonly questionBankQuestionRepo: Repository<QuestionBankQuestionEntity>,
     private readonly classService: ClassService,
     @Inject(forwardRef(() => QuestionService))
     private readonly questionService: QuestionService,
@@ -203,6 +206,22 @@ export class QuestionBankService {
     }
 
     return savedEntities;
+  }
+
+  private async createQuestionBankQuestionLink(
+    questionBankId: string,
+    questionId: string,
+    orderNo: number,
+    points = 0,
+  ): Promise<void> {
+    const link = this.questionBankQuestionRepo.create({
+      questionBankId,
+      questionId,
+      orderNo,
+      points,
+    });
+
+    await this.questionBankQuestionRepo.save(link);
   }
 
   async importExamFromPdf(
@@ -403,6 +422,7 @@ export class QuestionBankService {
     for (let qIndex = 0; qIndex < matches.length; qIndex++) {
       const match = matches[qIndex];
       const questionNumber = match[1];
+      const orderNo = Number.parseInt(questionNumber, 10) || qIndex + 1;
       let questionContent = match[2].trim();
 
       const estimatedPage = Math.floor(qIndex / questionsPerPage);
@@ -417,9 +437,15 @@ export class QuestionBankService {
                 contentType: ContentTypes.IMAGE,
               },
             ],
-            { questionBank, questionBankId: questionBank.id },
+            {},
             this.questionService.createBulk.bind(this.questionService),
             this.questionService.updateBulk.bind(this.questionService),
+          );
+
+          await this.createQuestionBankQuestionLink(
+            questionBank.id,
+            savedParts[0].id,
+            orderNo,
           );
 
           createdQuestions.push({
@@ -508,13 +534,19 @@ export class QuestionBankService {
       // Create question chain
       const savedParts = await this.createContentChain(
         contentParts,
-        { questionBank, questionBankId: questionBank.id },
+        {},
         this.questionService.createBulk.bind(this.questionService),
         this.questionService.updateBulk.bind(this.questionService),
       );
 
       // Root question for answers
       const rootQuestion = savedParts[0];
+
+      await this.createQuestionBankQuestionLink(
+        questionBank.id,
+        rootQuestion.id,
+        orderNo,
+      );
 
       // Parse and create answers
       const answerPattern = /([A-D])[\.\)]\s*([^\n]+)/gi;
