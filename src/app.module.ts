@@ -54,6 +54,8 @@ import { QuestionBankQuestionEntity } from './question-bank-question/question-ba
 import { AttemptModule } from './attempt/attempt.module';
 import { AttemptEntity } from './attempt/attempt.entity';
 import { StudentAnswerEntity } from './student-answer/student-answer.entity';
+import { GradeModule } from './grade/grade.module';
+import { GradeEntity } from './grade/grade.entity';
 
 @Module({
   imports: [
@@ -101,6 +103,7 @@ import { StudentAnswerEntity } from './student-answer/student-answer.entity';
           QuestionBankQuestionEntity,
           AttemptEntity,
           StudentAnswerEntity,
+          GradeEntity,
         ],
         synchronize: true,
       }),
@@ -126,6 +129,7 @@ import { StudentAnswerEntity } from './student-answer/student-answer.entity';
     StudentAnswerModule,
     QuestionBankQuestionModule,
     AttemptModule,
+    GradeModule,
   ],
   providers: [
     {

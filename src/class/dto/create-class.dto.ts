@@ -4,6 +4,7 @@ import {
   IsNumber,
   IsOptional,
   IsString,
+  IsUUID,
 } from 'class-validator';
 import { DisplayType } from '../enum/display-type.enum';
 import { ApiPropertyOptional } from '@nestjs/swagger';
@@ -50,6 +51,14 @@ export class CreateClassDto {
   @IsOptional()
   @IsString()
   note?: string;
+
+  @ApiPropertyOptional({
+    description: 'ID khối',
+    example: '7de93ed8-e016-4d85-9644-11e22bb728f6',
+  })
+  @IsOptional()
+  @IsUUID()
+  gradeId?: string;
 }
 
 export class UpdateClassDto {
@@ -96,4 +105,12 @@ export class UpdateClassDto {
   @IsOptional()
   @IsString()
   note?: string;
+
+  @ApiPropertyOptional({
+    description: 'ID khối',
+    example: '7de93ed8-e016-4d85-9644-11e22bb728f6',
+  })
+  @IsOptional()
+  @IsUUID()
+  gradeId?: string;
 }
