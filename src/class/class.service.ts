@@ -46,7 +46,8 @@ export class ClassService extends BaseService<ClassEntity> {
         cl.order_number AS "orderNumber",
         cl.display_type AS "displayType",
         cl.current_image AS "currentImage",
-        cl.note AS "note"
+        cl.note AS "note",
+        cl.grade_id AS "gradeId"
       FROM class cl
       INNER JOIN course c ON cl.id = c.class_id
       INNER JOIN lecture l ON l.course_id = c.id
@@ -67,7 +68,8 @@ export class ClassService extends BaseService<ClassEntity> {
         cl.order_number AS "orderNumber",
         cl.display_type AS "displayType",
         cl.current_image AS "currentImage",
-        cl.note AS "note"
+        cl.note AS "note",
+        cl.grade_id AS "gradeId"
       FROM class cl
       INNER JOIN course c ON cl.id = c.class_id
       INNER JOIN lecture l ON l.course_id = c.id

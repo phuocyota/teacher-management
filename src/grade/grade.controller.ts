@@ -25,6 +25,7 @@ import { PaginationResponseDto } from 'src/common/dto/pagination.dto';
 import { RolesGuard } from 'src/common/guard/roles.guard';
 import { Roles } from 'src/common/decorator/roles.decorator';
 import { UserType } from 'src/common/enum/user-type.enum';
+import { Public } from 'src/common/decorator/public.decorator';
 
 @ApiTags('Grade')
 @ApiBearerAuth('access-token')
@@ -42,6 +43,7 @@ export class GradeController {
   }
 
   @Get()
+  @Public()
   @ApiOperation({ summary: 'Lay danh sach Khối' })
   @ApiQuery({ name: 'page', required: false, type: Number })
   @ApiQuery({ name: 'size', required: false, type: Number })

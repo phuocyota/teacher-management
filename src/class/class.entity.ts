@@ -51,6 +51,14 @@ export class ClassEntity extends BaseEntity {
   })
   note?: string; // Ghi chú về lớp học
 
+  //gradeId
+  @Column({
+    name: 'grade_id',
+    type: 'uuid',
+    nullable: true,
+  })
+  gradeId: string;
+
   @OneToMany(() => CourseEntity, (course) => course.class)
   courses?: CourseEntity[];
 
