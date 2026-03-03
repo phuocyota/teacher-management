@@ -60,4 +60,5 @@ export const ENTITY_NAMES = {
   STUDENT: 'Học sinh',
   STUDENT_GROUP: 'Nhóm học sinh',
   SCHOOL: 'Trường học',
+  GRADE: 'Khối',
 };

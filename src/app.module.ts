@@ -48,6 +48,8 @@ import { QuestionEntity } from './question/question.entity';
 import { AnswerEntity } from './answer/answer.entity';
 import { TokenEntity } from './auth/token.entity';
 import { ServeStaticModule } from '@nestjs/serve-static';
+import { GradeModule } from './grade/grade.module';
+import { GradeEntity } from './grade/grade.entity';
 
 @Module({
   imports: [
@@ -92,6 +94,7 @@ import { ServeStaticModule } from '@nestjs/serve-static';
           QuestionEntity,
           AnswerEntity,
           TokenEntity,
+          GradeEntity,
         ],
         synchronize: true,
       }),
@@ -114,6 +117,7 @@ import { ServeStaticModule } from '@nestjs/serve-static';
     StudentModule,
     SchoolModule,
     StudentGroupModule,
+    GradeModule,
   ],
   providers: [
     {
