@@ -48,6 +48,12 @@ import { QuestionEntity } from './question/question.entity';
 import { AnswerEntity } from './answer/answer.entity';
 import { TokenEntity } from './auth/token.entity';
 import { ServeStaticModule } from '@nestjs/serve-static';
+import { StudentAnswerModule } from './student-answer/student-answer.module';
+import { QuestionBankQuestionModule } from './question-bank-question/question-bank-question.module';
+import { QuestionBankQuestionEntity } from './question-bank-question/question-bank-question.entity';
+import { AttemptModule } from './attempt/attempt.module';
+import { AttemptEntity } from './attempt/attempt.entity';
+import { StudentAnswerEntity } from './student-answer/student-answer.entity';
 import { GradeModule } from './grade/grade.module';
 import { GradeEntity } from './grade/grade.entity';
 
@@ -94,6 +100,9 @@ import { GradeEntity } from './grade/grade.entity';
           QuestionEntity,
           AnswerEntity,
           TokenEntity,
+          QuestionBankQuestionEntity,
+          AttemptEntity,
+          StudentAnswerEntity,
           GradeEntity,
         ],
         synchronize: true,
@@ -117,6 +126,9 @@ import { GradeEntity } from './grade/grade.entity';
     StudentModule,
     SchoolModule,
     StudentGroupModule,
+    StudentAnswerModule,
+    QuestionBankQuestionModule,
+    AttemptModule,
     GradeModule,
   ],
   providers: [

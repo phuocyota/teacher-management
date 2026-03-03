@@ -13,20 +13,28 @@ mà không phá cấu trúc cũ.
   - `*.module.ts`
   - `*.controller.ts`
   - `*.service.ts`
-  - `entity/*.entity.ts`
+  - `*.entity.ts` hoặc `entity/*.entity.ts`
   - `dto/*.dto.ts`
   - `enum/*.enum.ts`
 
 ## 2) Danh Sách Module
 
 - `auth/` đăng nhập + đăng ký
+- `attempt/` quản lý lần làm bài của học sinh theo đề thi
 - `class/` quản lý lớp
 - `course/` quản lý khóa học
 - `device/` request/approve thiết bị
 - `group/` quản lý nhóm
 - `lecture/` bài giảng + lecture_user + lecture_group + download_log
 - `license/` quản lý license
+- `question-bank/` quản lý đề thi / ngân hàng câu hỏi
+- `question-bank-question/` liên kết câu hỏi với đề thi, thứ tự và điểm từng câu
+- `question/` quản lý câu hỏi
+- `answer/` quản lý đáp án của câu hỏi
 - `socket/` websocket gateway
+- `student/` quản lý học sinh
+- `student-group/` quản lý nhóm học sinh
+- `student-answer/` quản lý câu trả lời của học sinh trong từng lần làm bài
 - `teacher/` quản lý giáo viên
 - `upload/` upload/stream file + phân quyền truy cập
 - `user/` quản lý người dùng
@@ -73,7 +81,29 @@ Lecture có nhiều sub-controller/service:
 - `upload.service.ts` xử lý upload, phân quyền, chunked upload, unzip.
 - `stream.service.ts` xử lý download/stream response.
 
-## 8) Thêm API Mới (Checklist)
+## 8) Lưu Ý Các Module Thi / Làm Bài
+
+- `question-bank/` là thực thể đề thi, lưu thông tin chung như mã đề, tên đề, tổng điểm, ngày thi.
+- `question-bank-question/` là bảng trung gian giữa đề thi và câu hỏi:
+  - `question_bank_id`
+  - `question_id`
+  - `order_no`
+  - `points`
+- `attempt/` là một lần học sinh vào làm một đề:
+  - `student_id`
+  - `question_bank_id`
+  - `status` (`DOING`, `SUBMITTED`, `EXPIRED`)
+  - `started_at`, `submitted_at`
+  - `score`
+- `student-answer/` lưu câu trả lời theo từng câu trong một `attempt`:
+  - `attempt_id`
+  - `question_id`
+  - `answer_id` nullable cho câu chọn 1 đáp án
+  - `text_value` nullable cho tự luận / điền đáp án
+  - `selected_answer_ids` nullable cho câu nhiều đáp án
+  - `is_correct`, `points_earned`, `time_spent_sec`
+
+## 9) Thêm API Mới (Checklist)
 
 1) Chọn domain module (hoặc tạo module mới).
 2) Thêm DTOs trong `src/<domain>/dto/`.
@@ -81,7 +111,7 @@ Lecture có nhiều sub-controller/service:
 4) Thêm route trong `src/<domain>/<domain>.controller.ts`.
 5) Nếu cần, export/import module trong `src/<domain>/<domain>.module.ts`.
 6) Nếu thêm bảng mới:
-   - tạo entity trong `src/<domain>/entity/`
+   - tạo entity trong `src/<domain>/` hoặc `src/<domain>/entity/`
    - thêm entity vào list TypeORM trong `app.module.ts`
 7) Dùng lại pattern chung:
    - lỗi từ `ERROR_MESSAGES`
@@ -89,23 +119,25 @@ Lecture có nhiều sub-controller/service:
    - phân quyền bằng `UserType` + guard
    - transaction với `runInTransaction`
 8) Cập nhật Swagger decorators nếu cần.
-9) Viết unit tests trong `src/**/**/*.spec.ts`.
+9) Nếu module theo CRUD chuẩn, bám `MODULE_PATTERN.md`.
+10) Viết unit tests trong `src/**/**/*.spec.ts`.
 
-## 9) Quy Ước Để Không Phá Cấu Trúc
+## 10) Quy Ước Để Không Phá Cấu Trúc
 
 - Giữ module self-contained (controller + service + DTO + entity).
 - Không bypass các tiện ích chung (error messages, pagination, ...).
 - Dùng `runInTransaction` cho các luồng ghi nhiều bước.
 - Controller mỏng; business logic đặt ở service.
 - Enum/constant mới đặt trong `enum/` hoặc `common/constant/`.
+- Với module CRUD mới, ưu tiên theo `MODULE_PATTERN.md` để giữ đồng nhất DTO/service/controller/module.
 
-## 10) Hỗ Trợ Tạo Stub Unit Test
+## 11) Hỗ Trợ Tạo Stub Unit Test
 
 - Script `npm run test:build` quét `src/**/**/*.service.ts`, tìm public method và
   tự thêm `it.todo('<method>')` vào `*.service.spec.ts` tương ứng.
 - Dùng `npm run test:build -- --dry-run` để xem trước thống kê mà không ghi file.
 
-## 11) Entry Points Quan Trọng
+## 12) Entry Points Quan Trọng
 
 - `src/main.ts` (bootstrap + Swagger + global interceptors)
 - `src/app.module.ts` (wiring modules + global providers)

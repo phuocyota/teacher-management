@@ -1,4 +1,4 @@
-import { IsNotEmpty, IsString, IsEnum, IsUUID } from 'class-validator';
+import { IsNotEmpty, IsString, IsEnum, IsUUID, IsOptional } from 'class-validator';
 import { ApiProperty, PartialType } from '@nestjs/swagger';
 import { ContentTypes } from 'src/common/enum/content-type.enum';
 
@@ -21,14 +21,16 @@ export class CreateQuestionDto {
   content!: string;
 
   @IsUUID()
-  @IsNotEmpty()
+  @IsOptional()
   @ApiProperty({
-    description: 'ID Ngân hàng câu hỏi mà câu hỏi thuộc về',
+    description: 'ID đề thi dùng để tạo liên kết qua bảng question_bank_question',
     example: '2233abe3-1961-4af5-a482-542f1227d844',
+    required: false,
   })
-  questionBankId!: string;
+  questionBankId?: string;
 
   @IsUUID()
+  @IsOptional()
   @ApiProperty({
     description:
       'Nội dung tiếp theo sau câu hỏi (nếu câu hỏi đó vừa hình vừa chữ xen kẽ nhau)',

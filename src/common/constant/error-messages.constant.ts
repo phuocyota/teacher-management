@@ -55,10 +55,13 @@ export const ENTITY_NAMES = {
   GROUP: 'Nhóm',
   COURSE: 'Khóa học',
   QUESTION_BANK: 'Ngân hàng câu hỏi',
+  QUESTION_BANK_QUESTION: 'Liên kết ngân hàng câu hỏi',
   QUESTION: 'Câu hỏi',
   ANSWER: 'Câu trả lời',
   STUDENT: 'Học sinh',
   STUDENT_GROUP: 'Nhóm học sinh',
   SCHOOL: 'Trường học',
+  ATTEMPT: 'Bài làm',
+  STUDENT_ANSWER: 'Câu trả lời học sinh',
   GRADE: 'Khối',
 };

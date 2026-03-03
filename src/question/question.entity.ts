@@ -1,6 +1,5 @@
-import { Entity, Column, ManyToOne, JoinColumn, OneToMany } from 'typeorm';
+import { Entity, Column, OneToMany } from 'typeorm';
 import { BaseEntity } from 'src/common/sql/base.entity';
-import { QuestionBankEntity } from 'src/question-bank/question-bank.entity';
 import { ContentTypes } from 'src/common/enum/content-type.enum';
 import { AnswerEntity } from 'src/answer/answer.entity';
 
@@ -20,13 +19,6 @@ export class QuestionEntity extends BaseEntity {
   //next_content
   @Column({ name: 'next_content', type: 'uuid', nullable: true })
   nextContent?: string; // Nội dung tiếp theo sau câu hỏi (nếu câu hỏi đó vừa hình vừa chữ xen kẽ nhau)
-
-  @Column()
-  questionBankId: string;
-
-  @ManyToOne(() => QuestionBankEntity, (questionBank) => questionBank.questions)
-  @JoinColumn({ name: 'questionBankId' })
-  questionBank: QuestionBankEntity; // Ngân hàng câu hỏi mà câu hỏi thuộc về
 
   @OneToMany(() => AnswerEntity, (answer) => answer.question)
   answers: AnswerEntity[]; // Các câu trả lời liên quan đến câu hỏi
