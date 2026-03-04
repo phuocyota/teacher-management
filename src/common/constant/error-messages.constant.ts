@@ -64,4 +64,9 @@ export const ENTITY_NAMES = {
   ATTEMPT: 'Bài làm',
   STUDENT_ANSWER: 'Câu trả lời học sinh',
   GRADE: 'Khối',
+  SUBJECT: 'Mon hoc',
+  EXAM_SET: 'Bo de thi',
+  EXAM_SET_QUESTION_BANK: 'Lien ket bo de thi va ngan hang cau hoi',
 };
+
+

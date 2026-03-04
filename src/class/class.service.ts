@@ -11,7 +11,6 @@ import { BaseService } from 'src/common/sql/base.service';
 import { UploadService } from 'src/upload/upload.service';
 import { JwtPayload } from 'src/common/interface/jwt-payload.interface';
 import { UserType } from 'src/common/enum/user-type.enum';
-import { autoMapListToDto } from 'src/common/utils/auto-map.util';
 
 @Injectable()
 export class ClassService extends BaseService<ClassEntity> {
@@ -47,7 +46,8 @@ export class ClassService extends BaseService<ClassEntity> {
         cl.display_type AS "displayType",
         cl.current_image AS "currentImage",
         cl.note AS "note",
-        cl.grade_id AS "gradeId"
+        cl.grade_id AS "gradeId",
+        cl.subject_id AS "subjectId"
       FROM class cl
       INNER JOIN course c ON cl.id = c.class_id
       INNER JOIN lecture l ON l.course_id = c.id
@@ -69,7 +69,8 @@ export class ClassService extends BaseService<ClassEntity> {
         cl.display_type AS "displayType",
         cl.current_image AS "currentImage",
         cl.note AS "note",
-        cl.grade_id AS "gradeId"
+        cl.grade_id AS "gradeId",
+        cl.subject_id AS "subjectId"
       FROM class cl
       INNER JOIN course c ON cl.id = c.class_id
       INNER JOIN lecture l ON l.course_id = c.id
@@ -108,7 +109,6 @@ export class ClassService extends BaseService<ClassEntity> {
   }
 
   async getMaxCode(): Promise<number> {
-    // Sử dụng Postgres regex để lấy phần số và trả về MAX nhanh hơn
     const result = await this.classRepo
       .createQueryBuilder('class')
       .select(

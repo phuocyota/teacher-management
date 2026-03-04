@@ -56,6 +56,12 @@ import { AttemptEntity } from './attempt/attempt.entity';
 import { StudentAnswerEntity } from './student-answer/student-answer.entity';
 import { GradeModule } from './grade/grade.module';
 import { GradeEntity } from './grade/grade.entity';
+import { SubjectModule } from './subject/subject.module';
+import { SubjectEntity } from './subject/subject.entity';
+import { ExamSetModule } from './exam-set/exam-set.module';
+import { ExamSetEntity } from './exam-set/exam-set.entity';
+import { ExamSetQuestionBankModule } from './exam-set-question-bank/exam-set-question-bank.module';
+import { ExamSetQuestionBankEntity } from './exam-set-question-bank/exam-set-question-bank.entity';
 
 @Module({
   imports: [
@@ -104,6 +110,9 @@ import { GradeEntity } from './grade/grade.entity';
           AttemptEntity,
           StudentAnswerEntity,
           GradeEntity,
+          SubjectEntity,
+          ExamSetEntity,
+          ExamSetQuestionBankEntity,
         ],
         synchronize: true,
       }),
@@ -130,6 +139,9 @@ import { GradeEntity } from './grade/grade.entity';
     QuestionBankQuestionModule,
     AttemptModule,
     GradeModule,
+    SubjectModule,
+    ExamSetModule,
+    ExamSetQuestionBankModule,
   ],
   providers: [
     {

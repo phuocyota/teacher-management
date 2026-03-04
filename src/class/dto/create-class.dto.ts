@@ -11,7 +11,7 @@ import { ApiPropertyOptional } from '@nestjs/swagger';
 
 export class CreateClassDto {
   @ApiPropertyOptional({
-    description: 'Mã lớp học',
+    description: 'Ma lop hoc',
     example: 'CS101',
   })
   @IsString()
@@ -19,29 +19,29 @@ export class CreateClassDto {
   code!: string;
 
   @ApiPropertyOptional({
-    description: 'Tên lớp học',
-    example: 'Lớp Khoa học Máy tính 101',
+    description: 'Ten lop hoc',
+    example: 'Lop Khoa hoc May tinh 101',
   })
   @IsString()
   @IsOptional()
   name?: string;
 
   @ApiPropertyOptional({
-    description: 'Số thứ tự của lớp học',
+    description: 'So thu tu cua lop hoc',
     example: 1,
   })
   @IsNumber()
   orderNumber!: number;
 
   @ApiPropertyOptional({
-    description: 'Loại hiển thị của lớp học',
+    description: 'Loai hien thi cua lop hoc',
     example: DisplayType.BASIC,
   })
   @IsEnum(DisplayType)
   displayType!: DisplayType;
 
   @ApiPropertyOptional({
-    description: 'Ảnh hiện tại của lớp học',
+    description: 'Anh hien tai cua lop hoc',
     example: 'https://example.com/current-image.jpg',
   })
   @IsOptional()
@@ -53,17 +53,25 @@ export class CreateClassDto {
   note?: string;
 
   @ApiPropertyOptional({
-    description: 'ID khối',
+    description: 'ID khoi',
     example: '7de93ed8-e016-4d85-9644-11e22bb728f6',
   })
   @IsOptional()
   @IsUUID()
   gradeId?: string;
+
+  @ApiPropertyOptional({
+    description: 'ID mon hoc',
+    example: '4d30e3c2-d08d-4b43-b2d1-2c3f5876f0ad',
+  })
+  @IsOptional()
+  @IsUUID()
+  subjectId?: string;
 }
 
 export class UpdateClassDto {
   @ApiPropertyOptional({
-    description: 'Mã lớp học',
+    description: 'Ma lop hoc',
     example: 'CS101-Updated',
   })
   @IsOptional()
@@ -71,15 +79,15 @@ export class UpdateClassDto {
   code?: string;
 
   @ApiPropertyOptional({
-    description: 'Tên lớp học',
-    example: 'Lớp Khoa học Máy tính 101 - Cập nhật',
+    description: 'Ten lop hoc',
+    example: 'Lop Khoa hoc May tinh 101 - Cap nhat',
   })
   @IsOptional()
   @IsString()
   name?: string;
 
   @ApiPropertyOptional({
-    description: 'Số thứ tự của lớp học',
+    description: 'So thu tu cua lop hoc',
     example: 2,
   })
   @IsOptional()
@@ -87,7 +95,7 @@ export class UpdateClassDto {
   orderNumber?: number;
 
   @ApiPropertyOptional({
-    description: 'Loại hiển thị của lớp học',
+    description: 'Loai hien thi cua lop hoc',
     example: DisplayType.BASIC,
   })
   @IsOptional()
@@ -95,7 +103,7 @@ export class UpdateClassDto {
   displayType?: DisplayType;
 
   @ApiPropertyOptional({
-    description: 'Ảnh hiện tại của lớp học',
+    description: 'Anh hien tai cua lop hoc',
     example: 'https://example.com/current-image-updated.jpg',
   })
   @IsOptional()
@@ -107,10 +115,18 @@ export class UpdateClassDto {
   note?: string;
 
   @ApiPropertyOptional({
-    description: 'ID khối',
+    description: 'ID khoi',
     example: '7de93ed8-e016-4d85-9644-11e22bb728f6',
   })
   @IsOptional()
   @IsUUID()
   gradeId?: string;
+
+  @ApiPropertyOptional({
+    description: 'ID mon hoc',
+    example: '4d30e3c2-d08d-4b43-b2d1-2c3f5876f0ad',
+  })
+  @IsOptional()
+  @IsUUID()
+  subjectId?: string;
 }
