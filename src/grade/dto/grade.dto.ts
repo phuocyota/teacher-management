@@ -50,6 +50,13 @@ export class GradeDetailExamSetDto {
     example: 'Kiem tra giua ki 1',
   })
   title!: string;
+
+  @ApiProperty({
+    description: 'Hinh anh bo de thi',
+    example: 'https://example.com/exam-set-image.jpg',
+    required: false,
+  })
+  image?: string;
 }
 
 export class GradeDetailSubjectDto {

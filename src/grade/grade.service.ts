@@ -111,6 +111,7 @@ export class GradeService {
         subjectName: string | null;
         examSetId: string | null;
         examSetTitle: string | null;
+        examSetImage: string | null;
       }>) {
         if (!detailMap.has(row.gradeId)) {
           detailMap.set(row.gradeId, {
@@ -149,6 +150,7 @@ export class GradeService {
           subject.examSets.push({
             id: row.examSetId,
             title: row.examSetTitle ?? '',
+            image: row.examSetImage ?? undefined,
           });
           subject.total = subject.examSets.length;
         }
