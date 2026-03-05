@@ -150,7 +150,7 @@ export class GradeService {
           subject.examSets.push({
             id: row.examSetId,
             title: row.examSetTitle ?? '',
-            image: row.examSetImage ?? undefined,
+            image: row.examSetImage ?? null,
           });
           subject.total = subject.examSets.length;
         }

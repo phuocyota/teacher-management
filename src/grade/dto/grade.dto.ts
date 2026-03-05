@@ -54,9 +54,9 @@ export class GradeDetailExamSetDto {
   @ApiProperty({
     description: 'Hinh anh bo de thi',
     example: 'https://example.com/exam-set-image.jpg',
-    required: false,
+    nullable: true,
   })
-  image?: string;
+  image!: string | null;
 }
 
 export class GradeDetailSubjectDto {
