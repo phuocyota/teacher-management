@@ -20,6 +20,15 @@ export class CreateExamSetDto {
   })
   description?: string;
 
+  @IsString()
+  @IsOptional()
+  @ApiProperty({
+    description: 'Hinh anh bo de thi (base64 hoac URL)',
+    example: 'https://example.com/exam-set-image.jpg',
+    required: false,
+  })
+  image?: string;
+
   @IsUUID()
   @IsOptional()
   @ApiProperty({

@@ -18,6 +18,13 @@ export class ExamSetResponseDto extends BaseDto {
   description?: string;
 
   @ApiProperty({
+    description: 'Hinh anh bo de thi',
+    example: 'https://example.com/exam-set-image.jpg',
+    required: false,
+  })
+  image?: string;
+
+  @ApiProperty({
     description: 'ID lop hoc',
     example: '2233abe3-1961-4af5-a482-542f1227d844',
     required: false,

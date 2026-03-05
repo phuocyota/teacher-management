@@ -60,7 +60,8 @@ export class GradeService {
           s.id AS "subjectId",
           s.name AS "subjectName",
           es.id AS "examSetId",
-          es.name AS "examSetTitle"
+          es.name AS "examSetTitle",
+          es.image as "examSetImage"
         FROM grade g
         INNER JOIN class c ON c.grade_id = g.id
         LEFT JOIN subject s ON s.id = c.subject_id

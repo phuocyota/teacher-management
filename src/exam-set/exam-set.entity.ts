@@ -20,6 +20,13 @@ export class ExamSetEntity extends BaseEntity {
   description?: string;
 
   @Column({
+    name: 'image',
+    type: 'text',
+    nullable: true,
+  })
+  image?: string;
+
+  @Column({
     name: 'class_id',
     type: 'uuid',
     nullable: true,

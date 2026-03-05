@@ -240,9 +240,6 @@ export class QuestionBankService {
       const parser = new PDFParse({ data: pdfBuffer });
       const pdfData: PdfData = await parser.getText();
       const text = pdfData.text;
-      const numPages = pdfData.numpages;
-
-      console.log(`PDF Import Info: ${numPages} pages detected`);
 
       // Extract images from PDF
       const pdfDoc = await PDFDocument.load(pdfBuffer);
@@ -254,10 +251,6 @@ export class QuestionBankService {
       // Parse and create questions/answers on-the-fly
       const { createdQuestions, totalAnswers } =
         await this.parseAndCreateFromPdf(text, extractedImages, questionBank);
-
-      console.log(
-        `Created ${createdQuestions.length} questions with ${totalAnswers} answers`,
-      );
 
       return {
         totalQuestions: createdQuestions.length,
@@ -291,7 +284,6 @@ export class QuestionBankService {
 
     try {
       const pages = pdfDoc.getPages();
-      console.log(`Extracting images from ${pages.length} pages...`);
 
       // Duyệt qua từng trang trong PDF
       for (let pageIndex = 0; pageIndex < pages.length; pageIndex++) {
@@ -300,6 +292,7 @@ export class QuestionBankService {
         try {
           // Truy cập resources của trang (fonts, images, etc.)
           const resources = page.node.Resources();
+          //nếu trang trắng thì bỏ qua
           if (!resources) continue;
 
           // Lấy XObject dictionary (chứa images và forms)

@@ -25,6 +25,7 @@ export class ExamSetService {
     const record = this.examSetRepo.create({
       name: dto.name,
       description: dto.description,
+      image: dto.image,
       status: dto.status ?? ExamSetStatus.DRAFT,
     });
 
@@ -125,6 +126,10 @@ export class ExamSetService {
 
     if (dto.description !== undefined) {
       record.description = dto.description;
+    }
+
+    if (dto.image !== undefined) {
+      record.image = dto.image;
     }
 
     if (dto.status !== undefined) {
