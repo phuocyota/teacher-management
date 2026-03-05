@@ -64,9 +64,15 @@ export class QuestionBankService {
   ) {}
 
   async create(dto: CreateQuestionBankDto): Promise<QuestionBankEntity> {
+    await this.classService.findOne(dto.classId);
+
     const record = this.questionBankRepo.create({
       code: dto.code,
       name: dto.name,
+      totalQuestions: dto.totalQuestions,
+      timeLimit: dto.timeLimit,
+      totalScore: dto.totalScore,
+      maxAttempts: dto.maxAttempts,
       totalMarks: dto.totalMarks,
       examDate: dto.examDate,
       classId: dto.classId,
@@ -143,9 +149,10 @@ export class QuestionBankService {
   ): Promise<QuestionBankEntity> {
     const record = await this.findOne(id);
 
-    if (dto.classId) {
+    if (dto.classId !== undefined) {
       const cls = await this.classService.findOne(dto.classId);
       record.class = cls;
+      record.classId = cls.id;
     }
 
     if (dto.name !== undefined) {
@@ -154,6 +161,22 @@ export class QuestionBankService {
 
     if (dto.code !== undefined) {
       record.code = dto.code;
+    }
+
+    if (dto.totalQuestions !== undefined) {
+      record.totalQuestions = dto.totalQuestions;
+    }
+
+    if (dto.timeLimit !== undefined) {
+      record.timeLimit = dto.timeLimit;
+    }
+
+    if (dto.totalScore !== undefined) {
+      record.totalScore = dto.totalScore;
+    }
+
+    if (dto.maxAttempts !== undefined) {
+      record.maxAttempts = dto.maxAttempts;
     }
 
     if (dto.totalMarks !== undefined) {

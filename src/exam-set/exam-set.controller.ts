@@ -19,7 +19,11 @@ import {
 } from '@nestjs/swagger';
 import { ExamSetService } from './exam-set.service';
 import { CreateExamSetDto, UpdateExamSetDto } from './dto/create-exam-set.dto';
-import { ExamSetListResponseDto, ExamSetResponseDto } from './dto/exam-set.dto';
+import {
+  ExamSetDetailResponseDto,
+  ExamSetListResponseDto,
+  ExamSetResponseDto,
+} from './dto/exam-set.dto';
 import { PaginationResponseDto } from 'src/common/dto/pagination.dto';
 import { ExamSetStatus } from './enum/exam-set-status.enum';
 
@@ -93,7 +97,7 @@ export class ExamSetController {
 
   @Get(':id')
   @ApiOperation({ summary: 'Lay thong tin bo de thi theo ID' })
-  @ApiOkResponse({ type: ExamSetResponseDto })
+  @ApiOkResponse({ type: ExamSetDetailResponseDto })
   findOne(@Param('id', ParseUUIDPipe) id: string) {
     return this.examSetService.findOne(id);
   }

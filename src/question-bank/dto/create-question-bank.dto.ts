@@ -1,4 +1,4 @@
-import {
+﻿import {
   IsNotEmpty,
   IsInt,
   IsDateString,
@@ -15,7 +15,7 @@ export class CreateQuestionBankDto {
   @IsNotEmpty()
   @MaxLength(50)
   @ApiProperty({
-    description: 'Mã ngân hàng câu hỏi (code)',
+    description: 'Ma ngan hang cau hoi (code)',
     example: 'QB-1001',
   })
   code!: string;
@@ -23,16 +23,56 @@ export class CreateQuestionBankDto {
   @IsString()
   @IsNotEmpty()
   @ApiProperty({
-    description: 'TÃªn ngÃ¢n hÃ ng cÃ¢u há»i',
-    example: 'Äá» thi há»c ká»³ 1',
+    description: 'Ten ngan hang cau hoi',
+    example: 'De thi hoc ky 1',
   })
   name!: string;
+
+  @IsInt()
+  @IsOptional()
+  @Min(0)
+  @ApiProperty({
+    description: 'Tong so cau hoi',
+    example: 40,
+    required: false,
+  })
+  totalQuestions?: number;
+
+  @IsInt()
+  @IsOptional()
+  @Min(0)
+  @ApiProperty({
+    description: 'Thoi gian gioi han (phut)',
+    example: 60,
+    required: false,
+  })
+  timeLimit?: number;
+
+  @IsInt()
+  @IsOptional()
+  @Min(0)
+  @ApiProperty({
+    description: 'Tong diem',
+    example: 100,
+    required: false,
+  })
+  totalScore?: number;
+
+  @IsInt()
+  @IsOptional()
+  @Min(0)
+  @ApiProperty({
+    description: 'So lan lam bai toi da',
+    example: 3,
+    required: false,
+  })
+  maxAttempts?: number;
 
   @IsInt()
   @IsNotEmpty()
   @Min(0)
   @ApiProperty({
-    description: 'Tổng điểm của kỳ thi',
+    description: 'Tong diem cua ky thi',
     example: 100,
   })
   totalMarks!: number;
@@ -40,7 +80,7 @@ export class CreateQuestionBankDto {
   @IsDateString()
   @IsNotEmpty()
   @ApiProperty({
-    description: 'Ngày diễn ra kỳ thi (định dạng YYYY-MM-DD)',
+    description: 'Ngay dien ra ky thi (YYYY-MM-DD)',
     example: '2026-02-15',
   })
   examDate!: string;
@@ -48,7 +88,7 @@ export class CreateQuestionBankDto {
   @IsUUID()
   @IsNotEmpty()
   @ApiProperty({
-    description: 'ID lớp học mà ngân hàng câu hỏi thuộc về',
+    description: 'ID lop hoc ma ngan hang cau hoi thuoc ve',
     example: '2233abe3-1961-4af5-a482-542f1227d844',
   })
   classId!: string;
@@ -56,7 +96,7 @@ export class CreateQuestionBankDto {
   @IsString()
   @IsOptional()
   @ApiProperty({
-    description: 'Hình ảnh liên quan đến ngân hàng câu hỏi (base64 hoặc URL)',
+    description: 'Hinh anh lien quan den ngan hang cau hoi (base64 hoac URL)',
     example: 'https://example.com/image.jpg',
     required: false,
   })

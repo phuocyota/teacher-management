@@ -4,9 +4,13 @@ import { ExamSetService } from './exam-set.service';
 import { ExamSetController } from './exam-set.controller';
 import { ExamSetEntity } from './exam-set.entity';
 import { ClassModule } from 'src/class/class.module';
+import { ExamSetQuestionBankEntity } from 'src/exam-set-question-bank/exam-set-question-bank.entity';
 
 @Module({
-  imports: [TypeOrmModule.forFeature([ExamSetEntity]), ClassModule],
+  imports: [
+    TypeOrmModule.forFeature([ExamSetEntity, ExamSetQuestionBankEntity]),
+    ClassModule,
+  ],
   providers: [ExamSetService],
   controllers: [ExamSetController],
   exports: [ExamSetService],

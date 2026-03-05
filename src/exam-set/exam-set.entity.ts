@@ -10,28 +10,28 @@ export class ExamSetEntity extends BaseEntity {
     type: 'text',
     nullable: false,
   })
-  name!: string;
+  name!: string; // Tên bộ đề thi
 
   @Column({
     name: 'description',
     type: 'text',
     nullable: true,
   })
-  description?: string;
+  description?: string; // Mô tả bộ đề thi
 
   @Column({
     name: 'image',
     type: 'text',
     nullable: true,
   })
-  image?: string;
+  image?: string; // Hình ảnh liên quan đến bộ đề thi
 
   @Column({
     name: 'class_id',
     type: 'uuid',
     nullable: true,
   })
-  classId?: string;
+  classId?: string; // ID của lớp học
 
   @ManyToOne(() => ClassEntity, { nullable: true, onDelete: 'SET NULL' })
   @JoinColumn({ name: 'class_id' })
@@ -44,5 +44,5 @@ export class ExamSetEntity extends BaseEntity {
     nullable: false,
     default: ExamSetStatus.DRAFT,
   })
-  status!: ExamSetStatus;
+  status!: ExamSetStatus; // Trạng thái của bộ đề thi
 }

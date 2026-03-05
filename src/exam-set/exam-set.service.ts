@@ -8,16 +8,19 @@ import {
   ENTITY_NAMES,
 } from 'src/common/constant/error-messages.constant';
 import { PaginationResponseDto } from 'src/common/dto/pagination.dto';
-import { ExamSetResponseDto } from './dto/exam-set.dto';
+import { ExamSetDetailResponseDto, ExamSetResponseDto } from './dto/exam-set.dto';
 import { autoMapListToDto } from 'src/common/utils/auto-map.util';
 import { ExamSetStatus } from './enum/exam-set-status.enum';
 import { ClassService } from 'src/class/class.service';
+import { ExamSetQuestionBankEntity } from 'src/exam-set-question-bank/exam-set-question-bank.entity';
 
 @Injectable()
 export class ExamSetService {
   constructor(
     @InjectRepository(ExamSetEntity)
     private readonly examSetRepo: Repository<ExamSetEntity>,
+    @InjectRepository(ExamSetQuestionBankEntity)
+    private readonly examSetQuestionBankRepo: Repository<ExamSetQuestionBankEntity>,
     private readonly classService: ClassService,
   ) {}
 
@@ -88,7 +91,56 @@ export class ExamSetService {
     };
   }
 
-  async findOne(id: string): Promise<ExamSetEntity> {
+  async findOne(id: string): Promise<ExamSetDetailResponseDto> {
+    const record = await this.findOneEntity(id);
+
+    const links = await this.examSetQuestionBankRepo.find({
+      where: { examSetId: id },
+      relations: ['questionBank'],
+      order: { order: 'ASC' },
+    });
+
+    const questionBanks = links
+      .filter((item) => Boolean(item.questionBank))
+      .map((item) => {
+        const qb = item.questionBank;
+        return {
+          id: qb.id,
+          title: qb.name,
+          durationSeconds:
+            qb.timeLimit !== null && qb.timeLimit !== undefined
+              ? qb.timeLimit * 60
+              : null,
+          totalQuestions: qb.totalQuestions ?? null,
+          maxAttempts: qb.maxAttempts ?? null,
+          totalPoints: qb.totalMarks ?? qb.totalScore ?? null,
+          difficulty: null,
+          status: null,
+          createdAt: qb.createdAt,
+        };
+      });
+
+    return {
+      id: record.id,
+      name: record.name,
+      description: record.description,
+      image: record.image,
+      classId: record.classId,
+      status: record.status,
+      createdAt: record.createdAt,
+      updatedAt: record.updatedAt,
+      createdBy: record.createdBy ?? '',
+      updatedBy: record.updatedBy ?? '',
+      subjectId: record.class?.subjectId ?? null,
+      gradeId: record.class?.gradeId ?? null,
+      questionBanks,
+      stats: {
+        questionBankCount: questionBanks.length,
+      },
+    };
+  }
+
+  private async findOneEntity(id: string): Promise<ExamSetEntity> {
     const record = await this.examSetRepo.findOne({
       where: { id },
       relations: ['class'],
@@ -107,7 +159,7 @@ export class ExamSetService {
   }
 
   async update(id: string, dto: UpdateExamSetDto): Promise<ExamSetEntity> {
-    const record = await this.findOne(id);
+    const record = await this.findOneEntity(id);
 
     if (dto.classId !== undefined) {
       if (dto.classId) {
@@ -140,7 +192,7 @@ export class ExamSetService {
   }
 
   async remove(id: string): Promise<void> {
-    const record = await this.findOne(id);
+    const record = await this.findOneEntity(id);
     await this.examSetRepo.remove(record);
   }
 }
