@@ -26,6 +26,7 @@ import {
 } from './dto/exam-set.dto';
 import { PaginationResponseDto } from 'src/common/dto/pagination.dto';
 import { ExamSetStatus } from './enum/exam-set-status.enum';
+import { Public } from 'src/common/decorator/public.decorator';
 
 @ApiTags('Exam Set')
 @ApiBearerAuth('access-token')
@@ -96,6 +97,7 @@ export class ExamSetController {
   }
 
   @Get(':id')
+  @Public()
   @ApiOperation({ summary: 'Lay thong tin bo de thi theo ID' })
   @ApiOkResponse({ type: ExamSetDetailResponseDto })
   findOne(@Param('id', ParseUUIDPipe) id: string) {
