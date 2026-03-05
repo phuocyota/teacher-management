@@ -19,6 +19,15 @@ export class ExamSetEntity extends BaseEntity {
   })
   description?: string; // Mô tả bộ đề thi
 
+  //count
+  @Column({
+    name: 'question_bank_count',
+    type: 'integer',
+    nullable: true,
+    default: 0,
+  })
+  questionBankCount?: number; // Số lượng ngân hàng câu hỏi trong bộ đề thi
+
   @Column({
     name: 'image',
     type: 'text',
