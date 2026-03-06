@@ -13,6 +13,7 @@ import { autoMapListToDto } from 'src/common/utils/auto-map.util';
 import { AttemptResponseDto } from './dto/attempt.dto';
 import { AttemptStatus } from './enum/attempt-status.enum';
 import { CreateAttemptDto, UpdateAttemptDto } from './dto/create-attempt.dto';
+import { ExamSetService } from 'src/exam-set/exam-set.service';
 
 @Injectable()
 export class AttemptService {
@@ -21,15 +22,18 @@ export class AttemptService {
     private readonly attemptRepo: Repository<AttemptEntity>,
     private readonly studentService: StudentService,
     private readonly questionBankService: QuestionBankService,
+    private readonly examSetService: ExamSetService,
   ) {}
 
   async create(dto: CreateAttemptDto): Promise<AttemptEntity> {
     await this.studentService.findOne(dto.studentId);
     await this.questionBankService.findOne(dto.questionBankId);
+    await this.examSetService.findOne(dto.examSetId);
 
     const record = this.attemptRepo.create({
       studentId: dto.studentId,
       questionBankId: dto.questionBankId,
+      examSetId: dto.examSetId,
       status: dto.status ?? AttemptStatus.DOING,
       startedAt: new Date(dto.startedAt),
       submittedAt: dto.submittedAt ? new Date(dto.submittedAt) : undefined,
@@ -44,6 +48,7 @@ export class AttemptService {
     size = 10,
     studentId?: string,
     questionBankId?: string,
+    examSetId?: string,
     status?: AttemptStatus,
   ): Promise<PaginationResponseDto<AttemptResponseDto>> {
     const skip = (page - 1) * size;
@@ -51,7 +56,8 @@ export class AttemptService {
     const qb = this.attemptRepo
       .createQueryBuilder('attempt')
       .leftJoinAndSelect('attempt.student', 'student')
-      .leftJoinAndSelect('attempt.questionBank', 'questionBank');
+      .leftJoinAndSelect('attempt.questionBank', 'questionBank')
+      .leftJoinAndSelect('attempt.examSet', 'examSet');
 
     if (studentId) {
       qb.andWhere('attempt.student_id = :studentId', { studentId });
@@ -61,6 +67,10 @@ export class AttemptService {
       qb.andWhere('attempt.question_bank_id = :questionBankId', {
         questionBankId,
       });
+    }
+
+    if (examSetId) {
+      qb.andWhere('attempt.exam_set_id = :examSetId', { examSetId });
     }
 
     if (status) {
@@ -83,7 +93,7 @@ export class AttemptService {
   async findOne(id: string): Promise<AttemptEntity> {
     const record = await this.attemptRepo.findOne({
       where: { id },
-      relations: ['student', 'questionBank'],
+      relations: ['student', 'questionBank', 'examSet'],
     });
 
     if (!record) {
@@ -106,6 +116,11 @@ export class AttemptService {
     if (dto.questionBankId !== undefined) {
       await this.questionBankService.findOne(dto.questionBankId);
       record.questionBankId = dto.questionBankId;
+    }
+
+    if (dto.examSetId !== undefined) {
+      await this.examSetService.findOne(dto.examSetId);
+      record.examSetId = dto.examSetId;
     }
 
     if (dto.status !== undefined) {

@@ -27,6 +27,14 @@ export class CreateAttemptDto {
   })
   questionBankId!: string;
 
+  @IsUUID()
+  @IsNotEmpty()
+  @ApiProperty({
+    description: 'ID bộ đề thi',
+    example: '4233abe3-1961-4af5-a482-542f1227d844',
+  })
+  examSetId!: string;
+
   @IsEnum(AttemptStatus)
   @IsOptional()
   @ApiProperty({

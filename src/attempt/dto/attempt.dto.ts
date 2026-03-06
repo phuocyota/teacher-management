@@ -17,6 +17,12 @@ export class AttemptResponseDto extends BaseDto {
   questionBankId!: string;
 
   @ApiProperty({
+    description: 'ID bộ đề thi',
+    example: '4233abe3-1961-4af5-a482-542f1227d844',
+  })
+  examSetId!: string;
+
+  @ApiProperty({
     description: 'Trạng thái bài làm',
     enum: AttemptStatus,
     example: AttemptStatus.DOING,

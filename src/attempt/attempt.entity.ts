@@ -3,6 +3,7 @@ import { BaseEntity } from 'src/common/sql/base.entity';
 import { StudentEntity } from 'src/student/student.entity';
 import { QuestionBankEntity } from 'src/question-bank/question-bank.entity';
 import { AttemptStatus } from './enum/attempt-status.enum';
+import { ExamSetEntity } from 'src/exam-set/exam-set.entity';
 
 @Entity('attempt')
 export class AttemptEntity extends BaseEntity {
@@ -19,6 +20,14 @@ export class AttemptEntity extends BaseEntity {
   @ManyToOne(() => QuestionBankEntity, { onDelete: 'CASCADE' })
   @JoinColumn({ name: 'question_bank_id' })
   questionBank!: QuestionBankEntity;
+
+  //exam_set_id
+  @Column({ name: 'exam_set_id', type: 'uuid', nullable: false })
+  examSetId!: string; // Id cua bo suu tap
+
+  @ManyToOne(() => ExamSetEntity, { onDelete: 'CASCADE' })
+  @JoinColumn({ name: 'exam_set_id' })
+  examSet!: ExamSetEntity;
 
   @Column({
     name: 'status',

@@ -53,6 +53,12 @@ export class AttemptController {
     description: 'Filter theo questionBankId',
   })
   @ApiQuery({
+    name: 'examSetId',
+    required: false,
+    type: String,
+    description: 'Filter theo examSetId',
+  })
+  @ApiQuery({
     name: 'status',
     required: false,
     enum: AttemptStatus,
@@ -64,6 +70,7 @@ export class AttemptController {
     @Query('size') size?: number,
     @Query('studentId') studentId?: string,
     @Query('questionBankId') questionBankId?: string,
+    @Query('examSetId') examSetId?: string,
     @Query('status') status?: AttemptStatus,
   ): Promise<PaginationResponseDto<AttemptResponseDto>> {
     return this.attemptService.findAll(
@@ -71,6 +78,7 @@ export class AttemptController {
       size,
       studentId,
       questionBankId,
+      examSetId,
       status,
     );
   }
