@@ -20,43 +20,32 @@ import { PaginationResponseDto } from 'src/common/dto/pagination.dto';
 import { QuestionResponseDto } from './dto/question.dto';
 import { autoMapListToDto } from 'src/common/utils/auto-map.util';
 import { QuestionBankQuestionEntity } from 'src/question-bank-question/question-bank-question.entity';
+import { QuestionBankQuestionService } from 'src/question-bank-question/question-bank-question.service';
 
 @Injectable()
 export class QuestionService {
   constructor(
     @InjectRepository(QuestionEntity)
     private readonly questionRepo: Repository<QuestionEntity>,
-    @InjectRepository(QuestionBankQuestionEntity)
-    private readonly questionBankQuestionRepo: Repository<QuestionBankQuestionEntity>,
     @Inject(forwardRef(() => QuestionBankService))
     private readonly questionBankService: QuestionBankService,
+    @Inject(forwardRef(() => QuestionBankQuestionService))
+    private readonly questionBankQuestionService: QuestionBankQuestionService,
   ) {}
 
   async create(dto: CreateQuestionDto): Promise<QuestionEntity> {
-    if (dto.questionBankId) {
-      await this.questionBankService.findOne(dto.questionBankId);
-    }
-
     const record = this.questionRepo.create({
       contentType: dto.contentType,
       content: dto.content,
       nextContent: dto.nextContent,
     });
+
     const savedRecord = await this.questionRepo.save(record);
 
-    if (dto.questionBankId) {
-      const existingCount = await this.questionBankQuestionRepo.count({
-        where: { questionBankId: dto.questionBankId },
-      });
-
-      await this.questionBankQuestionRepo.save(
-        this.questionBankQuestionRepo.create({
-          questionBankId: dto.questionBankId,
-          questionId: savedRecord.id,
-          orderNo: existingCount + 1,
-          points: 0,
-        }),
-      );
+    if (dto.previousId) {
+      const previousQuestion = await this.findOne(dto.previousId);
+      previousQuestion.nextContent = savedRecord.id;
+      await this.questionRepo.save(previousQuestion);
     }
 
     return savedRecord;
@@ -166,10 +155,8 @@ export class QuestionService {
       }
     }
 
-    const questionBankLink = await this.questionBankQuestionRepo.findOne({
-      where: { questionId: record.id },
-      order: { orderNo: 'ASC' },
-    });
+    const questionBankLink =
+      await this.questionBankQuestionService.findFirstByQuestionId(record.id);
 
     if (questionBankLink) {
       (record as any).questionBankId = questionBankLink.questionBankId;
@@ -183,29 +170,10 @@ export class QuestionService {
 
     if (dto.questionBankId !== undefined) {
       await this.questionBankService.findOne(dto.questionBankId);
-
-      const existingLink = await this.questionBankQuestionRepo.findOne({
-        where: { questionId: id },
-        order: { orderNo: 'ASC' },
-      });
-
-      if (existingLink) {
-        existingLink.questionBankId = dto.questionBankId;
-        await this.questionBankQuestionRepo.save(existingLink);
-      } else {
-        const existingCount = await this.questionBankQuestionRepo.count({
-          where: { questionBankId: dto.questionBankId },
-        });
-
-        await this.questionBankQuestionRepo.save(
-          this.questionBankQuestionRepo.create({
-            questionBankId: dto.questionBankId,
-            questionId: id,
-            orderNo: existingCount + 1,
-            points: 0,
-          }),
-        );
-      }
+      await this.questionBankQuestionService.assignQuestionToBank(
+        id,
+        dto.questionBankId,
+      );
     }
 
     if (dto.contentType !== undefined) {

@@ -4,12 +4,13 @@ import { QuestionService } from './question.service';
 import { QuestionController } from './question.controller';
 import { QuestionEntity } from './question.entity';
 import { QuestionBankModule } from 'src/question-bank/question-bank.module';
-import { QuestionBankQuestionEntity } from 'src/question-bank-question/question-bank-question.entity';
+import { QuestionBankQuestionModule } from 'src/question-bank-question/question-bank-question.module';
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([QuestionEntity, QuestionBankQuestionEntity]),
+    TypeOrmModule.forFeature([QuestionEntity]),
     forwardRef(() => QuestionBankModule),
+    forwardRef(() => QuestionBankQuestionModule),
   ],
   providers: [QuestionService],
   controllers: [QuestionController],

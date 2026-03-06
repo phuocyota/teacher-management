@@ -8,6 +8,7 @@ import {
   Patch,
   Post,
   Query,
+  UseGuards,
 } from '@nestjs/common';
 import {
   ApiBearerAuth,
@@ -22,6 +23,17 @@ import { CreateAttemptDto, UpdateAttemptDto } from './dto/create-attempt.dto';
 import { PaginationResponseDto } from 'src/common/dto/pagination.dto';
 import { AttemptListResponseDto, AttemptResponseDto } from './dto/attempt.dto';
 import { AttemptStatus } from './enum/attempt-status.enum';
+import {
+  EndAttemptDto,
+  EndAttemptResponseDto,
+  StartAttemptDto,
+  StartAttemptResponseDto,
+} from './dto/attempt-session.dto';
+import { User } from 'src/common/decorator/user.decorator';
+import type { JwtPayload } from 'src/common/interface/jwt-payload.interface';
+import { RolesGuard } from 'src/common/guard/roles.guard';
+import { Roles } from 'src/common/decorator/roles.decorator';
+import { UserType } from 'src/common/enum/user-type.enum';
 
 @ApiTags('Attempt')
 @ApiBearerAuth('access-token')
@@ -30,53 +42,56 @@ export class AttemptController {
   constructor(private readonly attemptService: AttemptService) {}
 
   @Post()
-  @ApiOperation({ summary: 'Tạo mới bài làm' })
+  @ApiOperation({ summary: 'Create attempt manually' })
   @ApiCreatedResponse({ type: AttemptResponseDto })
   create(@Body() dto: CreateAttemptDto) {
     return this.attemptService.create(dto);
   }
 
+  @Post('start')
+  @UseGuards(RolesGuard)
+  @Roles(UserType.STUDENT)
+  @ApiOperation({ summary: 'Start attempt and return exam payload' })
+  @ApiCreatedResponse({ type: StartAttemptResponseDto })
+  start(@Body() dto: StartAttemptDto, @User() user: JwtPayload) {
+    return this.attemptService.start(dto, user);
+  }
+
+  @Post(':id/end')
+  @UseGuards(RolesGuard)
+  @Roles(UserType.STUDENT)
+  @ApiOperation({ summary: 'End attempt and record submitted answers' })
+  @ApiOkResponse({ type: EndAttemptResponseDto })
+  end(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: EndAttemptDto,
+    @User() user: JwtPayload,
+  ) {
+    return this.attemptService.end(id, dto, user);
+  }
+
   @Get()
-  @ApiOperation({ summary: 'Lấy danh sách bài làm' })
+  @UseGuards(RolesGuard)
+  @Roles(UserType.STUDENT)
+  @ApiOperation({ summary: 'List attempts' })
   @ApiQuery({ name: 'page', required: false, type: Number })
   @ApiQuery({ name: 'size', required: false, type: Number })
-  @ApiQuery({
-    name: 'studentId',
-    required: false,
-    type: String,
-    description: 'Filter theo studentId',
-  })
-  @ApiQuery({
-    name: 'questionBankId',
-    required: false,
-    type: String,
-    description: 'Filter theo questionBankId',
-  })
-  @ApiQuery({
-    name: 'examSetId',
-    required: false,
-    type: String,
-    description: 'Filter theo examSetId',
-  })
-  @ApiQuery({
-    name: 'status',
-    required: false,
-    enum: AttemptStatus,
-    description: 'Filter theo trạng thái bài làm',
-  })
+  @ApiQuery({ name: 'questionBankId', required: false, type: String })
+  @ApiQuery({ name: 'examSetId', required: false, type: String })
+  @ApiQuery({ name: 'status', required: false, enum: AttemptStatus })
   @ApiOkResponse({ type: AttemptListResponseDto })
   findAll(
+    @User() user: JwtPayload,
     @Query('page') page?: number,
     @Query('size') size?: number,
-    @Query('studentId') studentId?: string,
     @Query('questionBankId') questionBankId?: string,
     @Query('examSetId') examSetId?: string,
     @Query('status') status?: AttemptStatus,
   ): Promise<PaginationResponseDto<AttemptResponseDto>> {
     return this.attemptService.findAll(
+      user,
       page,
       size,
-      studentId,
       questionBankId,
       examSetId,
       status,
@@ -84,14 +99,14 @@ export class AttemptController {
   }
 
   @Get(':id')
-  @ApiOperation({ summary: 'Lấy thông tin bài làm theo ID' })
+  @ApiOperation({ summary: 'Get attempt by id' })
   @ApiOkResponse({ type: AttemptResponseDto })
   findOne(@Param('id', ParseUUIDPipe) id: string) {
     return this.attemptService.findOne(id);
   }
 
   @Patch(':id')
-  @ApiOperation({ summary: 'Cập nhật bài làm' })
+  @ApiOperation({ summary: 'Update attempt' })
   @ApiOkResponse({ type: AttemptResponseDto })
   update(
     @Param('id', ParseUUIDPipe) id: string,
@@ -101,7 +116,7 @@ export class AttemptController {
   }
 
   @Delete(':id')
-  @ApiOperation({ summary: 'Xóa bài làm' })
+  @ApiOperation({ summary: 'Delete attempt' })
   remove(@Param('id', ParseUUIDPipe) id: string) {
     return this.attemptService.remove(id);
   }

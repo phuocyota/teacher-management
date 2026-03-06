@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, NotFoundException, Inject, forwardRef } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { QuestionBankQuestionEntity } from './question-bank-question.entity';
@@ -23,7 +23,9 @@ export class QuestionBankQuestionService {
   constructor(
     @InjectRepository(QuestionBankQuestionEntity)
     private readonly questionBankQuestionRepo: Repository<QuestionBankQuestionEntity>,
+    @Inject(forwardRef(() => QuestionBankService))
     private readonly questionBankService: QuestionBankService,
+    @Inject(forwardRef(() => QuestionService))
     private readonly questionService: QuestionService,
   ) {}
 
@@ -83,6 +85,40 @@ export class QuestionBankQuestionService {
     }
 
     return record;
+  }
+
+  async findFirstByQuestionId(
+    questionId: string,
+  ): Promise<QuestionBankQuestionEntity | null> {
+    return this.questionBankQuestionRepo.findOne({
+      where: { questionId },
+      order: { orderNo: 'ASC' },
+    });
+  }
+
+  async assignQuestionToBank(
+    questionId: string,
+    questionBankId: string,
+  ): Promise<QuestionBankQuestionEntity> {
+    const existingLink = await this.findFirstByQuestionId(questionId);
+
+    if (existingLink) {
+      existingLink.questionBankId = questionBankId;
+      return this.questionBankQuestionRepo.save(existingLink);
+    }
+
+    const existingCount = await this.questionBankQuestionRepo.count({
+      where: { questionBankId },
+    });
+
+    const record = this.questionBankQuestionRepo.create({
+      questionBankId,
+      questionId,
+      orderNo: existingCount + 1,
+      points: 0,
+    });
+
+    return this.questionBankQuestionRepo.save(record);
   }
 
   async update(

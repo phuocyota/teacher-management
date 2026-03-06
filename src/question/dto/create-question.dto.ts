@@ -1,4 +1,4 @@
-import { IsNotEmpty, IsString, IsEnum, IsUUID, IsOptional } from 'class-validator';
+import { IsEnum, IsNotEmpty, IsOptional, IsString, IsUUID } from 'class-validator';
 import { ApiProperty, PartialType } from '@nestjs/swagger';
 import { ContentTypes } from 'src/common/enum/content-type.enum';
 
@@ -6,7 +6,7 @@ export class CreateQuestionDto {
   @IsEnum(ContentTypes)
   @IsNotEmpty()
   @ApiProperty({
-    description: 'Loại dữ liệu của câu hỏi',
+    description: 'Loai du lieu cua cau hoi',
     enum: ContentTypes,
     example: ContentTypes.TEXT,
   })
@@ -15,7 +15,7 @@ export class CreateQuestionDto {
   @IsString()
   @IsNotEmpty()
   @ApiProperty({
-    description: 'Nội dung của câu hỏi',
+    description: 'Noi dung cua cau hoi',
     example: 'What is the capital of France?',
   })
   content!: string;
@@ -23,21 +23,29 @@ export class CreateQuestionDto {
   @IsUUID()
   @IsOptional()
   @ApiProperty({
-    description: 'ID đề thi dùng để tạo liên kết qua bảng question_bank_question',
-    example: '2233abe3-1961-4af5-a482-542f1227d844',
-    required: false,
-  })
-  questionBankId?: string;
-
-  @IsUUID()
-  @IsOptional()
-  @ApiProperty({
-    description:
-      'Nội dung tiếp theo sau câu hỏi (nếu câu hỏi đó vừa hình vừa chữ xen kẽ nhau)',
+    description: 'Noi dung tiep theo sau cau hoi neu cau hoi co chuoi noi dung',
     example: '550e8400-e29b-41d4-a716-446655440000',
     required: false,
   })
   nextContent?: string;
+
+  @IsUUID()
+  @IsOptional()
+  @ApiProperty({
+    description: 'ID cau hoi truoc do. Neu co thi cau hoi moi se duoc gan vao nextContent cua cau hoi nay',
+    example: '550e8400-e29b-41d4-a716-446655440001',
+    required: false,
+  })
+  previousId?: string;
 }
 
-export class UpdateQuestionDto extends PartialType(CreateQuestionDto) {}
+export class UpdateQuestionDto extends PartialType(CreateQuestionDto) {
+  @IsUUID()
+  @IsOptional()
+  @ApiProperty({
+    description: 'ID question bank dung de cap nhat lien ket question_bank_question',
+    example: '2233abe3-1961-4af5-a482-542f1227d844',
+    required: false,
+  })
+  questionBankId?: string;
+}

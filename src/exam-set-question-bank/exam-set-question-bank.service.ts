@@ -15,6 +15,7 @@ import { autoMapListToDto } from 'src/common/utils/auto-map.util';
 import { ExamSetQuestionBankResponseDto } from './dto/exam-set-question-bank.dto';
 import { ExamSetService } from 'src/exam-set/exam-set.service';
 import { QuestionBankService } from 'src/question-bank/question-bank.service';
+import { BadRequestException } from '@nestjs/common';
 
 @Injectable()
 export class ExamSetQuestionBankService {
@@ -89,6 +90,21 @@ export class ExamSetQuestionBankService {
     }
 
     return record;
+  }
+
+  async validateExamSetQuestionBank(
+    examSetId: string,
+    questionBankId: string,
+  ): Promise<void> {
+    const record = await this.examSetQuestionBankRepo.findOne({
+      where: { examSetId, questionBankId },
+    });
+
+    if (!record) {
+      throw new BadRequestException(
+        ERROR_MESSAGES.QUESTION_BANK_NOT_IN_EXAM_SET,
+      );
+    }
   }
 
   async update(

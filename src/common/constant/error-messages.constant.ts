@@ -16,7 +16,8 @@ export const ERROR_MESSAGES = {
   NOT_FOUND: (entity: string) => `${entity} không tồn tại`,
   NOT_FOUND_WITH_ID: (entity: string, id: string) =>
     `${entity} với ID ${id} không tồn tại`,
-  SOME_ENTITY_NOT_FOUND: (entity: string) => `Một số ${entity} không tồn tại`,
+  SOME_ENTITY_NOT_FOUND: (entity: string) =>
+    `Một số ${entity} không tồn tại`,
 
   // Device errors
   DEVICE_REQUEST_ALREADY_PROCESSED: (status: string) =>
@@ -40,6 +41,16 @@ export const ERROR_MESSAGES = {
 
   // Input errors
   INVALID_INPUT: 'Dữ liệu đầu vào không hợp lệ',
+  NO_PERMISSION_SUBMIT_ATTEMPT: 'Bạn không được phép nộp bài làm này',
+  ATTEMPT_ALREADY_ENDED: 'Bài làm này đã kết thúc',
+  ATTEMPT_INVALID_QUESTION_IN_SUBMISSION:
+    'Danh sách câu trả lời có câu hỏi không thuộc đề thi',
+  ATTEMPT_INVALID_ANSWER_MAPPING:
+    'answerId không khớp với questionId được gửi lên',
+  ATTEMPT_INVALID_SELECTED_ANSWER_MAPPING:
+    'selectedAnswerIds không khớp với questionId được gửi lên',
+  QUESTION_BANK_NOT_IN_EXAM_SET:
+    'Question bank không nằm trong exam set được chọn',
 };
 
 /**
@@ -64,9 +75,7 @@ export const ENTITY_NAMES = {
   ATTEMPT: 'Bài làm',
   STUDENT_ANSWER: 'Câu trả lời học sinh',
   GRADE: 'Khối',
-  SUBJECT: 'Mon hoc',
-  EXAM_SET: 'Bo de thi',
-  EXAM_SET_QUESTION_BANK: 'Lien ket bo de thi va ngan hang cau hoi',
+  SUBJECT: 'Môn học',
+  EXAM_SET: 'Bộ đề thi',
+  EXAM_SET_QUESTION_BANK: 'Liên kết bộ đề thi và ngân hàng câu hỏi',
 };
-
-
