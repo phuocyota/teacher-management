@@ -162,22 +162,34 @@ export class AttemptService {
 
     await this.studentAnswerRepo.delete({ attemptId: attempt.id });
 
+    let totalScore = 0;
+
     if (dto.answers.length > 0) {
-      const allAnswerIds = [
-        ...new Set(
-          submittedAnswers
-            .flatMap((item) => [
-              item.answerId,
-              ...(item.selectedAnswerIds ?? []),
-            ])
-            .filter((item): item is string => Boolean(item)),
-        ),
+      const submittedQuestionIds = [
+        ...new Set(submittedAnswers.map((item) => item.questionId)),
       ];
 
-      const answerEntities = allAnswerIds.length
-        ? await this.answerRepo.find({ where: { id: In(allAnswerIds) } })
+      const answerEntities = submittedQuestionIds.length
+        ? await this.answerRepo.find({
+            where: { questionId: In(submittedQuestionIds) },
+          })
         : [];
       const answerMap = new Map(answerEntities.map((item) => [item.id, item]));
+      const pointsByQuestionId = new Map(
+        questionLinks.map((item) => [item.questionId, item.points]),
+      );
+      const correctAnswerIdsByQuestionId = new Map<string, string[]>();
+
+      for (const answer of answerEntities) {
+        if (!answer.isCorrect) {
+          continue;
+        }
+
+        const existingIds =
+          correctAnswerIdsByQuestionId.get(answer.questionId) ?? [];
+        existingIds.push(answer.id);
+        correctAnswerIdsByQuestionId.set(answer.questionId, existingIds);
+      }
 
       for (const submitted of submittedAnswers) {
         if (submitted.answerId) {
@@ -199,8 +211,28 @@ export class AttemptService {
         }
       }
 
-      const records = submittedAnswers.map((submitted) =>
-        this.studentAnswerRepo.create({
+      const records = submittedAnswers.map((submitted) => {
+        const selectedIds = [
+          ...(submitted.answerId ? [submitted.answerId] : []),
+          ...(submitted.selectedAnswerIds ?? []),
+        ];
+        const normalizedSelectedIds = [...new Set(selectedIds)].sort();
+        const correctIds = [
+          ...(correctAnswerIdsByQuestionId.get(submitted.questionId) ?? []),
+        ].sort();
+        const isCorrect =
+          correctIds.length > 0 &&
+          normalizedSelectedIds.length === correctIds.length &&
+          normalizedSelectedIds.every(
+            (item, index) => item === correctIds[index],
+          );
+        const pointsEarned = isCorrect
+          ? (pointsByQuestionId.get(submitted.questionId) ?? 0)
+          : 0;
+
+        totalScore += pointsEarned;
+
+        return this.studentAnswerRepo.create({
           attemptId: attempt.id,
           questionId: submitted.questionId,
           answerId: submitted.answerId,
@@ -208,14 +240,16 @@ export class AttemptService {
           textValue: submitted.textValue,
           selectedAnswerIds: submitted.selectedAnswerIds,
           timeSpentSec: submitted.timeSpentSec,
-        }),
-      );
+          isCorrect,
+          pointsEarned,
+        });
+      });
       await this.studentAnswerRepo.save(records);
     }
 
     attempt.status = AttemptStatus.SUBMITTED;
     attempt.submittedAt = new Date();
-    attempt.score = null as unknown as number;
+    attempt.score = totalScore;
     const savedAttempt = await this.attemptRepo.save(attempt);
 
     return {
@@ -430,7 +464,7 @@ export class AttemptService {
     const allAnswers = rootQuestionIds.length
       ? await this.answerRepo.find({
           where: { questionId: In(rootQuestionIds) },
-          order: { createdAt: 'ASC' },
+          order: { orderNo: 'ASC' },
         })
       : [];
     const answersByQuestionId = new Map<string, AnswerEntity[]>();
@@ -530,7 +564,7 @@ export class AttemptService {
     const answerOptions = questionIds.length
       ? await this.answerRepo.find({
           where: { questionId: In(questionIds) },
-          order: { createdAt: 'ASC' },
+          order: { orderNo: 'ASC' },
         })
       : [];
     const answersByQuestionId = new Map<string, AnswerEntity[]>();
@@ -562,8 +596,10 @@ export class AttemptService {
 
       const questionAnswers = answersByQuestionId.get(questionId) ?? [];
       const selectedAnswerIds = choiceCodes.map((choiceCode) => {
-        const index = choiceCode.charCodeAt(0) - 65;
-        const answer = questionAnswers[index];
+        const answerOrderNo = choiceCode.charCodeAt(0) - 64;
+        const answer = questionAnswers.find(
+          (item) => item.orderNo === answerOrderNo,
+        );
         if (!answer) {
           throw new BadRequestException(ERROR_MESSAGES.INVALID_INPUT);
         }

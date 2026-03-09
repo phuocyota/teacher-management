@@ -142,3 +142,45 @@ Lecture có nhiều sub-controller/service:
 - `src/main.ts` (bootstrap + Swagger + global interceptors)
 - `src/app.module.ts` (wiring modules + global providers)
 - `src/common/*` (shared behaviors)
+
+## 13) Recent Changes
+
+- `user/createUser`:
+  - Khi tạo `userType = STUDENT`, tạo thêm record `student` và dùng chung `id` với `user`.
+  - Khi tạo `userType = TEACHER`, tạo thêm record `teacher` và dùng chung `id` với `user`.
+  - Payload tạo STUDENT hỗ trợ `studentGroupId` + `code`.
+  - Payload tạo TEACHER hỗ trợ `deviceId` + `teacherCode`.
+
+- `student/`:
+  - Bỏ phụ thuộc `student.userId`; hiện tại quy ước `student.id = user.id`.
+  - DTO/service của `student` đã đổi theo model mới.
+
+- `teacher/`:
+  - Thêm `code` vào `TeacherEntity`.
+
+- `attempt/`:
+  - `AttemptService.start()` tự động tạo `student` profile tối thiểu nếu user STUDENT chưa có record trong bảng `student`, để tránh lỗi FK khi tạo `attempt`.
+  - `findAll()` và các query liên quan đã đổi sang dùng entity property path thay vì raw DB column names để tránh lỗi TypeORM `databaseName`.
+  - Parse đáp án FE dạng `1A`, `2B`... hiện tại map theo:
+    - số = `question_bank_question.orderNo`
+    - A/B/C/D = `answer.orderNo` 1/2/3/4
+  - Thứ tự đáp án trong payload đề thi cũng ưu tiên theo `answer.orderNo`.
+
+- `answer/`:
+  - Thêm `isCorrect` vào `answer`.
+  - Thêm `orderNo` vào `answer`.
+  - Đã bỏ `point` khỏi `answer`; điểm bài làm hiện tại dùng `question_bank_question.points`.
+
+- `attempt end / scoring`:
+  - Khi nộp bài, hệ thống ghi `student_answer.isCorrect` và `student_answer.pointsEarned`.
+  - `attempt.score` được tính từ tổng điểm các câu đúng.
+  - Câu đúng được xác định bằng cách so tập đáp án học sinh chọn với tập đáp án `answer.isCorrect = true`.
+
+- `student_answer/`:
+  - Vẫn là bảng chi tiết cho từng câu trả lời trong một `attempt`.
+  - FK `student_answer.attempt_id -> attempt.id` dang `ON DELETE CASCADE`.
+
+- Dữ liệu / DB:
+  - Đã xác nhận DB Postgres đang dùng `UTF8`.
+  - Đã sửa 1 question + 4 answer bị lỗi tiếng Việt trong DB.
+  - Đã xóa toàn bộ dữ liệu trong `attempt` và `student_answer` theo yêu cầu trong quá trình debug.

@@ -5,6 +5,12 @@ import { ContentTypes } from 'src/common/enum/content-type.enum';
 
 @Entity('answer')
 export class AnswerEntity extends BaseEntity {
+  @Column({ name: 'is_correct', type: 'boolean', nullable: true, default: false })
+  isCorrect?: boolean;
+
+  @Column({ name: 'order_no', type: 'int', nullable: true, default: 0 })
+  orderNo?: number;
+
   @Column({
     type: 'enum',
     enum: ContentTypes,

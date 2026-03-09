@@ -4,15 +4,37 @@ import {
   IsEnum,
   IsUUID,
   IsOptional,
+  IsBoolean,
+  IsInt,
+  Min,
 } from 'class-validator';
 import { ApiProperty, PartialType } from '@nestjs/swagger';
 import { ContentTypes } from 'src/common/enum/content-type.enum';
 
 export class CreateAnswerDto {
+  @IsOptional()
+  @IsInt()
+  @Min(0)
+  @ApiProperty({
+    description: 'Thu tu cua dap an trong cau hoi',
+    example: 1,
+    required: false,
+  })
+  orderNo?: number;
+
+  @IsOptional()
+  @IsBoolean()
+  @ApiProperty({
+    description: 'Danh dau dap an dung',
+    example: true,
+    required: false,
+  })
+  isCorrect?: boolean;
+
   @IsEnum(ContentTypes)
   @IsNotEmpty()
   @ApiProperty({
-    description: 'Loại câu trả lời',
+    description: 'Loai cau tra loi',
     enum: ContentTypes,
     example: ContentTypes.TEXT,
   })
@@ -21,7 +43,7 @@ export class CreateAnswerDto {
   @IsString()
   @IsNotEmpty()
   @ApiProperty({
-    description: 'Nội dung câu trả lời',
+    description: 'Noi dung cau tra loi',
     example: 'Paris',
   })
   content!: string;
@@ -29,7 +51,7 @@ export class CreateAnswerDto {
   @IsUUID()
   @IsNotEmpty()
   @ApiProperty({
-    description: 'ID câu hỏi mà câu trả lời thuộc về',
+    description: 'ID cau hoi ma cau tra loi thuoc ve',
     example: '2233abe3-1961-4af5-a482-542f1227d844',
   })
   questionId!: string;
@@ -37,8 +59,7 @@ export class CreateAnswerDto {
   @IsUUID()
   @IsOptional()
   @ApiProperty({
-    description:
-      'ID của nội dung tiếp theo (nếu câu trả lời vừa hình vừa chữ xen kẽ nhau)',
+    description: 'ID cua noi dung tiep theo neu co',
     example: '550e8400-e29b-41d4-a716-446655440000',
     required: false,
   })
