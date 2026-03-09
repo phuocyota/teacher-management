@@ -5,15 +5,7 @@ export class CreateStudentDto {
   @IsUUID()
   @IsNotEmpty()
   @ApiProperty({
-    description: 'ID của người dùng (học sinh)',
-    example: '2233abe3-1961-4af5-a482-542f1227d844',
-  })
-  userId!: string;
-
-  @IsUUID()
-  @IsNotEmpty()
-  @ApiProperty({
-    description: 'ID của nhóm học sinh',
+    description: 'ID cua nhom hoc sinh',
     example: '3344abe3-1961-4af5-a482-542f1227d855',
   })
   studentGroupId!: string;
@@ -21,7 +13,7 @@ export class CreateStudentDto {
   @IsString()
   @IsNotEmpty()
   @ApiProperty({
-    description: 'Mã học sinh',
+    description: 'Ma hoc sinh',
     example: 'HS001',
   })
   code!: string;

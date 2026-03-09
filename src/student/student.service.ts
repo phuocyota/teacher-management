@@ -25,35 +25,22 @@ export class StudentService {
   ) {}
 
   async create(dto: CreateStudentDto): Promise<StudentEntity> {
-    // Validate studentGroupId exists
     const studentGroup = await this.studentGroupService.findOne(
       dto.studentGroupId,
     );
 
-    // Kiểm tra trùng code
     const existingStudent = await this.studentRepo.findOne({
       where: { code: dto.code },
     });
 
     if (existingStudent) {
-      throw new ConflictException('Mã học sinh đã tồn tại');
-    }
-
-    // Kiểm tra userId đã được gán cho student khác chưa
-    const existingUser = await this.studentRepo.findOne({
-      where: { userId: dto.userId },
-    });
-
-    if (existingUser) {
-      throw new ConflictException(
-        'Người dùng này đã được gán cho học sinh khác',
-      );
+      throw new ConflictException('Ma hoc sinh da ton tai');
     }
 
     const record = this.studentRepo.create({
-      userId: dto.userId,
+      studentGroupId: dto.studentGroupId,
       code: dto.code,
-      studentGroup: studentGroup,
+      studentGroup,
     });
     return this.studentRepo.save(record);
   }
@@ -72,7 +59,7 @@ export class StudentService {
       .leftJoinAndSelect('studentGroup.school', 'school');
 
     if (studentGroupId) {
-      qb.andWhere('student.student_group_id = :studentGroupId', {
+      qb.andWhere('student.studentGroupId = :studentGroupId', {
         studentGroupId,
       });
     }
@@ -103,7 +90,7 @@ export class StudentService {
     if (!record) {
       throw new NotFoundException(
         ERROR_MESSAGES.NOT_FOUND_WITH_ID(
-          ENTITY_NAMES.STUDENT ?? 'Học sinh',
+          ENTITY_NAMES.STUDENT ?? 'Hoc sinh',
           id,
         ),
       );
@@ -120,6 +107,7 @@ export class StudentService {
         dto.studentGroupId,
       );
       record.studentGroup = studentGroup;
+      record.studentGroupId = dto.studentGroupId;
     }
 
     if (dto.code !== undefined && dto.code !== record.code) {
@@ -128,22 +116,9 @@ export class StudentService {
       });
 
       if (existingStudent) {
-        throw new ConflictException('Mã học sinh đã tồn tại');
+        throw new ConflictException('Ma hoc sinh da ton tai');
       }
       record.code = dto.code;
-    }
-
-    if (dto.userId !== undefined && dto.userId !== record.userId) {
-      const existingUser = await this.studentRepo.findOne({
-        where: { userId: dto.userId },
-      });
-
-      if (existingUser) {
-        throw new ConflictException(
-          'Người dùng này đã được gán cho học sinh khác',
-        );
-      }
-      record.userId = dto.userId;
     }
 
     return this.studentRepo.save(record);

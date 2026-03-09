@@ -19,6 +19,10 @@ import {
   ENTITY_NAMES,
 } from 'src/common/constant/error-messages.constant';
 import { runInTransaction } from 'src/common/database/transaction.utils';
+import { UserType } from 'src/common/enum/user-type.enum';
+import { StudentEntity } from 'src/student/student.entity';
+import { TeacherEntity } from 'src/teacher/teacher.entity';
+import { StudentGroupEntity } from 'src/student-group/student-group.entity';
 
 @Injectable()
 export class UserService extends BaseService<UserEntity> {
@@ -76,23 +80,102 @@ export class UserService extends BaseService<UserEntity> {
   public async createUser(dto: CreateUserDto, user?: JwtPayload) {
     return runInTransaction(this.entityManager, async (manager) => {
       const userRepo = manager.getRepository(UserEntity);
+      const studentRepo = manager.getRepository(StudentEntity);
+      const teacherRepo = manager.getRepository(TeacherEntity);
+      const studentGroupRepo = manager.getRepository(StudentGroupEntity);
 
       await this.checkUserExisting(dto);
+
+      const {
+        groupIds,
+        studentGroupId,
+        code,
+        studentCode,
+        deviceId,
+        teacherCode,
+        ...userPayload
+      } = dto;
 
       const saltRounds = 10;
       const hashPassword = await bcrypt.hash(dto.password, saltRounds);
 
       const savedUser = await userRepo.save(
         userRepo.create({
-          ...dto,
+          ...userPayload,
           createdBy: user?.userId,
           hashPassword,
         }),
       );
 
-      if (dto.groupIds?.length && user) {
+      if (savedUser.userType === UserType.STUDENT) {
+        const studentCodeValue = code ?? studentCode;
+
+        if (!studentGroupId || !studentCodeValue) {
+          throw new BadRequestException(
+            'studentGroupId va code la bat buoc khi tao user STUDENT',
+          );
+        }
+
+        const studentGroup = await studentGroupRepo.findOne({
+          where: { id: studentGroupId },
+        });
+
+        if (!studentGroup) {
+          throw new NotFoundException('Khong tim thay nhom hoc sinh');
+        }
+
+        const existingStudentByCode = await studentRepo.findOne({
+          where: { code: studentCodeValue },
+        });
+
+        if (existingStudentByCode) {
+          throw new ConflictException('Ma hoc sinh da ton tai');
+        }
+
+        await studentRepo.save(
+          studentRepo.create({
+            id: savedUser.id,
+            studentGroupId,
+            code: studentCodeValue,
+            createdBy: user?.userId,
+          }),
+        );
+      }
+
+      if (savedUser.userType === UserType.TEACHER) {
+        if (!deviceId || !teacherCode) {
+          throw new BadRequestException(
+            'deviceId va teacherCode la bat buoc khi tao user TEACHER',
+          );
+        }
+
+        const existingTeacher = await teacherRepo.findOne({
+          where: [{ deviceId }, { code: teacherCode }],
+        });
+
+        if (existingTeacher) {
+          if (existingTeacher.deviceId === deviceId) {
+            throw new ConflictException('deviceId da ton tai');
+          }
+
+          throw new ConflictException('Ma giao vien da ton tai');
+        }
+
+        await teacherRepo.save(
+          teacherRepo.create({
+            id: savedUser.id,
+            code: teacherCode,
+            deviceId,
+            name: savedUser.fullName ?? savedUser.userName,
+            email: savedUser.email ?? `${savedUser.userName}@local.invalid`,
+            createdBy: user?.userId,
+          }),
+        );
+      }
+
+      if (groupIds?.length && user) {
         await this.userGroupService.addUserToGroups(
-          dto.groupIds,
+          groupIds,
           savedUser.id,
           user?.userId,
           manager,

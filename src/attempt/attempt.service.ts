@@ -8,6 +8,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { In, Repository } from 'typeorm';
 import { AttemptEntity } from './attempt.entity';
 import { StudentService } from 'src/student/student.service';
+import { StudentEntity } from 'src/student/student.entity';
 import { QuestionBankService } from 'src/question-bank/question-bank.service';
 import {
   ENTITY_NAMES,
@@ -21,11 +22,14 @@ import { CreateAttemptDto, UpdateAttemptDto } from './dto/create-attempt.dto';
 import { ExamSetService } from 'src/exam-set/exam-set.service';
 import { JwtPayload } from 'src/common/interface/jwt-payload.interface';
 import { UserType } from 'src/common/enum/user-type.enum';
+import { UserEntity } from 'src/user/user.entity';
 import { QuestionBankQuestionEntity } from 'src/question-bank-question/question-bank-question.entity';
 import { QuestionEntity } from 'src/question/question.entity';
 import { AnswerEntity } from 'src/answer/answer.entity';
 import { StudentAnswerEntity } from 'src/student-answer/student-answer.entity';
 import { ExamSetQuestionBankService } from 'src/exam-set-question-bank/exam-set-question-bank.service';
+import { StudentGroupEntity } from 'src/student-group/student-group.entity';
+import { SchoolEntity } from 'src/school/school.entity';
 import {
   AttemptAnswerChainItemDto,
   AttemptAnswerOptionDto,
@@ -43,6 +47,14 @@ export class AttemptService {
   constructor(
     @InjectRepository(AttemptEntity)
     private readonly attemptRepo: Repository<AttemptEntity>,
+    @InjectRepository(StudentEntity)
+    private readonly studentRepo: Repository<StudentEntity>,
+    @InjectRepository(UserEntity)
+    private readonly userRepo: Repository<UserEntity>,
+    @InjectRepository(StudentGroupEntity)
+    private readonly studentGroupRepo: Repository<StudentGroupEntity>,
+    @InjectRepository(SchoolEntity)
+    private readonly schoolRepo: Repository<SchoolEntity>,
     @InjectRepository(QuestionBankQuestionEntity)
     private readonly questionBankQuestionRepo: Repository<QuestionBankQuestionEntity>,
     @InjectRepository(QuestionEntity)
@@ -86,6 +98,7 @@ export class AttemptService {
     await this.questionBankService.findOne(dto.questionBankId);
     await this.examSetService.findOne(dto.examSetId);
     await this.validateExamSetQuestionBank(dto.examSetId, dto.questionBankId);
+    await this.ensureStudentProfile(user.userId);
 
     const record = this.attemptRepo.create({
       studentId: user.userId,
@@ -235,25 +248,25 @@ export class AttemptService {
       .leftJoinAndSelect('attempt.questionBank', 'questionBank')
       .leftJoinAndSelect('attempt.examSet', 'examSet');
 
-    qb.andWhere('student.user_id = :userId', {
+    qb.andWhere('student.id = :userId', {
       userId: user.userId,
     });
 
     if (questionBankId) {
-      qb.andWhere('attempt.question_bank_id = :questionBankId', {
+      qb.andWhere('attempt.questionBankId = :questionBankId', {
         questionBankId,
       });
     }
 
     if (examSetId) {
-      qb.andWhere('attempt.exam_set_id = :examSetId', { examSetId });
+      qb.andWhere('attempt.examSetId = :examSetId', { examSetId });
     }
 
     if (status) {
       qb.andWhere('attempt.status = :status', { status });
     }
 
-    qb.orderBy('attempt.started_at', 'DESC');
+    qb.orderBy('attempt.startedAt', 'DESC');
     qb.skip(skip).take(size);
 
     const [data, total] = await qb.getManyAndCount();
@@ -332,6 +345,71 @@ export class AttemptService {
     await this.examSetQuestionBankService.validateExamSetQuestionBank(
       examSetId,
       questionBankId,
+    );
+  }
+
+  private async ensureStudentProfile(userId: string): Promise<void> {
+    const existingStudent = await this.studentRepo.findOne({
+      where: { id: userId },
+    });
+
+    if (existingStudent) {
+      return;
+    }
+
+    const user = await this.userRepo.findOne({
+      where: { id: userId, userType: UserType.STUDENT },
+    });
+
+    if (!user) {
+      throw new ForbiddenException(ERROR_MESSAGES.NO_PERMISSION_SUBMIT_ATTEMPT);
+    }
+
+    let school = await this.schoolRepo.findOne({
+      where: { code: 'IMPORT' },
+    });
+
+    if (!school) {
+      school = await this.schoolRepo.save(
+        this.schoolRepo.create({
+          code: 'IMPORT',
+          name: 'Imported School',
+          address: 'N/A',
+          createdBy: userId,
+        }),
+      );
+    }
+
+    let studentGroup = await this.studentGroupRepo.findOne({
+      where: { code: 1, schoolId: school.id },
+    });
+
+    if (!studentGroup) {
+      studentGroup = await this.studentGroupRepo.save(
+        this.studentGroupRepo.create({
+          code: 1,
+          name: 'Imported Students',
+          schoolId: school.id,
+          createdBy: userId,
+        }),
+      );
+    }
+
+    const preferredCode = user.userName || `student-${user.id.slice(0, 8)}`;
+    const duplicateCode = await this.studentRepo.findOne({
+      where: { code: preferredCode },
+    });
+    const studentCode = duplicateCode
+      ? `${preferredCode}-${user.id.slice(0, 8)}`
+      : preferredCode;
+
+    await this.studentRepo.save(
+      this.studentRepo.create({
+        id: user.id,
+        studentGroupId: studentGroup.id,
+        code: studentCode,
+        createdBy: userId,
+      }),
     );
   }
 
@@ -494,7 +572,8 @@ export class AttemptService {
 
       return {
         questionId,
-        answerId: selectedAnswerIds.length === 1 ? selectedAnswerIds[0] : undefined,
+        answerId:
+          selectedAnswerIds.length === 1 ? selectedAnswerIds[0] : undefined,
         selectedAnswerIds:
           selectedAnswerIds.length > 1 ? selectedAnswerIds : undefined,
       };

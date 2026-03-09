@@ -17,35 +17,33 @@ import { Status } from '../enum/status.enum.js';
 import { Gender } from '../enum/gender.enum.js';
 
 export class CreateUserDto {
-  // ===== Thông tin đăng nhập =====
   @ApiProperty({
     example: 'john_doe',
-    description: 'Tên đăng nhập của người dùng (duy nhất)',
+    description: 'Ten dang nhap cua nguoi dung',
   })
-  @IsNotEmpty({ message: 'Tên đăng nhập không được để trống' })
+  @IsNotEmpty({ message: 'Ten dang nhap khong duoc de trong' })
   @IsString()
   userName!: string;
 
   @ApiProperty({
     example: 'Password@123',
-    description: 'Mật khẩu của người dùng (tối thiểu 6 ký tự)',
+    description: 'Mat khau cua nguoi dung',
   })
-  @IsNotEmpty({ message: 'Mật khẩu không được để trống' })
-  @MinLength(6, { message: 'Mật khẩu phải có ít nhất 6 ký tự' })
+  @IsNotEmpty({ message: 'Mat khau khong duoc de trong' })
+  @MinLength(6, { message: 'Mat khau phai co it nhat 6 ky tu' })
   password!: string;
 
   @ApiPropertyOptional({
     example: 'nguyenvana@school.edu.vn',
-    description: 'Email của người dùng (duy nhất)',
+    description: 'Email cua nguoi dung',
   })
   @IsOptional()
-  @IsEmail({}, { message: 'Email không hợp lệ' })
+  @IsEmail({}, { message: 'Email khong hop le' })
   email?: string;
 
-  // ===== Thông tin cá nhân =====
   @ApiPropertyOptional({
-    example: 'Nguyễn Văn A',
-    description: 'Tên đầy đủ của người dùng',
+    example: 'Nguyen Van A',
+    description: 'Ten day du cua nguoi dung',
   })
   @IsOptional()
   @IsString()
@@ -53,7 +51,7 @@ export class CreateUserDto {
 
   @ApiPropertyOptional({
     example: '0901234567',
-    description: 'Số điện thoại của người dùng',
+    description: 'So dien thoai cua nguoi dung',
   })
   @IsOptional()
   @IsString()
@@ -61,79 +59,76 @@ export class CreateUserDto {
 
   @ApiPropertyOptional({
     example: '1990-01-15',
-    description: 'Ngày sinh của người dùng',
+    description: 'Ngay sinh cua nguoi dung',
   })
   @IsOptional()
   @Type(() => Date)
-  @IsDate({ message: 'Ngày sinh không hợp lệ' })
+  @IsDate({ message: 'Ngay sinh khong hop le' })
   birthday?: Date;
 
   @ApiPropertyOptional({
     example: 'MALE',
-    description: 'Giới tính của người dùng',
+    description: 'Gioi tinh cua nguoi dung',
     enum: Gender,
   })
   @IsOptional()
-  @IsEnum(Gender, { message: 'Giới tính không hợp lệ' })
+  @IsEnum(Gender, { message: 'Gioi tinh khong hop le' })
   gender?: Gender;
 
   @ApiPropertyOptional({
     example: '001234567890',
-    description: 'Số CMND/CCCD của người dùng',
+    description: 'So CMND/CCCD cua nguoi dung',
   })
   @IsOptional()
   @IsString()
   citizenId?: string;
 
   @ApiPropertyOptional({
-    example: '123 Đường ABC, Quận 1, TP.HCM',
-    description: 'Địa chỉ của người dùng',
+    example: '123 Duong ABC, Quan 1, TP.HCM',
+    description: 'Dia chi cua nguoi dung',
   })
   @IsOptional()
   @IsString()
   address?: string;
 
   @ApiPropertyOptional({
-    example: 'Ghi chú về người dùng',
-    description: 'Ghi chú',
+    example: 'Ghi chu ve nguoi dung',
+    description: 'Ghi chu',
   })
   @IsOptional()
   @IsString()
   note?: string;
 
-  // ===== Loại người dùng =====
   @ApiProperty({
     example: 'TEACHER',
-    description: 'Loại người dùng',
+    description: 'Loai nguoi dung',
     enum: UserType,
   })
-  @IsNotEmpty({ message: 'Loại người dùng không được để trống' })
-  @IsEnum(UserType, { message: 'Loại người dùng không hợp lệ' })
+  @IsNotEmpty({ message: 'Loai nguoi dung khong duoc de trong' })
+  @IsEnum(UserType, { message: 'Loai nguoi dung khong hop le' })
   userType!: UserType;
 
-  // ===== Thời hạn =====
   @ApiPropertyOptional({
     example: '2024-01-01',
-    description: 'Ngày kích hoạt tài khoản',
+    description: 'Ngay kich hoat tai khoan',
   })
   @IsOptional()
   @Type(() => Date)
-  @IsDate({ message: 'Ngày kích hoạt không hợp lệ' })
+  @IsDate({ message: 'Ngay kich hoat khong hop le' })
   activatedDate?: Date;
 
   @ApiPropertyOptional({
     example: '2025-12-31',
-    description: 'Ngày hết hạn tài khoản',
+    description: 'Ngay het han tai khoan',
   })
   @IsOptional()
   @Type(() => Date)
-  @IsDate({ message: 'Ngày hết hạn không hợp lệ' })
+  @IsDate({ message: 'Ngay het han khong hop le' })
   expiredDate?: Date;
 
-  // ===== Quyền (checkbox) =====
   @ApiPropertyOptional({
     example: false,
-    description: 'Quyền tạo mã giáo viên',
+    description: 'Quyen tao ma giao vien',
   })
   @IsOptional()
   @IsBoolean()
@@ -141,7 +136,7 @@ export class CreateUserDto {
 
   @ApiPropertyOptional({
     example: false,
-    description: 'Quyền tạo mã admin',
+    description: 'Quyen tao ma admin',
   })
   @IsOptional()
   @IsBoolean()
@@ -149,7 +144,7 @@ export class CreateUserDto {
 
   @ApiPropertyOptional({
     example: false,
-    description: 'Quyền thêm bài giảng',
+    description: 'Quyen them bai giang',
   })
   @IsOptional()
   @IsBoolean()
@@ -157,7 +152,7 @@ export class CreateUserDto {
 
   @ApiPropertyOptional({
     example: false,
-    description: 'Quyền cập nhật bài giảng',
+    description: 'Quyen cap nhat bai giang',
   })
   @IsOptional()
   @IsBoolean()
@@ -165,7 +160,7 @@ export class CreateUserDto {
 
   @ApiPropertyOptional({
     example: false,
-    description: 'Quyền quản lý bài giảng',
+    description: 'Quyen quan ly bai giang',
   })
   @IsOptional()
   @IsBoolean()
@@ -173,7 +168,7 @@ export class CreateUserDto {
 
   @ApiPropertyOptional({
     example: false,
-    description: 'Quyền quản lý tài khoản',
+    description: 'Quyen quan ly tai khoan',
   })
   @IsOptional()
   @IsBoolean()
@@ -181,7 +176,7 @@ export class CreateUserDto {
 
   @ApiPropertyOptional({
     example: false,
-    description: 'Là tài khoản liên kết',
+    description: 'La tai khoan lien ket',
   })
   @IsOptional()
   @IsBoolean()
@@ -189,20 +184,60 @@ export class CreateUserDto {
 
   @ApiPropertyOptional({
     example: 'ACTIVE',
-    description: 'Trạng thái người dùng',
+    description: 'Trang thai nguoi dung',
     enum: Status,
   })
   @IsOptional()
-  @IsEnum(Status, { message: 'Trạng thái không hợp lệ' })
+  @IsEnum(Status, { message: 'Trang thai khong hop le' })
   status?: Status;
 
   @ApiPropertyOptional({
     example: ['group-uuid-1', 'group-uuid-2'],
-    description: 'Danh sách group IDs để thêm user vào',
+    description: 'Danh sach group IDs de them user vao',
     type: [String],
   })
   @IsOptional()
   @IsArray()
   @IsUUID('4', { each: true })
   groupIds?: string[];
+
+  @ApiPropertyOptional({
+    example: '3344abe3-1961-4af5-a482-542f1227d855',
+    description: 'ID nhom hoc sinh, dung khi tao user loai STUDENT',
+  })
+  @IsOptional()
+  @IsUUID('4')
+  studentGroupId?: string;
+
+  @ApiPropertyOptional({
+    example: 'HS001',
+    description: 'Code, dung khi tao user loai STUDENT',
+  })
+  @IsOptional()
+  @IsString()
+  code?: string;
+
+  @ApiPropertyOptional({
+    example: 'HS001',
+    description: 'Ma hoc sinh, dung de tuong thich nguoc',
+  })
+  @IsOptional()
+  @IsString()
+  studentCode?: string;
+
+  @ApiPropertyOptional({
+    example: 'teacher-device-001',
+    description: 'Device ID, dung khi tao user loai TEACHER',
+  })
+  @IsOptional()
+  @IsString()
+  deviceId?: string;
+
+  @ApiPropertyOptional({
+    example: 'GV001',
+    description: 'Ma giao vien, dung khi tao user loai TEACHER',
+  })
+  @IsOptional()
+  @IsString()
+  teacherCode?: string;
 }

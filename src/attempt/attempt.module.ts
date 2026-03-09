@@ -12,6 +12,9 @@ import { QuestionEntity } from 'src/question/question.entity';
 import { AnswerEntity } from 'src/answer/answer.entity';
 import { StudentAnswerEntity } from 'src/student-answer/student-answer.entity';
 import { ExamSetQuestionBankModule } from 'src/exam-set-question-bank/exam-set-question-bank.module';
+import { UserEntity } from 'src/user/user.entity';
+import { StudentGroupEntity } from 'src/student-group/student-group.entity';
+import { SchoolEntity } from 'src/school/school.entity';
 
 @Module({
   imports: [
@@ -22,6 +25,9 @@ import { ExamSetQuestionBankModule } from 'src/exam-set-question-bank/exam-set-q
       QuestionEntity,
       AnswerEntity,
       StudentAnswerEntity,
+      UserEntity,
+      StudentGroupEntity,
+      SchoolEntity,
     ]),
     StudentModule,
     QuestionBankModule,

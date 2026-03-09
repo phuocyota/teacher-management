@@ -5,9 +5,6 @@ import { StudentGroupEntity } from 'src/student-group/student-group.entity';
 
 @Entity('student')
 export class StudentEntity extends BaseEntity {
-  @Column({ name: 'user_id', type: 'uuid', nullable: false })
-  userId: string; // ID của người dùng (học sinh)
-
   @Column({ name: 'student_group_id', type: 'uuid', nullable: false })
   studentGroupId: string; // ID của nhóm học sinh
 
