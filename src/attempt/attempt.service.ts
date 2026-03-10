@@ -340,12 +340,17 @@ export class AttemptService {
       where: {
         id,
         studentId: user.userId,
-        status: AttemptStatus.SUBMITTED,
       },
     });
 
     if (!attempt) {
       throw new ForbiddenException(ERROR_MESSAGES.NO_PERMISSION_SUBMIT_ATTEMPT);
+    }
+
+    if (attempt.status === AttemptStatus.DOING) {
+      throw new BadRequestException(
+        'Attempt has not been submitted yet, review is unavailable',
+      );
     }
 
     const questionLinks = await this.questionBankQuestionRepo.find({
