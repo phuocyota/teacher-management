@@ -38,6 +38,9 @@ import {
   AttemptAnswerOptionDto,
   AttemptQuestionChainItemDto,
   AttemptQuestionItemDto,
+  AttemptReviewAnswerOptionDto,
+  AttemptReviewQuestionItemDto,
+  AttemptReviewResponseDto,
   EndAttemptAnswerDto,
   EndAttemptDto,
   EndAttemptResponseDto,
@@ -322,6 +325,123 @@ export class AttemptService {
       page,
       size,
       total,
+    };
+  }
+
+  async review(
+    id: string,
+    user: JwtPayload,
+  ): Promise<AttemptReviewResponseDto> {
+    if (!user?.userId) {
+      throw new ForbiddenException(ERROR_MESSAGES.INVALID_TOKEN_STRUCTURE);
+    }
+
+    const attempt = await this.attemptRepo.findOne({
+      where: {
+        id,
+        studentId: user.userId,
+        status: AttemptStatus.SUBMITTED,
+      },
+    });
+
+    if (!attempt) {
+      throw new ForbiddenException(ERROR_MESSAGES.NO_PERMISSION_SUBMIT_ATTEMPT);
+    }
+
+    const questionLinks = await this.questionBankQuestionRepo.find({
+      where: { questionBankId: attempt.questionBankId },
+      order: { orderNo: 'ASC' },
+    });
+    const questionIds = questionLinks.map((item) => item.questionId);
+
+    const studentAnswers = questionIds.length
+      ? await this.studentAnswerRepo.find({
+          where: { attemptId: attempt.id, questionId: In(questionIds) },
+        })
+      : [];
+    const studentAnswerMap = new Map(
+      studentAnswers.map((item) => [item.questionId, item]),
+    );
+
+    const rootQuestions = questionIds.length
+      ? await this.questionRepo.find({ where: { id: In(questionIds) } })
+      : [];
+    const questionMap = new Map(rootQuestions.map((item) => [item.id, item]));
+
+    const allAnswers = questionIds.length
+      ? await this.answerRepo.find({
+          where: { questionId: In(questionIds) },
+          order: { orderNo: 'ASC' },
+        })
+      : [];
+    const answersByQuestionId = new Map<string, AnswerEntity[]>();
+
+    for (const answer of allAnswers) {
+      const items = answersByQuestionId.get(answer.questionId) ?? [];
+      items.push(answer);
+      answersByQuestionId.set(answer.questionId, items);
+    }
+
+    const questions: AttemptReviewQuestionItemDto[] = [];
+
+    for (const link of questionLinks) {
+      const rootQuestion = questionMap.get(link.questionId);
+      if (!rootQuestion) {
+        continue;
+      }
+
+      const studentAnswer = studentAnswerMap.get(link.questionId);
+      const selectedIds = [
+        ...(studentAnswer?.answerId ? [studentAnswer.answerId] : []),
+        ...(studentAnswer?.selectedAnswerIds ?? []),
+      ];
+      const selectedIdSet = new Set(selectedIds);
+      const questionChain = await this.loadQuestionChain(rootQuestion.id);
+      const answerOptions = answersByQuestionId.get(rootQuestion.id) ?? [];
+      const mappedAnswers: AttemptReviewAnswerOptionDto[] = await Promise.all(
+        answerOptions.map(async (answer) => {
+          const chain = await this.loadAnswerChain(answer.id);
+          const mappedChain = this.mapAnswerChain(chain);
+
+          return {
+            ...mappedChain,
+            isCorrect: Boolean(answer.isCorrect),
+            isSelected: selectedIdSet.has(answer.id),
+          };
+        }),
+      );
+
+      questions.push({
+        id: rootQuestion.id,
+        orderNo: link.orderNo,
+        points: link.points,
+        contentType: rootQuestion.contentType,
+        content: rootQuestion.content,
+        nextContent: rootQuestion.nextContent ?? null,
+        chain: this.mapQuestionChain(questionChain),
+        answers: mappedAnswers,
+        studentAnswerId: studentAnswer?.id ?? null,
+        answerId: studentAnswer?.answerId ?? null,
+        selectedAnswerIds: selectedIds,
+        textValue: studentAnswer?.textValue ?? null,
+        description: studentAnswer?.description ?? null,
+        isCorrect: studentAnswer?.isCorrect ?? null,
+        pointsEarned: studentAnswer?.pointsEarned ?? null,
+        timeSpentSec: studentAnswer?.timeSpentSec ?? null,
+      });
+    }
+
+    return {
+      attemptId: attempt.id,
+      status: attempt.status,
+      studentId: attempt.studentId,
+      questionBankId: attempt.questionBankId,
+      examSetId: attempt.examSetId,
+      submittedAt: attempt.submittedAt ?? null,
+      score: attempt.score ?? null,
+      totalQuestions: questionLinks.length,
+      answeredQuestions: studentAnswers.length,
+      questions,
     };
   }
 

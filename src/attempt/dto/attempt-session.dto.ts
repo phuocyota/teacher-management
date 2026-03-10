@@ -189,3 +189,72 @@ export class EndAttemptResponseDto {
   @ApiProperty()
   answeredQuestions!: number;
 }
+
+export class AttemptReviewAnswerOptionDto extends AttemptAnswerOptionDto {
+  @ApiProperty()
+  isCorrect!: boolean;
+
+  @ApiProperty()
+  isSelected!: boolean;
+}
+
+export class AttemptReviewQuestionItemDto extends AttemptQuestionItemDto {
+  @ApiProperty({ required: false, nullable: true })
+  studentAnswerId?: string | null;
+
+  @ApiProperty({ required: false, nullable: true })
+  answerId?: string | null;
+
+  @ApiProperty({ type: [String] })
+  selectedAnswerIds!: string[];
+
+  @ApiProperty({ required: false, nullable: true })
+  textValue?: string | null;
+
+  @ApiProperty({ required: false, nullable: true })
+  description?: string | null;
+
+  @ApiProperty({ required: false, nullable: true })
+  isCorrect?: boolean | null;
+
+  @ApiProperty({ required: false, nullable: true })
+  pointsEarned?: number | null;
+
+  @ApiProperty({ required: false, nullable: true })
+  timeSpentSec?: number | null;
+
+  @ApiProperty({ type: [AttemptReviewAnswerOptionDto] })
+  declare answers: AttemptReviewAnswerOptionDto[];
+}
+
+export class AttemptReviewResponseDto {
+  @ApiProperty()
+  attemptId!: string;
+
+  @ApiProperty({ enum: AttemptStatus })
+  status!: AttemptStatus;
+
+  @ApiProperty()
+  studentId!: string;
+
+  @ApiProperty()
+  questionBankId!: string;
+
+  @ApiProperty()
+  examSetId!: string;
+
+  @ApiProperty({ required: false, nullable: true })
+  submittedAt?: Date | null;
+
+  @ApiProperty({ required: false, nullable: true })
+  score?: number | null;
+
+  @ApiProperty()
+  totalQuestions!: number;
+
+  @ApiProperty()
+  answeredQuestions!: number;
+
+  @ApiProperty({ type: [AttemptReviewQuestionItemDto] })
+  questions!: AttemptReviewQuestionItemDto[];
+}

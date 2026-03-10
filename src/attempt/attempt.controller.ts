@@ -28,6 +28,7 @@ import {
 } from './dto/attempt.dto';
 import { AttemptStatus } from './enum/attempt-status.enum';
 import {
+  AttemptReviewResponseDto,
   EndAttemptDto,
   EndAttemptResponseDto,
   StartAttemptDto,
@@ -196,6 +197,15 @@ export class AttemptController {
       questionBankId,
       examSetId,
     );
+  }
+
+  @Get(':id/review')
+  @UseGuards(RolesGuard)
+  @Roles(UserType.STUDENT)
+  @ApiOperation({ summary: 'Review submitted attempt with correct and wrong answers' })
+  @ApiOkResponse({ type: AttemptReviewResponseDto })
+  review(@Param('id', ParseUUIDPipe) id: string, @User() user: JwtPayload) {
+    return this.attemptService.review(id, user);
   }
 
   @Get(':id')
