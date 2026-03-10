@@ -16,7 +16,10 @@ import {
 } from 'src/common/constant/error-messages.constant';
 import { PaginationResponseDto } from 'src/common/dto/pagination.dto';
 import { autoMapListToDto } from 'src/common/utils/auto-map.util';
-import { AttemptResponseDto } from './dto/attempt.dto';
+import {
+  AttemptExamHistoryItemDto,
+  AttemptResponseDto,
+} from './dto/attempt.dto';
 import { AttemptStatus } from './enum/attempt-status.enum';
 import { CreateAttemptDto, UpdateAttemptDto } from './dto/create-attempt.dto';
 import { ExamSetService } from 'src/exam-set/exam-set.service';
@@ -311,6 +314,100 @@ export class AttemptService {
       size,
       total,
     };
+  }
+
+  async findExamHistory(
+    user: JwtPayload,
+    fromDate?: string,
+    toDate?: string,
+  ): Promise<AttemptExamHistoryItemDto[]> {
+    if (!user?.userId) {
+      throw new ForbiddenException(ERROR_MESSAGES.INVALID_TOKEN_STRUCTURE);
+    }
+
+    this.validateDateRange(fromDate, toDate);
+
+    const qb = this.attemptRepo
+      .createQueryBuilder('attempt')
+      .innerJoin('attempt.questionBank', 'questionBank')
+      .select("DATE(attempt.started_at)", 'date')
+      .addSelect('questionBank.id', 'questionBankId')
+      .addSelect('questionBank.name', 'examName')
+      .addSelect('COUNT(attempt.id)', 'attemptCount')
+      .where('attempt.studentId = :userId', { userId: user.userId });
+
+    if (fromDate) {
+      qb.andWhere("DATE(attempt.started_at) >= :fromDate", { fromDate });
+    }
+
+    if (toDate) {
+      qb.andWhere("DATE(attempt.started_at) <= :toDate", { toDate });
+    }
+
+    const rows = await qb
+      .groupBy("DATE(attempt.started_at)")
+      .addGroupBy('questionBank.id')
+      .addGroupBy('questionBank.name')
+      .orderBy("DATE(attempt.started_at)", 'DESC')
+      .addOrderBy('questionBank.name', 'ASC')
+      .getRawMany<{
+        date: string;
+        questionBankId: string;
+        examName: string;
+        attemptCount: string;
+      }>();
+
+    return rows.map((row) => ({
+      date: row.date,
+      questionBankId: row.questionBankId,
+      examName: row.examName,
+      attemptCount: Number(row.attemptCount) || 0,
+    }));
+  }
+
+  async findExamHistoryDetail(
+    user: JwtPayload,
+    date: string,
+    questionBankId: string,
+  ): Promise<AttemptResponseDto[]> {
+    if (!user?.userId) {
+      throw new ForbiddenException(ERROR_MESSAGES.INVALID_TOKEN_STRUCTURE);
+    }
+
+    this.validateDate(date, 'date');
+
+    const attempts = await this.attemptRepo
+      .createQueryBuilder('attempt')
+      .where('attempt.studentId = :userId', { userId: user.userId })
+      .andWhere('attempt.questionBankId = :questionBankId', { questionBankId })
+      .andWhere("DATE(attempt.started_at) = :date", { date })
+      .orderBy('attempt.startedAt', 'DESC')
+      .getMany();
+
+    return autoMapListToDto(AttemptResponseDto, attempts);
+  }
+
+  private validateDateRange(fromDate?: string, toDate?: string): void {
+    if (fromDate) {
+      this.validateDate(fromDate, 'fromDate');
+    }
+
+    if (toDate) {
+      this.validateDate(toDate, 'toDate');
+    }
+
+    if (fromDate && toDate && fromDate > toDate) {
+      throw new BadRequestException('fromDate must be less than or equal to toDate');
+    }
+  }
+
+  private validateDate(value: string, fieldName: string): void {
+    const isoDateRegex = /^\d{4}-\d{2}-\d{2}$/;
+    if (!isoDateRegex.test(value)) {
+      throw new BadRequestException(
+        `${fieldName} must be in YYYY-MM-DD format`,
+      );
+    }
   }
 
   async findOne(id: string): Promise<AttemptEntity> {

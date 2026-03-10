@@ -21,7 +21,11 @@ import {
 import { AttemptService } from './attempt.service';
 import { CreateAttemptDto, UpdateAttemptDto } from './dto/create-attempt.dto';
 import { PaginationResponseDto } from 'src/common/dto/pagination.dto';
-import { AttemptListResponseDto, AttemptResponseDto } from './dto/attempt.dto';
+import {
+  AttemptExamHistoryItemDto,
+  AttemptListResponseDto,
+  AttemptResponseDto,
+} from './dto/attempt.dto';
 import { AttemptStatus } from './enum/attempt-status.enum';
 import {
   EndAttemptDto,
@@ -95,6 +99,66 @@ export class AttemptController {
       questionBankId,
       examSetId,
       status,
+    );
+  }
+
+  @Get('exam-history')
+  @UseGuards(RolesGuard)
+  @Roles(UserType.STUDENT)
+  @ApiOperation({
+    summary:
+      'List exam history grouped by date and exam name for current student',
+  })
+  @ApiQuery({
+    name: 'fromDate',
+    required: false,
+    type: String,
+    description: 'Filter from date (YYYY-MM-DD)',
+  })
+  @ApiQuery({
+    name: 'toDate',
+    required: false,
+    type: String,
+    description: 'Filter to date (YYYY-MM-DD)',
+  })
+  @ApiOkResponse({ type: [AttemptExamHistoryItemDto] })
+  findExamHistory(
+    @User() user: JwtPayload,
+    @Query('fromDate') fromDate?: string,
+    @Query('toDate') toDate?: string,
+  ): Promise<AttemptExamHistoryItemDto[]> {
+    return this.attemptService.findExamHistory(user, fromDate, toDate);
+  }
+
+  @Get('exam-history/detail')
+  @UseGuards(RolesGuard)
+  @Roles(UserType.STUDENT)
+  @ApiOperation({
+    summary:
+      'List attempt details for a grouped exam history record of current student',
+  })
+  @ApiQuery({
+    name: 'date',
+    required: true,
+    type: String,
+    description: 'Attempt date (YYYY-MM-DD)',
+  })
+  @ApiQuery({
+    name: 'questionBankId',
+    required: true,
+    type: String,
+    description: 'Question bank ID',
+  })
+  @ApiOkResponse({ type: [AttemptResponseDto] })
+  findExamHistoryDetail(
+    @User() user: JwtPayload,
+    @Query('date') date: string,
+    @Query('questionBankId') questionBankId: string,
+  ): Promise<AttemptResponseDto[]> {
+    return this.attemptService.findExamHistoryDetail(
+      user,
+      date,
+      questionBankId,
     );
   }
 
