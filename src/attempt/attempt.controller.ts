@@ -77,12 +77,40 @@ export class AttemptController {
   @Get()
   @UseGuards(RolesGuard)
   @Roles(UserType.STUDENT)
-  @ApiOperation({ summary: 'List attempts' })
-  @ApiQuery({ name: 'page', required: false, type: Number })
-  @ApiQuery({ name: 'size', required: false, type: Number })
-  @ApiQuery({ name: 'questionBankId', required: false, type: String })
-  @ApiQuery({ name: 'examSetId', required: false, type: String })
-  @ApiQuery({ name: 'status', required: false, enum: AttemptStatus })
+  @ApiOperation({
+    summary:
+      'List attempts of current student; filter by questionBankId and examSetId to get attempts of one exam',
+  })
+  @ApiQuery({
+    name: 'page',
+    required: false,
+    type: Number,
+    description: 'Page number',
+  })
+  @ApiQuery({
+    name: 'size',
+    required: false,
+    type: Number,
+    description: 'Page size',
+  })
+  @ApiQuery({
+    name: 'questionBankId',
+    required: false,
+    type: String,
+    description: 'Question bank ID of the exam',
+  })
+  @ApiQuery({
+    name: 'examSetId',
+    required: false,
+    type: String,
+    description: 'Exam set ID of the exam',
+  })
+  @ApiQuery({
+    name: 'status',
+    required: false,
+    enum: AttemptStatus,
+    description: 'Attempt status',
+  })
   @ApiOkResponse({ type: AttemptListResponseDto })
   findAll(
     @User() user: JwtPayload,
@@ -149,16 +177,24 @@ export class AttemptController {
     type: String,
     description: 'Question bank ID',
   })
+  @ApiQuery({
+    name: 'examSetId',
+    required: true,
+    type: String,
+    description: 'Exam set ID',
+  })
   @ApiOkResponse({ type: [AttemptResponseDto] })
   findExamHistoryDetail(
     @User() user: JwtPayload,
     @Query('date') date: string,
     @Query('questionBankId') questionBankId: string,
+    @Query('examSetId') examSetId: string,
   ): Promise<AttemptResponseDto[]> {
     return this.attemptService.findExamHistoryDetail(
       user,
       date,
       questionBankId,
+      examSetId,
     );
   }
 

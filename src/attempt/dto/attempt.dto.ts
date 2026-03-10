@@ -72,6 +72,12 @@ export class AttemptExamHistoryItemDto {
   questionBankId!: string;
 
   @ApiProperty({
+    description: 'ID bo de thi',
+    example: '4233abe3-1961-4af5-a482-542f1227d844',
+  })
+  examSetId!: string;
+
+  @ApiProperty({
     description: 'Ten bai thi',
     example: 'De thi hoc ky 1',
   })

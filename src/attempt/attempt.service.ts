@@ -279,6 +279,15 @@ export class AttemptService {
       throw new ForbiddenException(ERROR_MESSAGES.INVALID_TOKEN_STRUCTURE);
     }
 
+    if (
+      (questionBankId && !examSetId) ||
+      (!questionBankId && examSetId)
+    ) {
+      throw new BadRequestException(
+        'questionBankId and examSetId must be provided together',
+      );
+    }
+
     const qb = this.attemptRepo
       .createQueryBuilder('attempt')
       .leftJoinAndSelect('attempt.student', 'student')
@@ -332,6 +341,7 @@ export class AttemptService {
       .innerJoin('attempt.questionBank', 'questionBank')
       .select("DATE(attempt.started_at)", 'date')
       .addSelect('questionBank.id', 'questionBankId')
+      .addSelect('attempt.examSetId', 'examSetId')
       .addSelect('questionBank.name', 'examName')
       .addSelect('COUNT(attempt.id)', 'attemptCount')
       .where('attempt.studentId = :userId', { userId: user.userId });
@@ -347,12 +357,14 @@ export class AttemptService {
     const rows = await qb
       .groupBy("DATE(attempt.started_at)")
       .addGroupBy('questionBank.id')
+      .addGroupBy('attempt.examSetId')
       .addGroupBy('questionBank.name')
       .orderBy("DATE(attempt.started_at)", 'DESC')
       .addOrderBy('questionBank.name', 'ASC')
       .getRawMany<{
         date: string;
         questionBankId: string;
+        examSetId: string;
         examName: string;
         attemptCount: string;
       }>();
@@ -360,6 +372,7 @@ export class AttemptService {
     return rows.map((row) => ({
       date: row.date,
       questionBankId: row.questionBankId,
+      examSetId: row.examSetId,
       examName: row.examName,
       attemptCount: Number(row.attemptCount) || 0,
     }));
@@ -369,6 +382,7 @@ export class AttemptService {
     user: JwtPayload,
     date: string,
     questionBankId: string,
+    examSetId: string,
   ): Promise<AttemptResponseDto[]> {
     if (!user?.userId) {
       throw new ForbiddenException(ERROR_MESSAGES.INVALID_TOKEN_STRUCTURE);
@@ -380,6 +394,7 @@ export class AttemptService {
       .createQueryBuilder('attempt')
       .where('attempt.studentId = :userId', { userId: user.userId })
       .andWhere('attempt.questionBankId = :questionBankId', { questionBankId })
+      .andWhere('attempt.examSetId = :examSetId', { examSetId })
       .andWhere("DATE(attempt.started_at) = :date", { date })
       .orderBy('attempt.startedAt', 'DESC')
       .getMany();
