@@ -62,6 +62,10 @@ export class UserResponseDto {
   phoneNumber?: string;
 
   @Expose()
+  @ApiPropertyOptional({ example: 'https://example.com/avatar.jpg' })
+  avatar?: string;
+
+  @Expose()
   @ApiPropertyOptional({ example: '1990-01-15' })
   birthday?: Date;
 

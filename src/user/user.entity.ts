@@ -25,6 +25,9 @@ export class UserEntity extends BaseEntity {
   @Column({ name: 'phone_number', type: 'text', nullable: true })
   phoneNumber?: string;
 
+  @Column({ type: 'text', nullable: true })
+  avatar?: string;
+
   @Column({ type: 'date', nullable: true })
   birthday?: Date;
 

@@ -131,6 +131,12 @@ export class GroupMemberDto {
   })
   fullName?: string;
 
+  @ApiPropertyOptional({
+    description: 'Avatar của user',
+    example: 'https://example.com/avatar.jpg',
+  })
+  avatar?: string;
+
   @ApiProperty({ description: 'Email', example: 'nguyenvana@school.edu.vn' })
   email: string;
 
