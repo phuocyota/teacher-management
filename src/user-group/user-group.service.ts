@@ -71,6 +71,7 @@ export class UserGroupService {
         u.id,
         u.user_name as "userName",
         u.full_name as "fullName",
+        u.avatar,
         u.email,
         ug.role
       FROM user_group ug
@@ -360,6 +361,7 @@ export class UserGroupService {
         u.id,
         u.user_name as "userName",
         u.full_name as "fullName",
+        u.avatar,
         u.email,
         ug.role
       FROM user_group ug

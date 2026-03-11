@@ -54,6 +54,12 @@ export class UserGroupUserDto {
   })
   fullName?: string;
 
+  @ApiPropertyOptional({
+    description: 'Avatar của user',
+    example: 'https://example.com/avatar.jpg',
+  })
+  avatar?: string;
+
   @ApiProperty({
     description: 'Email',
   })
@@ -115,6 +121,12 @@ export class UserWithGroupsDto {
     description: 'Họ tên đầy đủ',
   })
   fullName?: string;
+
+  @ApiPropertyOptional({
+    description: 'Avatar của user',
+    example: 'https://example.com/avatar.jpg',
+  })
+  avatar?: string;
 
   @ApiProperty({
     description: 'Email',

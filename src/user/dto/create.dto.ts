@@ -9,6 +9,7 @@ import {
   MinLength,
   IsArray,
   IsUUID,
+  MaxLength,
 } from 'class-validator';
 import { UserType } from '../../common/enum/user-type.enum.js';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
@@ -56,6 +57,15 @@ export class CreateUserDto {
   @IsOptional()
   @IsString()
   phoneNumber?: string;
+
+  @ApiPropertyOptional({
+    example: 'https://example.com/avatar.jpg',
+    description: 'Avatar cua nguoi dung',
+  })
+  @IsOptional()
+  @IsString()
+  @MaxLength(2000, { message: 'avatar khong duoc vuot qua 2000 ky tu' })
+  avatar?: string;
 
   @ApiPropertyOptional({
     example: '1990-01-15',
