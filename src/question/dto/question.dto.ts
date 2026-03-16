@@ -24,6 +24,34 @@ export class NextContentDto {
   contentType!: ContentTypes;
 }
 
+export class QuestionChainItemDto {
+  @ApiProperty({
+    description: 'ID cua phan noi dung',
+    example: '550e8400-e29b-41d4-a716-446655440000',
+  })
+  id!: string;
+
+  @ApiProperty({
+    description: 'Noi dung',
+    example: 'anh1.png',
+  })
+  content!: string;
+
+  @ApiProperty({
+    description: 'Loai noi dung',
+    enum: ContentTypes,
+    example: ContentTypes.IMAGE,
+  })
+  contentType!: ContentTypes;
+
+  @ApiProperty({
+    description: 'ID noi dung tiep theo',
+    example: '660e8400-e29b-41d4-a716-446655440000',
+    required: false,
+  })
+  nextContent?: string;
+}
+
 export class QuestionResponseDto extends BaseDto {
   @ApiProperty({
     description: 'Loại dữ liệu của câu hỏi',
@@ -59,6 +87,13 @@ export class QuestionResponseDto extends BaseDto {
     required: false,
   })
   nextContentDetails?: NextContentDto;
+
+  @ApiProperty({
+    description: 'Chuoi noi dung cua cau hoi theo thu tu nextContent',
+    type: [QuestionChainItemDto],
+    required: false,
+  })
+  chain?: QuestionChainItemDto[];
 }
 
 export class QuestionListResponseDto extends PaginationResponseDto<QuestionResponseDto> {

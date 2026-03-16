@@ -33,6 +33,15 @@ export class QuestionService {
     private readonly questionBankQuestionService: QuestionBankQuestionService,
   ) {}
 
+  private mapQuestionChain(chain: QuestionEntity[]) {
+    return chain.map((item) => ({
+      id: item.id,
+      contentType: item.contentType,
+      content: item.content,
+      nextContent: item.nextContent,
+    }));
+  }
+
   async create(dto: CreateQuestionDto): Promise<QuestionEntity> {
     const record = this.questionRepo.create({
       contentType: dto.contentType,
@@ -113,6 +122,9 @@ export class QuestionService {
               contentType: nextContentEntity.contentType,
             };
           }
+
+          const chain = await this.getQuestionWithChain(question.id);
+          (question as any).chain = this.mapQuestionChain(chain);
         }
         return question;
       }),
@@ -153,6 +165,9 @@ export class QuestionService {
           contentType: nextContentEntity.contentType,
         };
       }
+
+      const chain = await this.getQuestionWithChain(record.id);
+      (record as any).chain = this.mapQuestionChain(chain);
     }
 
     const questionBankLink =
