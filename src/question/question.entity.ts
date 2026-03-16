@@ -11,15 +11,17 @@ export class QuestionEntity extends BaseEntity {
     enum: ContentTypes,
     nullable: false,
   })
-  contentType: ContentTypes; // Loại dữ liệu của câu hỏi
+  contentType: ContentTypes;
 
   @Column({ name: 'content', type: 'text', nullable: false })
-  content: string; // Nội dung câu hỏi
+  content: string;
 
-  //next_content
   @Column({ name: 'next_content', type: 'uuid', nullable: true })
-  nextContent?: string; // Nội dung tiếp theo sau câu hỏi (nếu câu hỏi đó vừa hình vừa chữ xen kẽ nhau)
+  nextContent?: string;
+
+  @Column({ name: 'is_root', type: 'boolean', default: true })
+  isRoot!: boolean;
 
   @OneToMany(() => AnswerEntity, (answer) => answer.question)
-  answers: AnswerEntity[]; // Các câu trả lời liên quan đến câu hỏi
+  answers: AnswerEntity[];
 }

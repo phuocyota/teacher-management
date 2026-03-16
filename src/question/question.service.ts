@@ -33,20 +33,12 @@ export class QuestionService {
     private readonly questionBankQuestionService: QuestionBankQuestionService,
   ) {}
 
-  private mapQuestionChain(chain: QuestionEntity[]) {
-    return chain.map((item) => ({
-      id: item.id,
-      contentType: item.contentType,
-      content: item.content,
-      nextContent: item.nextContent,
-    }));
-  }
-
   async create(dto: CreateQuestionDto): Promise<QuestionEntity> {
     const record = this.questionRepo.create({
       contentType: dto.contentType,
       content: dto.content,
       nextContent: dto.nextContent,
+      isRoot: !dto.previousId,
     });
 
     const savedRecord = await this.questionRepo.save(record);
@@ -55,6 +47,29 @@ export class QuestionService {
       const previousQuestion = await this.findOne(dto.previousId);
       previousQuestion.nextContent = savedRecord.id;
       await this.questionRepo.save(previousQuestion);
+    }
+
+    if (dto.nextContent && !dto.previousId) {
+      const nextQuestion = await this.questionRepo.findOne({
+        where: { id: dto.nextContent },
+      });
+
+      if (nextQuestion && nextQuestion.isRoot) {
+        nextQuestion.isRoot = false;
+        await this.questionRepo.save(nextQuestion);
+      }
+
+      const questionBankLink =
+        await this.questionBankQuestionService.findFirstByQuestionId(
+          dto.nextContent,
+        );
+
+      if (questionBankLink) {
+        questionBankLink.questionId = savedRecord.id;
+        await this.questionBankQuestionService.update(questionBankLink.id, {
+          questionId: savedRecord.id,
+        });
+      }
     }
 
     return savedRecord;
@@ -93,6 +108,8 @@ export class QuestionService {
       qb.andWhere('question.content_type = :questionType', { questionType });
     }
 
+    qb.andWhere('question.isRoot = :isRoot', { isRoot: true });
+
     if (questionBankId) {
       qb.orderBy('qbq.order_no', 'ASC');
     } else {
@@ -123,8 +140,6 @@ export class QuestionService {
             };
           }
 
-          const chain = await this.getQuestionWithChain(question.id);
-          (question as any).chain = this.mapQuestionChain(chain);
         }
         return question;
       }),
@@ -166,8 +181,6 @@ export class QuestionService {
         };
       }
 
-      const chain = await this.getQuestionWithChain(record.id);
-      (record as any).chain = this.mapQuestionChain(chain);
     }
 
     const questionBankLink =
