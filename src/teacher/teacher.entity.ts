@@ -12,6 +12,6 @@ export class TeacherEntity extends BaseEntity {
   @Column({ name: 'email', type: 'text' })
   email: string;
 
-  @Column({ nullable: false, unique: true, name: 'device_id' })
-  deviceId!: string;
+  @Column({ nullable: true, unique: true, name: 'device_id' })
+  deviceId?: string;
 }

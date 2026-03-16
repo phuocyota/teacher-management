@@ -26,6 +26,8 @@ import { StudentGroupEntity } from 'src/student-group/student-group.entity';
 
 @Injectable()
 export class UserService extends BaseService<UserEntity> {
+  private static readonly MAX_TEACHER_CODE_RETRIES = 10;
+
   constructor(
     @InjectRepository(UserEntity)
     userRepo: Repository<UserEntity>,
@@ -37,6 +39,42 @@ export class UserService extends BaseService<UserEntity> {
 
   protected getEntityName(): string {
     return 'User';
+  }
+
+  private async generateNextTeacherCode(
+    teacherRepo: Repository<TeacherEntity>,
+  ): Promise<string> {
+    const teachers = await teacherRepo.find({
+      select: ['code'],
+    });
+
+    const maxCode = teachers.reduce((max, teacher) => {
+      const match = teacher.code?.match(/^GV(\d+)$/);
+      if (!match) {
+        return max;
+      }
+
+      return Math.max(max, Number(match[1]));
+    }, 0);
+
+    return `GV${String(maxCode + 1).padStart(3, '0')}`;
+  }
+
+  private isTeacherCodeUniqueViolation(error: unknown): boolean {
+    if (
+      !error ||
+      typeof error !== 'object' ||
+      !('code' in error) ||
+      !('detail' in error)
+    ) {
+      return false;
+    }
+
+    return (
+      error.code === '23505' &&
+      typeof error.detail === 'string' &&
+      error.detail.includes('(code)')
+    );
   }
 
   public async findByUsernameOrEmail(
@@ -143,34 +181,50 @@ export class UserService extends BaseService<UserEntity> {
       }
 
       if (savedUser.userType === UserType.TEACHER) {
-        if (!deviceId || !teacherCode) {
-          throw new BadRequestException(
-            'deviceId va teacherCode la bat buoc khi tao user TEACHER',
-          );
-        }
+        let attempt = 0;
 
-        const existingTeacher = await teacherRepo.findOne({
-          where: [{ deviceId }, { code: teacherCode }],
-        });
+        while (attempt < UserService.MAX_TEACHER_CODE_RETRIES) {
+          const teacherCodeValue =
+            teacherCode ?? (await this.generateNextTeacherCode(teacherRepo));
 
-        if (existingTeacher) {
-          if (existingTeacher.deviceId === deviceId) {
-            throw new ConflictException('deviceId da ton tai');
+          const existingTeacherByCode = await teacherRepo.findOne({
+            where: { code: teacherCodeValue },
+          });
+
+          if (existingTeacherByCode) {
+            if (teacherCode) {
+              throw new ConflictException('Ma giao vien da ton tai');
+            }
+
+            attempt += 1;
+            continue;
           }
 
-          throw new ConflictException('Ma giao vien da ton tai');
+          try {
+            await teacherRepo.save(
+              teacherRepo.create({
+                id: savedUser.id,
+                code: teacherCodeValue,
+                deviceId,
+                name: savedUser.fullName ?? savedUser.userName,
+                email: savedUser.email ?? `${savedUser.userName}@local.invalid`,
+                createdBy: user?.userId,
+              }),
+            );
+            break;
+          } catch (error) {
+            if (!teacherCode && this.isTeacherCodeUniqueViolation(error)) {
+              attempt += 1;
+              continue;
+            }
+
+            throw error;
+          }
         }
 
-        await teacherRepo.save(
-          teacherRepo.create({
-            id: savedUser.id,
-            code: teacherCode,
-            deviceId,
-            name: savedUser.fullName ?? savedUser.userName,
-            email: savedUser.email ?? `${savedUser.userName}@local.invalid`,
-            createdBy: user?.userId,
-          }),
-        );
+        if (attempt === UserService.MAX_TEACHER_CODE_RETRIES) {
+          throw new ConflictException('Khong the tu sinh ma giao vien');
+        }
       }
 
       if (groupIds?.length && user) {
