@@ -11,7 +11,6 @@ import {
   ENTITY_NAMES,
 } from 'src/common/constant/error-messages.constant';
 import { PaginationResponseDto } from 'src/common/dto/pagination.dto';
-import { autoMapListToDto } from 'src/common/utils/auto-map.util';
 import { ExamSetQuestionBankResponseDto } from './dto/exam-set-question-bank.dto';
 import { ExamSetService } from 'src/exam-set/exam-set.service';
 import { QuestionBankService } from 'src/question-bank/question-bank.service';
@@ -51,7 +50,9 @@ export class ExamSetQuestionBankService {
   ): Promise<PaginationResponseDto<ExamSetQuestionBankResponseDto>> {
     const skip = (page - 1) * size;
 
-    const qb = this.examSetQuestionBankRepo.createQueryBuilder('esqb');
+    const qb = this.examSetQuestionBankRepo
+      .createQueryBuilder('esqb')
+      .leftJoinAndSelect('esqb.questionBank', 'questionBank');
 
     if (examSetId) {
       qb.andWhere('esqb.exam_set_id = :examSetId', { examSetId });
@@ -67,7 +68,7 @@ export class ExamSetQuestionBankService {
     const [data, total] = await qb.getManyAndCount();
 
     return {
-      data: autoMapListToDto(ExamSetQuestionBankResponseDto, data),
+      data: data.map((item) => this.mapToResponseDto(item)),
       page,
       size,
       total,
@@ -137,5 +138,37 @@ export class ExamSetQuestionBankService {
   async remove(id: string): Promise<void> {
     const record = await this.findOne(id);
     await this.examSetQuestionBankRepo.remove(record);
+  }
+
+  private mapToResponseDto(
+    item: ExamSetQuestionBankEntity,
+  ): ExamSetQuestionBankResponseDto {
+    const questionBank = item.questionBank
+      ? {
+          id: item.questionBank.id,
+          code: item.questionBank.code,
+          name: item.questionBank.name,
+          totalMarks: item.questionBank.totalMarks,
+          examDate: item.questionBank.examDate,
+          classId: item.questionBank.classId,
+        }
+      : undefined;
+
+    return {
+      id: item.id,
+      createdAt: item.createdAt,
+      updatedAt: item.updatedAt,
+      createdBy: item.createdBy ?? '',
+      updatedBy: item.updatedBy ?? '',
+      examSetId: item.examSetId,
+      questionBankId: item.questionBankId,
+      order: item.order,
+      questionBank,
+      code: questionBank?.code,
+      name: questionBank?.name,
+      totalMarks: questionBank?.totalMarks,
+      examDate: questionBank?.examDate,
+      classId: questionBank?.classId,
+    };
   }
 }

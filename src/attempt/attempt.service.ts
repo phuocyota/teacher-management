@@ -527,6 +527,29 @@ export class AttemptService {
     return autoMapListToDto(AttemptResponseDto, attempts);
   }
 
+  async findByExam(
+    user: JwtPayload,
+    questionBankId: string,
+    examSetId: string,
+  ): Promise<AttemptResponseDto[]> {
+    if (!user?.userId) {
+      throw new ForbiddenException(ERROR_MESSAGES.INVALID_TOKEN_STRUCTURE);
+    }
+
+    const attempts = await this.attemptRepo.find({
+      where: {
+        studentId: user.userId,
+        questionBankId,
+        examSetId,
+      },
+      order: {
+        startedAt: 'DESC',
+      },
+    });
+
+    return autoMapListToDto(AttemptResponseDto, attempts);
+  }
+
   private validateDateRange(fromDate?: string, toDate?: string): void {
     if (fromDate) {
       this.validateDate(fromDate, 'fromDate');

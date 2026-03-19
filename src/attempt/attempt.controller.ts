@@ -199,6 +199,34 @@ export class AttemptController {
     );
   }
 
+  @Get('by-exam')
+  @UseGuards(RolesGuard)
+  @Roles(UserType.STUDENT)
+  @ApiOperation({
+    summary:
+      'List attempts of current student by questionBankId and examSetId',
+  })
+  @ApiQuery({
+    name: 'questionBankId',
+    required: true,
+    type: String,
+    description: 'Question bank ID',
+  })
+  @ApiQuery({
+    name: 'examSetId',
+    required: true,
+    type: String,
+    description: 'Exam set ID',
+  })
+  @ApiOkResponse({ type: [AttemptResponseDto] })
+  findByExam(
+    @User() user: JwtPayload,
+    @Query('questionBankId', ParseUUIDPipe) questionBankId: string,
+    @Query('examSetId', ParseUUIDPipe) examSetId: string,
+  ): Promise<AttemptResponseDto[]> {
+    return this.attemptService.findByExam(user, questionBankId, examSetId);
+  }
+
   @Get(':id/review')
   @UseGuards(RolesGuard)
   @Roles(UserType.STUDENT)
