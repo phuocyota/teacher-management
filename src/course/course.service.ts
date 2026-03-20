@@ -15,7 +15,7 @@ import {
 import { UploadService } from 'src/upload/upload.service';
 import { JwtPayload } from 'src/common/interface/jwt-payload.interface';
 import { PaginationResponseDto } from 'src/common/dto/pagination.dto';
-import { CourseResponseDto } from './dto/course.dto';
+import { CourseOptionDto, CourseResponseDto } from './dto/course.dto';
 
 @Injectable()
 export class CourseService {
@@ -96,6 +96,56 @@ export class CourseService {
       );
     }
     return record;
+  }
+
+  async getOptions(
+    page = 1,
+    size = 10,
+    q?: string,
+    classId?: string,
+  ): Promise<PaginationResponseDto<CourseOptionDto>> {
+    const skip = (page - 1) * size;
+
+    const qb = this.courseRepo
+      .createQueryBuilder('course')
+      .leftJoin('course.class', 'class')
+      .select([
+        'course.id AS "value"',
+        'course.name AS "label"',
+        'course.code AS "code"',
+        'course.name AS "name"',
+        'course.classId AS "classId"',
+        'class.code AS "classCode"',
+        'class.name AS "className"',
+      ]);
+
+    if (q) {
+      const qParam = `%${q}%`;
+      qb.andWhere(
+        `(
+          LOWER(course.code) LIKE LOWER(:q)
+          OR LOWER(course.name) LIKE LOWER(:q)
+          OR LOWER(class.code) LIKE LOWER(:q)
+          OR LOWER(class.name) LIKE LOWER(:q)
+        )`,
+        { q: qParam },
+      );
+    }
+
+    if (classId) {
+      qb.andWhere('course.class_id = :classId', { classId });
+    }
+
+    qb.orderBy('class.name', 'ASC');
+    qb.addOrderBy('course.name', 'ASC');
+    qb.skip(skip).take(size);
+
+    const [data, total] = await Promise.all([
+      qb.getRawMany<CourseOptionDto>(),
+      qb.getCount(),
+    ]);
+
+    return { data, page, size, total };
   }
 
   async update(id: string, dto: UpdateCourseDto): Promise<CourseEntity> {

@@ -18,7 +18,12 @@ import {
 } from '@nestjs/swagger';
 import { CourseService } from './course.service';
 import { CreateCourseDto, UpdateCourseDto } from './dto/create-course.dto';
-import { CourseListResponseDto, CourseResponseDto } from './dto/course.dto';
+import {
+  CourseListResponseDto,
+  CourseOptionListResponseDto,
+  CourseOptionDto,
+  CourseResponseDto,
+} from './dto/course.dto';
 import { User } from 'src/common/decorator/user.decorator';
 import type { JwtPayload } from 'src/common/interface/jwt-payload.interface';
 import { PaginationResponseDto } from 'src/common/dto/pagination.dto';
@@ -66,6 +71,31 @@ export class CourseController {
   async getMaxCode(): Promise<MaxCodeResponseDto> {
     const maxCode = await this.courseService.getMaxCode();
     return { maxCode };
+  }
+
+  @Get('options')
+  @ApiQuery({ name: 'page', required: false, type: Number })
+  @ApiQuery({ name: 'size', required: false, type: Number })
+  @ApiQuery({
+    name: 'q',
+    required: false,
+    type: String,
+    description: 'Search by course code, course name, class code or class name',
+  })
+  @ApiQuery({
+    name: 'classId',
+    required: false,
+    type: String,
+    description: 'Filter options by classId',
+  })
+  @ApiOkResponse({ type: CourseOptionListResponseDto })
+  getOptions(
+    @Query('page') page?: number,
+    @Query('size') size?: number,
+    @Query('q') q?: string,
+    @Query('classId') classId?: string,
+  ): Promise<PaginationResponseDto<CourseOptionDto>> {
+    return this.courseService.getOptions(page, size, q, classId);
   }
 
   @Get(':id')
