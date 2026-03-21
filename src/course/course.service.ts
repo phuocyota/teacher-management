@@ -16,16 +16,12 @@ import {
 import { UploadService } from 'src/upload/upload.service';
 import { JwtPayload } from 'src/common/interface/jwt-payload.interface';
 import { PaginationResponseDto } from 'src/common/dto/pagination.dto';
-<<<<<<< HEAD
 import {
   ClassOptionDto,
   CourseOptionDto,
   CourseResponseDto,
   LectureOptionDto,
 } from './dto/course.dto';
-=======
-import { CourseOptionDto, CourseResponseDto } from './dto/course.dto';
->>>>>>> b3aba5bb7454c60bed62b01cee6c963b9afbc016
 
 @Injectable()
 export class CourseService {
@@ -115,7 +111,6 @@ export class CourseService {
     size = 10,
     q?: string,
     classId?: string,
-<<<<<<< HEAD
   ): Promise<
     PaginationResponseDto<CourseOptionDto> & {
       classes: ClassOptionDto[];
@@ -127,12 +122,6 @@ export class CourseService {
     const qParam = q ? `%${q}%` : undefined;
 
     const coursesQb = this.courseRepo
-=======
-  ): Promise<PaginationResponseDto<CourseOptionDto>> {
-    const skip = (page - 1) * size;
-
-    const qb = this.courseRepo
->>>>>>> b3aba5bb7454c60bed62b01cee6c963b9afbc016
       .createQueryBuilder('course')
       .leftJoin('course.class', 'class')
       .select([
@@ -145,14 +134,8 @@ export class CourseService {
         'class.name AS "className"',
       ]);
 
-<<<<<<< HEAD
     if (qParam) {
       coursesQb.andWhere(
-=======
-    if (q) {
-      const qParam = `%${q}%`;
-      qb.andWhere(
->>>>>>> b3aba5bb7454c60bed62b01cee6c963b9afbc016
         `(
           LOWER(course.code) LIKE LOWER(:q)
           OR LOWER(course.name) LIKE LOWER(:q)
@@ -164,7 +147,6 @@ export class CourseService {
     }
 
     if (classId) {
-<<<<<<< HEAD
       coursesQb.andWhere('course.class_id = :classId', { classId });
     }
 
@@ -176,7 +158,7 @@ export class CourseService {
       .createQueryBuilder('class')
       .select([
         'class.id AS "value"',
-        "CONCAT(class.code, ' - ', class.name) AS \"label\"",
+        'CONCAT(class.code, \' - \', class.name) AS "label"',
         'class.code AS "code"',
         'class.name AS "name"',
       ]);
@@ -247,21 +229,6 @@ export class CourseService {
       size,
       total,
     };
-=======
-      qb.andWhere('course.class_id = :classId', { classId });
-    }
-
-    qb.orderBy('class.name', 'ASC');
-    qb.addOrderBy('course.name', 'ASC');
-    qb.skip(skip).take(size);
-
-    const [data, total] = await Promise.all([
-      qb.getRawMany<CourseOptionDto>(),
-      qb.getCount(),
-    ]);
-
-    return { data, page, size, total };
->>>>>>> b3aba5bb7454c60bed62b01cee6c963b9afbc016
   }
 
   async update(id: string, dto: UpdateCourseDto): Promise<CourseEntity> {

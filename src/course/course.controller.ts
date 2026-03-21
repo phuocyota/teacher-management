@@ -19,18 +19,12 @@ import {
 import { CourseService } from './course.service';
 import { CreateCourseDto, UpdateCourseDto } from './dto/create-course.dto';
 import {
-<<<<<<< HEAD
   ClassOptionDto,
-=======
->>>>>>> b3aba5bb7454c60bed62b01cee6c963b9afbc016
   CourseListResponseDto,
   CourseOptionListResponseDto,
   CourseOptionDto,
   CourseResponseDto,
-<<<<<<< HEAD
   LectureOptionDto,
-=======
->>>>>>> b3aba5bb7454c60bed62b01cee6c963b9afbc016
 } from './dto/course.dto';
 import { User } from 'src/common/decorator/user.decorator';
 import type { JwtPayload } from 'src/common/interface/jwt-payload.interface';
@@ -102,7 +96,6 @@ export class CourseController {
     @Query('size') size?: number,
     @Query('q') q?: string,
     @Query('classId') classId?: string,
-<<<<<<< HEAD
   ): Promise<
     PaginationResponseDto<CourseOptionDto> & {
       classes: ClassOptionDto[];
@@ -110,9 +103,6 @@ export class CourseController {
       lectures: LectureOptionDto[];
     }
   > {
-=======
-  ): Promise<PaginationResponseDto<CourseOptionDto>> {
->>>>>>> b3aba5bb7454c60bed62b01cee6c963b9afbc016
     return this.courseService.getOptions(page, size, q, classId);
   }
 
