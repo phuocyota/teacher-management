@@ -105,6 +105,7 @@ export class CourseOptionDto {
   className?: string;
 }
 
+<<<<<<< HEAD
 export class ClassOptionDto {
   @ApiProperty({
     description: 'Class ID used as option value',
@@ -170,6 +171,8 @@ export class LectureOptionDto {
   courseId!: string;
 }
 
+=======
+>>>>>>> b3aba5bb7454c60bed62b01cee6c963b9afbc016
 export class CourseListResponseDto {
   @ApiProperty({ type: [CourseResponseDto] })
   data!: CourseResponseDto[];
@@ -197,6 +200,7 @@ export class CourseOptionListResponseDto {
   @ApiProperty({ type: [CourseOptionDto] })
   data!: CourseOptionDto[];
 
+<<<<<<< HEAD
   @ApiProperty({ type: [ClassOptionDto] })
   classes!: ClassOptionDto[];
 
@@ -206,6 +210,8 @@ export class CourseOptionListResponseDto {
   @ApiProperty({ type: [LectureOptionDto] })
   lectures!: LectureOptionDto[];
 
+=======
+>>>>>>> b3aba5bb7454c60bed62b01cee6c963b9afbc016
   @ApiProperty({
     description: 'Page number',
     example: 1,
