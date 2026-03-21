@@ -8,6 +8,7 @@ import { Repository } from 'typeorm';
 import { CourseEntity } from './course.entity';
 import { CreateCourseDto, UpdateCourseDto } from './dto/create-course.dto';
 import { ClassEntity } from 'src/class/class.entity';
+import { LectureEntity } from 'src/lecture/entity/lecture.entity';
 import {
   ERROR_MESSAGES,
   ENTITY_NAMES,
@@ -15,7 +16,12 @@ import {
 import { UploadService } from 'src/upload/upload.service';
 import { JwtPayload } from 'src/common/interface/jwt-payload.interface';
 import { PaginationResponseDto } from 'src/common/dto/pagination.dto';
-import { CourseResponseDto } from './dto/course.dto';
+import {
+  ClassOptionDto,
+  CourseOptionDto,
+  CourseResponseDto,
+  LectureOptionDto,
+} from './dto/course.dto';
 
 @Injectable()
 export class CourseService {
@@ -24,6 +30,8 @@ export class CourseService {
     private readonly courseRepo: Repository<CourseEntity>,
     @InjectRepository(ClassEntity)
     private readonly classRepo: Repository<ClassEntity>,
+    @InjectRepository(LectureEntity)
+    private readonly lectureRepo: Repository<LectureEntity>,
     private readonly uploadService: UploadService,
   ) {}
 
@@ -96,6 +104,131 @@ export class CourseService {
       );
     }
     return record;
+  }
+
+  async getOptions(
+    page = 1,
+    size = 10,
+    q?: string,
+    classId?: string,
+  ): Promise<
+    PaginationResponseDto<CourseOptionDto> & {
+      classes: ClassOptionDto[];
+      courses: CourseOptionDto[];
+      lectures: LectureOptionDto[];
+    }
+  > {
+    const skip = (page - 1) * size;
+    const qParam = q ? `%${q}%` : undefined;
+
+    const coursesQb = this.courseRepo
+      .createQueryBuilder('course')
+      .leftJoin('course.class', 'class')
+      .select([
+        'course.id AS "value"',
+        'course.name AS "label"',
+        'course.code AS "code"',
+        'course.name AS "name"',
+        'course.classId AS "classId"',
+        'class.code AS "classCode"',
+        'class.name AS "className"',
+      ]);
+
+    if (qParam) {
+      coursesQb.andWhere(
+        `(
+          LOWER(course.code) LIKE LOWER(:q)
+          OR LOWER(course.name) LIKE LOWER(:q)
+          OR LOWER(class.code) LIKE LOWER(:q)
+          OR LOWER(class.name) LIKE LOWER(:q)
+        )`,
+        { q: qParam },
+      );
+    }
+
+    if (classId) {
+      coursesQb.andWhere('course.class_id = :classId', { classId });
+    }
+
+    coursesQb.orderBy('class.name', 'ASC');
+    coursesQb.addOrderBy('course.name', 'ASC');
+    coursesQb.skip(skip).take(size);
+
+    const classesQb = this.classRepo
+      .createQueryBuilder('class')
+      .select([
+        'class.id AS "value"',
+        "CONCAT(class.code, ' - ', class.name) AS \"label\"",
+        'class.code AS "code"',
+        'class.name AS "name"',
+      ]);
+
+    if (classId) {
+      classesQb.andWhere('class.id = :classId', { classId });
+    }
+
+    if (qParam) {
+      classesQb.andWhere(
+        `(
+          LOWER(class.code) LIKE LOWER(:q)
+          OR LOWER(class.name) LIKE LOWER(:q)
+        )`,
+        { q: qParam },
+      );
+    }
+
+    classesQb.orderBy('class.name', 'ASC');
+
+    const lecturesQb = this.lectureRepo
+      .createQueryBuilder('lecture')
+      .innerJoin(CourseEntity, 'course', 'course.id = lecture.course_id')
+      .innerJoin(ClassEntity, 'class', 'class.id = course.class_id')
+      .select([
+        'lecture.id AS "value"',
+        'lecture.title AS "label"',
+        'lecture.code AS "code"',
+        'lecture.title AS "title"',
+        'class.id AS "classId"',
+        'course.id AS "courseId"',
+      ]);
+
+    if (classId) {
+      lecturesQb.andWhere('class.id = :classId', { classId });
+    }
+
+    if (qParam) {
+      lecturesQb.andWhere(
+        `(
+          LOWER(lecture.code) LIKE LOWER(:q)
+          OR LOWER(lecture.title) LIKE LOWER(:q)
+          OR LOWER(course.code) LIKE LOWER(:q)
+          OR LOWER(course.name) LIKE LOWER(:q)
+          OR LOWER(class.code) LIKE LOWER(:q)
+          OR LOWER(class.name) LIKE LOWER(:q)
+        )`,
+        { q: qParam },
+      );
+    }
+
+    lecturesQb.orderBy('lecture.order_column', 'ASC');
+    lecturesQb.addOrderBy('lecture.title', 'ASC');
+
+    const [data, total, classes, lectures] = await Promise.all([
+      coursesQb.getRawMany<CourseOptionDto>(),
+      coursesQb.getCount(),
+      classesQb.getRawMany<ClassOptionDto>(),
+      lecturesQb.getRawMany<LectureOptionDto>(),
+    ]);
+
+    return {
+      data,
+      classes,
+      courses: data,
+      lectures,
+      page,
+      size,
+      total,
+    };
   }
 
   async update(id: string, dto: UpdateCourseDto): Promise<CourseEntity> {
