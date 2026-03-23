@@ -55,7 +55,6 @@ export class LectureService {
 
       const saved = await manager.save(lecture);
 
-      // Tạo resources nếu có
       if (dto.resources && dto.resources.length > 0) {
         for (const resource of dto.resources) {
           const lectureResource = new LectureResourceEntity();
@@ -68,7 +67,6 @@ export class LectureService {
         }
       }
 
-      // Tạo context nếu có groupId
       if (dto.groupId) {
         await this.groupService.checkById(dto.groupId);
 
@@ -146,7 +144,6 @@ export class LectureService {
       .take(size)
       .distinct(true);
 
-    // Phân quyền: user không phải admin chỉ xem được lecture được phân quyền
     if (user.userType !== UserType.ADMIN) {
       query.andWhere(
         `(
@@ -267,7 +264,6 @@ export class LectureService {
       );
     }
 
-    // Phân quyền: user không phải admin chỉ xem được lecture được phân quyền
     if (user.userType !== UserType.ADMIN) {
       const hasAccess = await this.lectureRepository
         .createQueryBuilder('lecture')
@@ -323,7 +319,6 @@ export class LectureService {
         );
       }
 
-      // Kiểm tra code unique nếu có thay đổi
       if (dto.code !== undefined && dto.code !== lecture.code) {
         const existingLecture = await manager.findOne(LectureEntity, {
           where: { code: dto.code },
@@ -342,40 +337,10 @@ export class LectureService {
 
       const updated = await manager.save(lecture);
 
-      // Cập nhật resources nếu có
       if (dto.resources !== undefined) {
-        for (const resource of dto.resources) {
-          // Tìm resource hiện tại với type và source tương ứng
-          const existingResource = await manager.findOne(
-            LectureResourceEntity,
-            {
-              where: {
-                lecture: { id },
-                type: resource.type as Type,
-                source: resource.source as Source,
-              },
-            },
-          );
-
-          if (existingResource) {
-            // Cập nhật URL nếu resource đã tồn tại
-            existingResource.url = resource.url;
-            existingResource.updatedBy = user.userId;
-            await manager.save(existingResource);
-          } else {
-            // Tạo resource mới nếu chưa tồn tại
-            const lectureResource = new LectureResourceEntity();
-            lectureResource.lecture = updated;
-            lectureResource.type = resource.type as Type;
-            lectureResource.source = resource.source as Source;
-            lectureResource.url = resource.url;
-            lectureResource.createdBy = user.userId;
-            await manager.save(lectureResource);
-          }
-        }
+        await this.syncLectureResources(manager, lecture, updated, dto, user);
       }
 
-      // Cập nhật hoặc tạo context nếu có thay đổi
       if (dto.groupId !== undefined) {
         if (dto.groupId) {
           await this.groupService.checkById(dto.groupId);
@@ -390,19 +355,15 @@ export class LectureService {
         });
 
         if (existingContext) {
-          // Cập nhật context hiện tại
           if (dto.groupId !== undefined) existingContext.groupId = dto.groupId;
           existingContext.updatedBy = user.userId;
           await manager.save(existingContext);
-        } else {
-          // Tạo context mới nếu có thông tin phân bổ
-          if (dto.groupId) {
-            await manager.save(LectureGroupEntity, {
-              lectureId: id,
-              groupId: dto.groupId,
-              createdBy: user.userId,
-            });
-          }
+        } else if (dto.groupId) {
+          await manager.save(LectureGroupEntity, {
+            lectureId: id,
+            groupId: dto.groupId,
+            createdBy: user.userId,
+          });
         }
       }
 
@@ -430,7 +391,6 @@ export class LectureService {
         throw new ForbiddenException('Bạn không có quyền xoá bài giảng này');
       }
 
-      // Xóa các file resources có source OFFLINE trước khi xóa lecture
       if (lecture.resources && lecture.resources.length > 0) {
         for (const resource of lecture.resources) {
           if (resource.source === Source.OFFLINE && resource.url) {
@@ -439,18 +399,15 @@ export class LectureService {
         }
       }
 
-      // Xóa avatar nếu có
       if (lecture.avatar) {
         await this.uploadService.deleteFileByPath(lecture.avatar);
       }
 
-      // Xoá lecture sẽ tự động xoá lecture_context và lecture_resource nhờ onDelete: CASCADE
       await manager.delete(LectureEntity, { id });
     });
   }
 
   async getMaxCode(): Promise<number> {
-    // Sử dụng Postgres regex để lấy phần số và trả về MAX nhanh hơn
     const result = await this.lectureRepository
       .createQueryBuilder('lecture')
       .select(
@@ -460,5 +417,103 @@ export class LectureService {
       .getRawOne<{ maxCode: number | null }>();
 
     return result?.maxCode ?? 0;
+  }
+
+  private async syncLectureResources(
+    manager: EntityManager,
+    lecture: LectureEntity,
+    updatedLecture: LectureEntity,
+    dto: UpdateLectureDto,
+    user: JwtPayload,
+  ): Promise<void> {
+    const currentResources = lecture.resources ?? [];
+    const targetResources = new Map<
+      string,
+      {
+        type: Type;
+        source: Source;
+        url: string;
+      }
+    >();
+    const syncedKeys = new Set<string>();
+
+    for (const resource of dto.resources ?? []) {
+      const type = resource.type as Type;
+      const source = resource.source as Source;
+
+      targetResources.set(this.getResourceKey(type, source), {
+        type,
+        source,
+        url: resource.url,
+      });
+    }
+
+    for (const existingResource of currentResources) {
+      const resourceKey = this.getResourceKey(
+        existingResource.type,
+        existingResource.source,
+      );
+      const targetResource = targetResources.get(resourceKey);
+
+      if (!targetResource) {
+        await this.deleteOfflineLectureResourceFile(existingResource);
+        await manager.remove(existingResource);
+        continue;
+      }
+
+      if (syncedKeys.has(resourceKey)) {
+        await this.deleteOfflineLectureResourceFile(
+          existingResource,
+          targetResource.url,
+        );
+        await manager.remove(existingResource);
+        continue;
+      }
+
+      if (existingResource.url !== targetResource.url) {
+        await this.deleteOfflineLectureResourceFile(
+          existingResource,
+          targetResource.url,
+        );
+        existingResource.url = targetResource.url;
+        existingResource.updatedBy = user.userId;
+        await manager.save(existingResource);
+      }
+
+      syncedKeys.add(resourceKey);
+    }
+
+    for (const [resourceKey, resource] of targetResources.entries()) {
+      if (syncedKeys.has(resourceKey)) {
+        continue;
+      }
+
+      const lectureResource = new LectureResourceEntity();
+      lectureResource.lecture = updatedLecture;
+      lectureResource.type = resource.type;
+      lectureResource.source = resource.source;
+      lectureResource.url = resource.url;
+      lectureResource.createdBy = user.userId;
+      await manager.save(lectureResource);
+    }
+  }
+
+  private getResourceKey(type: Type, source: Source): string {
+    return `${type}:${source}`;
+  }
+
+  private async deleteOfflineLectureResourceFile(
+    resource: LectureResourceEntity,
+    nextUrl?: string,
+  ): Promise<void> {
+    if (
+      resource.source !== Source.OFFLINE ||
+      !resource.url ||
+      resource.url === nextUrl
+    ) {
+      return;
+    }
+
+    await this.uploadService.deleteFileByPath(resource.url);
   }
 }

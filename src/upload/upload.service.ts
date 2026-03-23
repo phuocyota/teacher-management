@@ -596,28 +596,33 @@ export class UploadService {
       return false;
     }
 
-    let absolutePath: string;
+    let absolutePath: string | undefined;
     try {
       absolutePath = this.streamService.getAbsoluteFilePath(pathValue);
     } catch (error) {
-      return false;
+      absolutePath = undefined;
     }
 
-    if (!existsSync(absolutePath)) {
-      return false;
-    }
+    let deletedPhysicalFile = false;
 
-    try {
-      const stats = statSync(absolutePath);
-      if (!stats.isFile()) {
-        return false;
+    if (absolutePath && existsSync(absolutePath)) {
+      try {
+        const stats = statSync(absolutePath);
+        if (stats.isFile()) {
+          rmSync(absolutePath);
+          deletedPhysicalFile = true;
+        }
+      } catch (error) {
+        deletedPhysicalFile = false;
       }
-
-      rmSync(absolutePath);
-      return true;
-    } catch (error) {
-      return false;
     }
+
+    const deletedFileRecord = await this.deleteFileRecordByPath(
+      pathValue,
+      absolutePath,
+    );
+
+    return deletedPhysicalFile || deletedFileRecord;
   }
 
   /**
@@ -636,6 +641,114 @@ export class UploadService {
     }
 
     return name;
+  }
+
+  private async deleteFileRecordByPath(
+    pathValue: string,
+    absolutePath?: string,
+  ): Promise<boolean> {
+    const candidatePaths = new Set<string>();
+    const candidateFilenames = new Set<string>();
+    const isUrlPath = /^https?:\/\//i.test(pathValue);
+    const normalizedPathValue = pathValue.replace(/\\/g, '/');
+    const sanitizedPathValue = normalizedPathValue.split(/[?#]/)[0];
+    const uploadPrefix = this.uploadDir.replace(/\\/g, '/');
+    const normalizedPublicBaseUrl = this.publicBaseUrl?.replace(/\/$/, '');
+    const canDeriveFromAbsolute =
+      !isUrlPath ||
+      (!!normalizedPublicBaseUrl &&
+        normalizedPathValue.startsWith(normalizedPublicBaseUrl));
+
+    candidatePaths.add(pathValue);
+    candidatePaths.add(normalizedPathValue);
+
+    if (sanitizedPathValue) {
+      candidatePaths.add(sanitizedPathValue);
+      if (sanitizedPathValue.startsWith('/')) {
+        candidatePaths.add(sanitizedPathValue.slice(1));
+      }
+
+      if (sanitizedPathValue.startsWith('/uploads/')) {
+        candidatePaths.add(sanitizedPathValue.slice('/uploads/'.length));
+        candidatePaths.add(
+          `${uploadPrefix}/${sanitizedPathValue.slice('/uploads/'.length)}`,
+        );
+      } else if (sanitizedPathValue.startsWith('uploads/')) {
+        candidatePaths.add(sanitizedPathValue.slice('uploads/'.length));
+        candidatePaths.add(
+          `${uploadPrefix}/${sanitizedPathValue.slice('uploads/'.length)}`,
+        );
+      }
+
+      if (!isUrlPath) {
+        const inputFilename = basename(sanitizedPathValue);
+        if (inputFilename && inputFilename !== '.') {
+          candidateFilenames.add(inputFilename);
+        }
+      }
+    }
+
+    if (absolutePath && canDeriveFromAbsolute) {
+      const absoluteFilename = basename(absolutePath);
+      if (absoluteFilename) {
+        candidateFilenames.add(absoluteFilename);
+      }
+
+      const absoluteUploadDir = resolve(process.cwd(), this.uploadDir);
+      const resolvedTargetPath = resolve(absolutePath);
+      if (
+        resolvedTargetPath.startsWith(`${absoluteUploadDir}${sep}`) ||
+        resolvedTargetPath === absoluteUploadDir
+      ) {
+        const relativePath = resolvedTargetPath
+          .slice(absoluteUploadDir.length)
+          .replace(/^[/\\]+/, '')
+          .replace(/\\/g, '/');
+
+        if (relativePath) {
+          candidatePaths.add(relativePath);
+          candidatePaths.add(`${uploadPrefix}/${relativePath}`);
+
+          if (normalizedPublicBaseUrl) {
+            candidatePaths.add(
+              `${normalizedPublicBaseUrl}/${relativePath}`,
+            );
+          }
+        }
+      }
+    }
+
+    const query = this.fileRepo.createQueryBuilder('file');
+    const candidatePathList = [...candidatePaths].filter(Boolean);
+    const candidateFilenameList = [...candidateFilenames].filter(Boolean);
+
+    if (candidatePathList.length > 0) {
+      query.where('file.path IN (:...paths)', { paths: candidatePathList });
+    }
+
+    if (candidateFilenameList.length > 0) {
+      if (candidatePathList.length > 0) {
+        query.orWhere('file.filename IN (:...filenames)', {
+          filenames: candidateFilenameList,
+        });
+      } else {
+        query.where('file.filename IN (:...filenames)', {
+          filenames: candidateFilenameList,
+        });
+      }
+    }
+
+    if (candidatePathList.length === 0 && candidateFilenameList.length === 0) {
+      return false;
+    }
+
+    const matchedFiles = await query.getMany();
+    if (matchedFiles.length === 0) {
+      return false;
+    }
+
+    await this.fileRepo.delete(matchedFiles.map((file) => file.id));
+    return true;
   }
 
   async ensureFolderPath(relativePath: string): Promise<FolderPathResponseDto> {

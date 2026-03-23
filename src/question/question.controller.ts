@@ -55,7 +55,7 @@ export class QuestionController {
     name: 'questionType',
     required: false,
     type: String,
-    description: 'Filter by content type (TEXT or IMAGE)',
+    description: 'Filter by content type (TEXT, IMAGE, or AUDIO)',
   })
   @ApiOkResponse({ type: QuestionListResponseDto })
   findAll(

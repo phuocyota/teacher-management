@@ -1,186 +1,380 @@
-# Tổng Quan Source (Teacher Management API)
+# Tổng Quan Source - Teacher Management API
 
-Dự án là NestJS monolith, tổ chức theo module theo domain. Dùng TypeORM
-(entity + repository), DTO cho request/response, và các tiện ích chung
-trong `src/common`. Tài liệu này giúp đọc nhanh cấu trúc và thêm API mới
-mà không phá cấu trúc cũ.
+Project này là NestJS monolith dùng TypeORM + PostgreSQL, tổ chức theo domain module. Mỗi domain thường có `module`, `controller`, `service`, `entity`, `dto`, và đôi khi có `enum` hoặc `services/entity/controller` con.
 
-## 1) Cấu Trúc Tổng Quan
+Tài liệu này được cập nhật theo source hiện tại trong `src/`, không dựa trên tài liệu cũ.
 
-- `src/main.ts` bootstrap app + Swagger.
-- `src/app.module.ts` khai báo module + global guard/interceptor/filter.
-- Mỗi domain nằm trong `src/<domain>/` gồm:
-  - `*.module.ts`
-  - `*.controller.ts`
-  - `*.service.ts`
-  - `*.entity.ts` hoặc `entity/*.entity.ts`
-  - `dto/*.dto.ts`
-  - `enum/*.enum.ts`
+## 1. Entry Points
 
-## 2) Danh Sách Module
+- `src/main.ts`
+  - Bootstrap `NestExpressApplication`
+  - Bật Swagger tại `/swagger`
+  - Bật CORS cho một số origin cố định
+  - Gắn global interceptors:
+    - `ResponseLoggerInterceptor`
+    - `SuccessResponseInterceptor`
+  - Serve static thư mục `uploads` tại `/uploads`
+  - Listen port `process.env.PORT ?? 3001` trên `0.0.0.0`
 
-- `auth/` đăng nhập + đăng ký
-- `attempt/` quản lý lần làm bài của học sinh theo đề thi
-- `class/` quản lý lớp
-- `course/` quản lý khóa học
-- `device/` request/approve thiết bị
-- `group/` quản lý nhóm
-- `lecture/` bài giảng + lecture_user + lecture_group + download_log
-- `license/` quản lý license
-- `question-bank/` quản lý đề thi / ngân hàng câu hỏi
-- `question-bank-question/` liên kết câu hỏi với đề thi, thứ tự và điểm từng câu
-- `question/` quản lý câu hỏi
-- `answer/` quản lý đáp án của câu hỏi
-- `socket/` websocket gateway
-- `student/` quản lý học sinh
-- `student-group/` quản lý nhóm học sinh
-- `student-answer/` quản lý câu trả lời của học sinh trong từng lần làm bài
-- `teacher/` quản lý giáo viên
-- `upload/` upload/stream file + phân quyền truy cập
-- `user/` quản lý người dùng
-- `user-group/` membership + roles
+- `src/app.module.ts`
+  - Nạp `.env` bằng `ConfigModule.forRoot({ isGlobal: true })`
+  - Kết nối PostgreSQL qua `TypeOrmModule.forRootAsync`
+  - Đăng ký toàn bộ entity trực tiếp trong `entities: []`
+  - `synchronize: true`
+  - Gắn global:
+    - `APP_FILTER` -> `AllExceptionsFilter`
+    - `APP_GUARD` -> `AuthGuard`
+  - Gắn `RequestLoggerMiddleware` cho toàn bộ route
+  - Serve static thêm một root Linux cố định: `/var/www/teacher-management/uploads`
 
-## 3) Thành Phần Dùng Chung
+## 2. Runtime Request Pipeline
 
-- `src/common/sql/base.entity.ts` fields chung (id, createdAt, ...)
-- `src/common/sql/base.service.ts` helper CRUD (nếu dùng)
-- `src/common/database/transaction.utils.ts` helper transaction
-- `src/common/constant/error-messages.constant.ts` thông báo lỗi chuẩn
-- `src/common/dto/pagination.dto.ts` request/response phân trang
-- `src/common/utils/auto-map.util.ts` map raw DB -> DTO
-- Guards/interceptors/filters:
-  - `common/guard/auth.guard.ts` (global)
-  - `common/guard/roles.guard.ts`
-  - `common/interceptors/*`
-  - `common/filter/all-exceptions.filter.ts`
-  - `common/decorator/*` (public/roles/user)
+Luồng request hiện tại:
 
-## 4) Pattern Auth + Permission
+1. Request đi qua `RequestLoggerMiddleware`
+2. `AuthGuard` kiểm tra JWT cho mọi route, trừ route có `@Public()`
+3. Controller gọi service theo domain
+4. Nếu lỗi:
+   - `AllExceptionsFilter` chuẩn hóa lỗi thành JSON
+5. Nếu thành công:
+   - `SuccessResponseInterceptor` bọc response thành:
+     - `success`
+     - `message`
+     - `data`
 
-- AuthGuard áp dụng global (xem `app.module.ts`).
-- Dùng `@Public()` cho endpoint public.
-- Dùng `@Roles()` + `RolesGuard` cho role-based.
-- Nhiều service kiểm tra `user.userType` để phân quyền.
+Lưu ý:
 
-## 5) Pattern DB + Entity
+- `AuthGuard` chỉ verify JWT bằng `JWT_SECRET`, sau đó attach `request.user`
+- Guard không check token có còn tồn tại trong bảng `token` hay không; việc check token sống/chết nằm trong `AuthService.isTokenAlive()`
 
-- Entity kế thừa `BaseEntity`.
-- `synchronize: true` đang bật (xem `app.module.ts`).
-- Repository inject bằng `@InjectRepository(Entity)`.
+## 3. Stack Và Convention
 
-## 6) Lưu Ý Module Lecture
+- Framework: NestJS 11
+- ORM: TypeORM 0.3
+- DB: PostgreSQL
+- Auth: JWT + `jsonwebtoken`
+- Password: `bcryptjs`
+- Docs: `@nestjs/swagger`
+- Upload/stream: local filesystem, chunk upload, unzip
+- Test hiện có rất ít; repo gần như chưa có unit spec trong `src/`
 
-Lecture có nhiều sub-controller/service:
-- `lecture.controller.ts` (CRUD bài giảng)
-- `lecture_user.*` phân bài giảng theo user
-- `lecture_group.*` phân bài giảng theo group
-- `lecture_download_log.*` lịch sử download
+Pattern chung:
 
-## 7) Lưu Ý Module Upload
+- Controller mỏng, logic nằm ở service
+- DTO dùng cho request/response
+- Entity thường kế thừa `src/common/sql/base.entity.ts`
+- Phân trang dùng `PaginationResponseDto`
+- Map entity -> DTO dùng `autoMapListToDto`
 
-- `upload.service.ts` xử lý upload, phân quyền, chunked upload, unzip.
-- `stream.service.ts` xử lý download/stream response.
+## 4. Module Đang Được Wire Trong AppModule
 
-## 8) Lưu Ý Các Module Thi / Làm Bài
+Các module đã được import vào runtime:
 
-- `question-bank/` là thực thể đề thi, lưu thông tin chung như mã đề, tên đề, tổng điểm, ngày thi.
-- `question-bank-question/` là bảng trung gian giữa đề thi và câu hỏi:
-  - `question_bank_id`
-  - `question_id`
-  - `order_no`
-  - `points`
-- `attempt/` là một lần học sinh vào làm một đề:
-  - `student_id`
-  - `question_bank_id`
-  - `status` (`DOING`, `SUBMITTED`, `EXPIRED`)
-  - `started_at`, `submitted_at`
-  - `score`
-- `student-answer/` lưu câu trả lời theo từng câu trong một `attempt`:
-  - `attempt_id`
-  - `question_id`
-  - `answer_id` nullable cho câu chọn 1 đáp án
-  - `text_value` nullable cho tự luận / điền đáp án
-  - `selected_answer_ids` nullable cho câu nhiều đáp án
-  - `is_correct`, `points_earned`, `time_spent_sec`
+- `AuthModule`
+- `TeacherModule`
+- `LectureModule`
+- `UserModule`
+- `LicenseModule`
+- `DeviceModule`
+- `SocketModule`
+- `ClassModule`
+- `CourseModule`
+- `UploadModule`
+- `GroupModule`
+- `UserGroupModule`
+- `QuestionBankModule`
+- `QuestionModule`
+- `AnswerModule`
+- `StudentModule`
+- `SchoolModule`
+- `StudentGroupModule`
+- `StudentAnswerModule`
+- `QuestionBankQuestionModule`
+- `AttemptModule`
+- `GradeModule`
+- `SubjectModule`
+- `ExamSetModule`
+- `ExamSetQuestionBankModule`
 
-## 9) Thêm API Mới (Checklist)
+## 5. Bản Đồ Domain
 
-1) Chọn domain module (hoặc tạo module mới).
-2) Thêm DTOs trong `src/<domain>/dto/`.
-3) Thêm method trong `src/<domain>/<domain>.service.ts`.
-4) Thêm route trong `src/<domain>/<domain>.controller.ts`.
-5) Nếu cần, export/import module trong `src/<domain>/<domain>.module.ts`.
-6) Nếu thêm bảng mới:
-   - tạo entity trong `src/<domain>/` hoặc `src/<domain>/entity/`
-   - thêm entity vào list TypeORM trong `app.module.ts`
-7) Dùng lại pattern chung:
-   - lỗi từ `ERROR_MESSAGES`
-   - phân trang `PaginationResponseDto`
-   - phân quyền bằng `UserType` + guard
-   - transaction với `runInTransaction`
-8) Cập nhật Swagger decorators nếu cần.
-9) Nếu module theo CRUD chuẩn, bám `MODULE_PATTERN.md`.
-10) Viết unit tests trong `src/**/**/*.spec.ts`.
+### Người dùng và phân quyền
 
-## 10) Quy Ước Để Không Phá Cấu Trúc
+- `auth/`
+  - Route: `auth/*`
+  - Chức năng:
+    - `login/admin`
+    - `login/teacher`
+    - `login/student`
+    - `register`
+    - `token/check`
+  - `AuthService` sinh JWT 1 năm, lưu token vào bảng `token`
 
-- Giữ module self-contained (controller + service + DTO + entity).
-- Không bypass các tiện ích chung (error messages, pagination, ...).
-- Dùng `runInTransaction` cho các luồng ghi nhiều bước.
-- Controller mỏng; business logic đặt ở service.
-- Enum/constant mới đặt trong `enum/` hoặc `common/constant/`.
-- Với module CRUD mới, ưu tiên theo `MODULE_PATTERN.md` để giữ đồng nhất DTO/service/controller/module.
+- `user/`
+  - Route: `users`
+  - CRUD user, đổi password, toggle disabled
+  - Là nguồn dữ liệu đăng nhập chính
 
-## 11) Hỗ Trợ Tạo Stub Unit Test
+- `teacher/`
+  - Route: `teacher`
+  - CRUD hồ sơ giáo viên
 
-- Script `npm run test:build` quét `src/**/**/*.service.ts`, tìm public method và
-  tự thêm `it.todo('<method>')` vào `*.service.spec.ts` tương ứng.
-- Dùng `npm run test:build -- --dry-run` để xem trước thống kê mà không ghi file.
+- `student/`
+  - Route: `student`
+  - CRUD hồ sơ học sinh
 
-## 12) Entry Points Quan Trọng
+- `device/`
+  - Route: `device`
+  - Quản lý yêu cầu thiết bị và danh sách thiết bị đã duyệt
 
-- `src/main.ts` (bootstrap + Swagger + global interceptors)
-- `src/app.module.ts` (wiring modules + global providers)
-- `src/common/*` (shared behaviors)
+### Cấu trúc tổ chức học tập
 
-## 13) Recent Changes
+- `school/`
+  - Route: `school`
+  - CRUD trường học
 
-- `user/createUser`:
-  - Khi tạo `userType = STUDENT`, tạo thêm record `student` và dùng chung `id` với `user`.
-  - Khi tạo `userType = TEACHER`, tạo thêm record `teacher` và dùng chung `id` với `user`.
-  - Payload tạo STUDENT hỗ trợ `studentGroupId` + `code`.
-  - Payload tạo TEACHER hỗ trợ `deviceId` + `teacherCode`.
+- `student-group/`
+  - Route: `student-group`
+  - CRUD nhóm học sinh
 
-- `student/`:
-  - Bỏ phụ thuộc `student.userId`; hiện tại quy ước `student.id = user.id`.
-  - DTO/service của `student` đã đổi theo model mới.
+- `group/`
+  - Route: `groups`
+  - CRUD nhóm chung, tìm kiếm, lấy max code, thống kê số lượng
 
-- `teacher/`:
-  - Thêm `code` vào `TeacherEntity`.
+- `user-group/`
+  - Route: `user-groups`
+  - Quản lý membership giữa user và group
+  - Có API kiểm tra membership, lấy role, lấy group của user, thêm/xóa member
 
-- `attempt/`:
-  - `AttemptService.start()` tự động tạo `student` profile tối thiểu nếu user STUDENT chưa có record trong bảng `student`, để tránh lỗi FK khi tạo `attempt`.
-  - `findAll()` và các query liên quan đã đổi sang dùng entity property path thay vì raw DB column names để tránh lỗi TypeORM `databaseName`.
-  - Parse đáp án FE dạng `1A`, `2B`... hiện tại map theo:
-    - số = `question_bank_question.orderNo`
-    - A/B/C/D = `answer.orderNo` 1/2/3/4
-  - Thứ tự đáp án trong payload đề thi cũng ưu tiên theo `answer.orderNo`.
+- `class/`
+  - Route: `classes`
+  - CRUD lớp
 
-- `answer/`:
-  - Thêm `isCorrect` vào `answer`.
-  - Thêm `orderNo` vào `answer`.
-  - Đã bỏ `point` khỏi `answer`; điểm bài làm hiện tại dùng `question_bank_question.points`.
+- `course/`
+  - Route: `courses`
+  - CRUD khóa học
+  - Có route `max-code` và `options`
 
-- `attempt end / scoring`:
-  - Khi nộp bài, hệ thống ghi `student_answer.isCorrect` và `student_answer.pointsEarned`.
-  - `attempt.score` được tính từ tổng điểm các câu đúng.
-  - Câu đúng được xác định bằng cách so tập đáp án học sinh chọn với tập đáp án `answer.isCorrect = true`.
+- `grade/`
+  - Route: `grade`
+  - CRUD khối/lớp học theo cấp
 
-- `student_answer/`:
-  - Vẫn là bảng chi tiết cho từng câu trả lời trong một `attempt`.
-  - FK `student_answer.attempt_id -> attempt.id` dang `ON DELETE CASCADE`.
+- `subject/`
+  - Route: `subject`
+  - CRUD môn học
 
-- Dữ liệu / DB:
-  - Đã xác nhận DB Postgres đang dùng `UTF8`.
-  - Đã sửa 1 question + 4 answer bị lỗi tiếng Việt trong DB.
-  - Đã xóa toàn bộ dữ liệu trong `attempt` và `student_answer` theo yêu cầu trong quá trình debug.
+### Nội dung giảng dạy
+
+- `lecture/`
+  - Route:
+    - `lecture`
+    - `lecture/user`
+    - `lecture/group`
+    - `lecture/download-log`
+  - Chức năng:
+    - CRUD bài giảng
+    - Gán bài giảng cho user
+    - Gán bài giảng cho group
+    - Log tải bài giảng
+  - Có các entity con:
+    - `LectureEntity`
+    - `LectureUserEntity`
+    - `LectureGroupEntity`
+    - `LectureDownloadLogEntity`
+    - `LectureResourceEntity`
+
+- `upload/`
+  - Route:
+    - `upload/*`
+    - `updateversion`
+  - Chức năng:
+    - upload single/multiple/folder
+    - chunked upload
+    - cấp quyền truy cập file
+    - download / stream / serve image
+    - unzip file zip
+    - ghi và đọc `ichiteacher/version.json`
+  - `UploadService` đang giữ session chunk upload bằng in-memory `Map`, nên restart process sẽ mất session
+
+- `license/`
+  - Route: `licenses`
+  - CRUD license
+
+### Ngân hàng đề và làm bài
+
+- `question-bank/`
+  - Route: `question-bank`
+  - CRUD đề/ngân hàng đề
+  - Có route import PDF: `POST question-bank/:id/import-pdf`
+
+- `question/`
+  - Route: `question`
+  - CRUD câu hỏi
+  - Có route `:id/chain` để đọc chuỗi nội dung kế tiếp
+
+- `answer/`
+  - Route: `answer`
+  - CRUD đáp án
+  - Có route `:id/chain`
+  - Entity hiện có `isCorrect`, `orderNo`, `nextContent`
+
+- `question-bank-question/`
+  - Route: `question-bank-question`
+  - Bảng nối giữa đề và câu hỏi
+  - Lưu `orderNo`, `points`
+
+- `exam-set/`
+  - Route: `exam-set`
+  - CRUD bộ đề/ca thi
+
+- `exam-set-question-bank/`
+  - Route: `exam-set-question-bank`
+  - Bảng nối giữa `exam_set` và `question_bank`
+
+- `attempt/`
+  - Route: `attempt`
+  - Chức năng chính:
+    - tạo bản ghi attempt
+    - `start`
+    - `:id/end`
+    - `exam-history`
+    - `exam-history/detail`
+    - `by-exam`
+    - `:id/review`
+  - `AttemptService` là service nghiệp vụ phức tạp nhất hiện tại
+  - Tự bảo đảm user kiểu `STUDENT` có student profile trước khi bắt đầu làm bài
+  - Tính điểm bằng cách so sánh tập đáp án nộp với tập `answer.isCorrect`
+  - Hỗ trợ payload FE dạng chuỗi như `1A`, `2BD`
+
+- `student-answer/`
+  - Route: `student-answer`
+  - CRUD chi tiết câu trả lời theo từng attempt
+
+### Realtime
+
+- `socket/`
+  - Chứa `SocketGateway`
+  - Hiện là module realtime riêng, không phải trung tâm của nghiệp vụ CRUD
+
+## 6. Common Layer
+
+`src/common/` chứa phần dùng chung:
+
+- `constant/`
+  - constants và error messages
+- `database/transaction.utils.ts`
+  - helper transaction
+- `decorator/`
+  - `@Public()`
+  - `@Roles()`
+  - `@User()`
+- `dto/`
+  - DTO base và pagination
+- `enum/`
+  - `UserType`, `Status`, `ContentType`
+- `filter/`
+  - `AllExceptionsFilter`
+- `guard/`
+  - `AuthGuard`
+  - `RolesGuard`
+- `interceptors/`
+  - success logger / response logger
+- `middleware/`
+  - request logger
+- `sql/`
+  - `BaseEntity`, `BaseService`
+- `utils/`
+  - `auto-map.util.ts`
+  - `array-diff.utils.ts`
+
+## 7. Data Model Và Quan Hệ Nổi Bật
+
+- `user` là thực thể identity trung tâm
+- `teacher` và `student` là hồ sơ theo role
+- `group` + `user_group` quản lý group membership
+- `lecture` đi cùng:
+  - `lecture_user`
+  - `lecture_group`
+  - `lecture_download_log`
+  - `lecture_resource`
+- `question_bank` đi cùng:
+  - `question_bank_question`
+  - `attempt`
+- `attempt` đi cùng:
+  - `student_answer`
+- `exam_set` đi cùng:
+  - `exam_set_question_bank`
+- `upload` đi cùng:
+  - `file`
+  - `file_access`
+
+## 8. Những Điểm Cần Biết Khi Sửa Source
+
+- `synchronize: true` đang bật, nên thay đổi entity có thể tác động schema ngay khi app chạy
+- `AppModule` đang khai báo entity bằng tay; thêm bảng mới phải cập nhật `entities: []`
+- Có hai cấu hình static uploads:
+  - trong `ServeStaticModule.forRoot`
+  - trong `main.ts`
+  - khi deploy cần kiểm tra lại đường dẫn đang dùng thật
+- `UploadService` xử lý khá nhiều logic filesystem trực tiếp; cần cẩn thận với path, rename, delete
+- Phần import PDF, unzip, và chain content có tính domain-specific cao; không nên refactor cơ học nếu chưa đọc flow
+
+## 9. Route Prefix Tổng Hợp
+
+Các prefix controller hiện có:
+
+- `/auth`
+- `/users`
+- `/teacher`
+- `/student`
+- `/device`
+- `/licenses`
+- `/classes`
+- `/courses`
+- `/groups`
+- `/user-groups`
+- `/lecture`
+- `/lecture/user`
+- `/lecture/group`
+- `/lecture/download-log`
+- `/upload`
+- `/updateversion`
+- `/question-bank`
+- `/question`
+- `/answer`
+- `/question-bank-question`
+- `/attempt`
+- `/student-answer`
+- `/school`
+- `/student-group`
+- `/grade`
+- `/subject`
+- `/exam-set`
+- `/exam-set-question-bank`
+
+## 10. Gợi Ý Đọc Code Theo Thứ Tự
+
+Nếu cần onboard nhanh, nên đọc theo thứ tự:
+
+1. `src/main.ts`
+2. `src/app.module.ts`
+3. `src/common/guard/auth.guard.ts`
+4. `src/auth/auth.service.ts`
+5. `src/user/*`
+6. `src/attempt/*`
+7. `src/question-bank/*`, `src/question/*`, `src/answer/*`
+8. `src/upload/*`
+9. `src/lecture/*`
+
+## 11. File Quan Trọng
+
+- `src/main.ts`
+- `src/app.module.ts`
+- `src/common/guard/auth.guard.ts`
+- `src/common/filter/all-exceptions.filter.ts`
+- `src/common/interceptors/success-response.interceptor.ts`
+- `src/auth/auth.service.ts`
+- `src/attempt/attempt.service.ts`
+- `src/upload/upload.service.ts`
+- `src/question-bank/question-bank.service.ts`
+- `src/lecture/services/lecture.service.ts`

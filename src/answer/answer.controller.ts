@@ -49,7 +49,7 @@ export class AnswerController {
     name: 'answerType',
     required: false,
     type: String,
-    description: 'Lọc theo loại câu trả lời (TEXT hoặc IMAGE)',
+    description: 'Lọc theo loại câu trả lời (TEXT, IMAGE hoặc AUDIO)',
   })
   @ApiOkResponse({ type: AnswerListResponseDto })
   findAll(
