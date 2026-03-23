@@ -59,6 +59,7 @@ export class GradeService {
           g.code AS "gradeCode",
           s.id AS "subjectId",
           s.name AS "subjectName",
+          c.current_image AS "subjectImage",
           es.id AS "examSetId",
           es.name AS "examSetTitle",
           es.image as "examSetImage"
@@ -109,6 +110,7 @@ export class GradeService {
         gradeCode: string;
         subjectId: string | null;
         subjectName: string | null;
+        subjectImage: string | null;
         examSetId: string | null;
         examSetTitle: string | null;
         examSetImage: string | null;
@@ -137,10 +139,13 @@ export class GradeService {
           subject = {
             id: row.subjectId,
             name: row.subjectName,
+            image: row.subjectImage ?? null,
             examSets: [],
             total: 0,
           };
           gradeDetail.subjects.push(subject);
+        } else if (!subject.image && row.subjectImage) {
+          subject.image = row.subjectImage;
         }
 
         if (

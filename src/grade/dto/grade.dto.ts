@@ -73,6 +73,13 @@ export class GradeDetailSubjectDto {
   name!: string;
 
   @ApiProperty({
+    description: 'Hinh anh dai dien theo cap khoi + mon hoc',
+    example: 'https://example.com/class-image.jpg',
+    nullable: true,
+  })
+  image!: string | null;
+
+  @ApiProperty({
     description: 'Danh sach bo de thi',
     type: [GradeDetailExamSetDto],
   })

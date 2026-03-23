@@ -13,6 +13,7 @@ import { autoMapListToDto } from 'src/common/utils/auto-map.util';
 import { ExamSetStatus } from './enum/exam-set-status.enum';
 import { ClassService } from 'src/class/class.service';
 import { ExamSetQuestionBankEntity } from 'src/exam-set-question-bank/exam-set-question-bank.entity';
+import { QuestionBankQuestionEntity } from 'src/question-bank-question/question-bank-question.entity';
 
 @Injectable()
 export class ExamSetService {
@@ -21,6 +22,8 @@ export class ExamSetService {
     private readonly examSetRepo: Repository<ExamSetEntity>,
     @InjectRepository(ExamSetQuestionBankEntity)
     private readonly examSetQuestionBankRepo: Repository<ExamSetQuestionBankEntity>,
+    @InjectRepository(QuestionBankQuestionEntity)
+    private readonly questionBankQuestionRepo: Repository<QuestionBankQuestionEntity>,
     private readonly classService: ClassService,
   ) {}
 
@@ -99,6 +102,13 @@ export class ExamSetService {
       relations: ['questionBank'],
       order: { order: 'ASC' },
     });
+    const questionBankIds = links
+      .map((item) => item.questionBank?.id)
+      .filter((questionBankId): questionBankId is string => Boolean(questionBankId));
+    const questionCounts =
+      questionBankIds.length > 0
+        ? await this.getQuestionCountsByBankIds(questionBankIds)
+        : new Map<string, number>();
 
     const questionBanks = links
       .filter((item) => Boolean(item.questionBank))
@@ -111,7 +121,8 @@ export class ExamSetService {
             qb.timeLimit !== null && qb.timeLimit !== undefined
               ? qb.timeLimit * 60
               : null,
-          totalQuestions: qb.totalQuestions ?? null,
+          totalQuestions:
+            qb.totalQuestions ?? questionCounts.get(qb.id) ?? null,
           maxAttempts: qb.maxAttempts ?? null,
           totalPoints: qb.totalMarks ?? qb.totalScore ?? null,
           difficulty: null,
@@ -194,5 +205,24 @@ export class ExamSetService {
   async remove(id: string): Promise<void> {
     const record = await this.findOneEntity(id);
     await this.examSetRepo.remove(record);
+  }
+
+  private async getQuestionCountsByBankIds(
+    questionBankIds: string[],
+  ): Promise<Map<string, number>> {
+    const rows = await this.questionBankQuestionRepo
+      .createQueryBuilder('qbq')
+      .select('qbq.questionBankId', 'questionBankId')
+      .addSelect('COUNT(*)', 'totalQuestions')
+      .where('qbq.questionBankId IN (:...questionBankIds)', { questionBankIds })
+      .groupBy('qbq.questionBankId')
+      .getRawMany<{ questionBankId: string; totalQuestions: string }>();
+
+    return new Map(
+      rows.map((row) => [
+        row.questionBankId,
+        Number.parseInt(row.totalQuestions, 10) || 0,
+      ]),
+    );
   }
 }

@@ -49,6 +49,8 @@ interface CreatedQuestionSummary {
   answerCount: number;
 }
 
+const SUPPORTED_PDF_IMAGE_FILTERS = new Set(['DCTDecode', 'JPXDecode']);
+
 @Injectable()
 export class QuestionBankService {
   constructor(
@@ -118,7 +120,7 @@ export class QuestionBankService {
     const result = await this.questionBankRepo
       .createQueryBuilder('qb')
       .select(
-        "MAX(CASE WHEN regexp_replace(qb.code, '\\\\D', '', 'g') = '' THEN 0 ELSE (regexp_replace(qb.code, '\\\\D', '', 'g'))::int END)",
+        "MAX(CASE WHEN regexp_replace(qb.code, '\\D', '', 'g') = '' THEN 0 ELSE (regexp_replace(qb.code, '\\D', '', 'g'))::int END)",
         'maxCode',
       )
       .getRawOne<{ maxCode: number | null }>();
@@ -274,9 +276,15 @@ export class QuestionBankService {
       // Parse and create questions/answers on-the-fly
       const { createdQuestions, totalAnswers } =
         await this.parseAndCreateFromPdf(text, extractedImages, questionBank);
+      const totalQuestions = await this.questionBankQuestionRepo.count({
+        where: { questionBankId: questionBank.id },
+      });
+
+      questionBank.totalQuestions = totalQuestions;
+      await this.questionBankRepo.save(questionBank);
 
       return {
-        totalQuestions: createdQuestions.length,
+        totalQuestions,
         totalAnswers,
         questions: createdQuestions,
       };
@@ -339,6 +347,18 @@ export class QuestionBankService {
               );
               if (subtype?.toString() !== '/Image') continue;
 
+              const extractedImage = await this.extractPdfImageXObject(
+                xObject,
+                uploadsDir,
+                questionBankId,
+                pageIndex,
+              );
+              if (extractedImage) {
+                imagesWithPosition.push(extractedImage);
+                imageIndexInPage++;
+              }
+              continue;
+
               // Lấy dữ liệu ảnh thô từ PDF
               const imageData = xObject.contents;
               if (!imageData) continue;
@@ -368,9 +388,10 @@ export class QuestionBankService {
 
               imageIndexInPage++;
             } catch (imgError) {
-              console.error(
-                `Error extracting image from page ${pageIndex}:`,
-                imgError,
+              const message =
+                imgError instanceof Error ? imgError.message : String(imgError);
+              console.warn(
+                `Skipping PDF image on page ${pageIndex + 1}: ${message}`,
               );
             }
           }
@@ -391,6 +412,100 @@ export class QuestionBankService {
     }
 
     return imagesWithPosition;
+  }
+
+  private async extractPdfImageXObject(
+    xObject: any,
+    uploadsDir: string,
+    questionBankId: string,
+    pageIndex: number,
+  ): Promise<ImageWithPosition | null> {
+    const imageMask = xObject.dict.lookup(pdfLib.PDFName.of('ImageMask'));
+    if (typeof imageMask?.asBoolean === 'function' && imageMask.asBoolean()) {
+      return null;
+    }
+
+    const filterNames = this.getPdfImageFilterNames(xObject);
+    if (
+      filterNames.length > 0 &&
+      filterNames.some((filter) => !SUPPORTED_PDF_IMAGE_FILTERS.has(filter))
+    ) {
+      console.warn(
+        `Skipping unsupported PDF image filters on page ${pageIndex + 1}: ${filterNames.join(', ')}`,
+      );
+      return null;
+    }
+
+    const imageData = xObject.contents;
+    if (!imageData) {
+      return null;
+    }
+
+    const imageBuffer = Buffer.from(imageData);
+    const sharp = require('sharp');
+    const metadata = await sharp(imageBuffer).metadata();
+
+    if (!metadata.width || !metadata.height) {
+      return null;
+    }
+
+    const imageId = uuidv4();
+    const imagePath = path.join(uploadsDir, `${imageId}.png`);
+    const relativeImagePath = `/uploads/question-banks/${questionBankId}/${imageId}.png`;
+
+    await sharp(imageBuffer).png().toFile(imagePath);
+
+    return {
+      path: relativeImagePath,
+      page: pageIndex,
+      width: metadata.width,
+      height: metadata.height,
+    };
+  }
+
+  private getPdfImageFilterNames(xObject: any): string[] {
+    const filterValue = xObject?.dict?.lookup?.(pdfLib.PDFName.of('Filter'));
+    if (!filterValue) {
+      return [];
+    }
+
+    if (
+      typeof filterValue.lookup === 'function' &&
+      typeof filterValue.size === 'function'
+    ) {
+      const filters: string[] = [];
+      for (let i = 0; i < filterValue.size(); i++) {
+        const item = filterValue.lookup(i);
+        const name = this.getPdfNameValue(item);
+        if (name) {
+          filters.push(name);
+        }
+      }
+      return filters;
+    }
+
+    const name = this.getPdfNameValue(filterValue);
+    return name ? [name] : [];
+  }
+
+  private getPdfNameValue(value: any): string | undefined {
+    if (!value) {
+      return undefined;
+    }
+
+    if (typeof value.decodeText === 'function') {
+      return value.decodeText();
+    }
+
+    if (typeof value.asString === 'function') {
+      return value.asString().replace(/^\//, '');
+    }
+
+    if (typeof value.toString === 'function') {
+      return value.toString().replace(/^\//, '');
+    }
+
+    return undefined;
   }
 
   /**

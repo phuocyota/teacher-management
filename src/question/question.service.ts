@@ -111,7 +111,7 @@ export class QuestionService {
     qb.andWhere('question.isRoot = :isRoot', { isRoot: true });
 
     if (questionBankId) {
-      qb.orderBy('qbq.order_no', 'ASC');
+      qb.orderBy('qbq.orderNo', 'ASC');
     } else {
       qb.orderBy('question.createdAt', 'DESC');
     }
