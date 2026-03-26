@@ -9,6 +9,7 @@ import {
   Min,
 } from 'class-validator';
 import { AttemptStatus } from '../enum/attempt-status.enum';
+import { QuestionType } from 'src/question/enum/question-type.enum';
 
 export class StartAttemptDto {
   @IsUUID()
@@ -122,6 +123,9 @@ export class AttemptAnswerOptionDto extends AttemptAnswerChainItemDto {
 export class AttemptQuestionChainItemDto {
   @ApiProperty()
   id!: string;
+
+  @ApiProperty({ enum: QuestionType })
+  type!: QuestionType;
 
   @ApiProperty()
   contentType!: string;

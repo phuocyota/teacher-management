@@ -22,11 +22,14 @@ import { CreateExamSetDto, UpdateExamSetDto } from './dto/create-exam-set.dto';
 import {
   ExamSetDetailResponseDto,
   ExamSetListResponseDto,
+  ExamSetOptionsResponseDto,
   ExamSetResponseDto,
 } from './dto/exam-set.dto';
 import { PaginationResponseDto } from 'src/common/dto/pagination.dto';
 import { ExamSetStatus } from './enum/exam-set-status.enum';
 import { Public } from 'src/common/decorator/public.decorator';
+import { User } from 'src/common/decorator/user.decorator';
+import type { JwtPayload } from 'src/common/interface/jwt-payload.interface';
 
 @ApiTags('Exam Set')
 @ApiBearerAuth('access-token')
@@ -94,6 +97,13 @@ export class ExamSetController {
       status,
       search,
     );
+  }
+
+  @Get('options')
+  @ApiOperation({ summary: 'Lay danh sach lop va bo de thi cho bo loc' })
+  @ApiOkResponse({ type: ExamSetOptionsResponseDto })
+  getOptions(@User() user: JwtPayload): Promise<ExamSetOptionsResponseDto> {
+    return this.examSetService.getOptions(user);
   }
 
   @Get(':id')

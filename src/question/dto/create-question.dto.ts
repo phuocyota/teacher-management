@@ -1,8 +1,20 @@
 import { IsEnum, IsNotEmpty, IsOptional, IsString, IsUUID } from 'class-validator';
 import { ApiProperty, PartialType } from '@nestjs/swagger';
 import { ContentTypes } from 'src/common/enum/content-type.enum';
+import { QuestionType } from '../enum/question-type.enum';
 
 export class CreateQuestionDto {
+  @IsOptional()
+  @IsEnum(QuestionType)
+  @ApiProperty({
+    description: 'Loai cau hoi',
+    enum: QuestionType,
+    example: QuestionType.SINGLE_CHOICE,
+    required: false,
+    default: QuestionType.SINGLE_CHOICE,
+  })
+  type?: QuestionType;
+
   @IsEnum(ContentTypes)
   @IsNotEmpty()
   @ApiProperty({

@@ -8,12 +8,19 @@ import {
   ENTITY_NAMES,
 } from 'src/common/constant/error-messages.constant';
 import { PaginationResponseDto } from 'src/common/dto/pagination.dto';
-import { ExamSetDetailResponseDto, ExamSetResponseDto } from './dto/exam-set.dto';
+import {
+  ExamSetClassOptionDto,
+  ExamSetDetailResponseDto,
+  ExamSetOptionDto,
+  ExamSetOptionsResponseDto,
+  ExamSetResponseDto,
+} from './dto/exam-set.dto';
 import { autoMapListToDto } from 'src/common/utils/auto-map.util';
 import { ExamSetStatus } from './enum/exam-set-status.enum';
 import { ClassService } from 'src/class/class.service';
 import { ExamSetQuestionBankEntity } from 'src/exam-set-question-bank/exam-set-question-bank.entity';
 import { QuestionBankQuestionEntity } from 'src/question-bank-question/question-bank-question.entity';
+import { JwtPayload } from 'src/common/interface/jwt-payload.interface';
 
 @Injectable()
 export class ExamSetService {
@@ -91,6 +98,45 @@ export class ExamSetService {
       page,
       size,
       total,
+    };
+  }
+
+  async getOptions(user?: JwtPayload): Promise<ExamSetOptionsResponseDto> {
+    const classes = await this.classService.findAll(user);
+    const classOptions: ExamSetClassOptionDto[] = classes.map((item) => ({
+      value: item.id,
+      label: item.name,
+      code: item.code,
+      name: item.name,
+    }));
+
+    const classIds = classOptions.map((item) => item.value);
+    if (classIds.length === 0) {
+      return {
+        classes: classOptions,
+        examSets: [],
+      };
+    }
+
+    const examSets = await this.examSetRepo
+      .createQueryBuilder('es')
+      .leftJoin('es.class', 'class')
+      .where('es.class_id IN (:...classIds)', { classIds })
+      .orderBy('class.name', 'ASC')
+      .addOrderBy('es.name', 'ASC')
+      .getMany();
+
+    const examSetOptions: ExamSetOptionDto[] = examSets.map((item) => ({
+      value: item.id,
+      label: item.name,
+      name: item.name,
+      classId: item.classId,
+      status: item.status,
+    }));
+
+    return {
+      classes: classOptions,
+      examSets: examSetOptions,
     };
   }
 

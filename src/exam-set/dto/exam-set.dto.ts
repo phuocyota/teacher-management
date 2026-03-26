@@ -139,6 +139,80 @@ export class ExamSetDetailResponseDto extends ExamSetResponseDto {
   stats!: ExamSetDetailStatsDto;
 }
 
+export class ExamSetOptionDto {
+  @ApiProperty({
+    description: 'Exam set ID used as option value',
+    example: '2233abe3-1961-4af5-a482-542f1227d844',
+  })
+  value!: string;
+
+  @ApiProperty({
+    description: 'Exam set name used as option label',
+    example: 'Bo de 1',
+  })
+  label!: string;
+
+  @ApiProperty({
+    description: 'Exam set name',
+    example: 'Bo de 1',
+  })
+  name!: string;
+
+  @ApiProperty({
+    description: 'Related class ID',
+    example: '3233abe3-1961-4af5-a482-542f1227d844',
+    required: false,
+  })
+  classId?: string;
+
+  @ApiProperty({
+    description: 'Exam set status',
+    example: ExamSetStatus.DRAFT,
+    enum: ExamSetStatus,
+  })
+  status!: ExamSetStatus;
+}
+
+export class ExamSetClassOptionDto {
+  @ApiProperty({
+    description: 'Class ID used as option value',
+    example: '3233abe3-1961-4af5-a482-542f1227d844',
+  })
+  value!: string;
+
+  @ApiProperty({
+    description: 'Class name used as option label',
+    example: 'Lop 1',
+  })
+  label!: string;
+
+  @ApiProperty({
+    description: 'Class code',
+    example: 'L1',
+  })
+  code!: string;
+
+  @ApiProperty({
+    description: 'Class name',
+    example: 'Lop 1',
+  })
+  name!: string;
+}
+
+export class ExamSetOptionsResponseDto {
+  @ApiProperty({
+    description: 'Danh sach lop hoc cho combobox',
+    type: [ExamSetClassOptionDto],
+  })
+  classes!: ExamSetClassOptionDto[];
+
+  @ApiProperty({
+    description: 'Danh sach bo de thi cho combobox',
+    type: [ExamSetOptionDto],
+  })
+  examSets!: ExamSetOptionDto[];
+}
+
 export class ExamSetListResponseDto extends PaginationResponseDto<ExamSetResponseDto> {
   @ApiProperty({
     description: 'Danh sach bo de thi',

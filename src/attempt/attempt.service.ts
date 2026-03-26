@@ -33,6 +33,7 @@ import { StudentAnswerEntity } from 'src/student-answer/student-answer.entity';
 import { ExamSetQuestionBankService } from 'src/exam-set-question-bank/exam-set-question-bank.service';
 import { StudentGroupEntity } from 'src/student-group/student-group.entity';
 import { SchoolEntity } from 'src/school/school.entity';
+import { QuestionType } from 'src/question/enum/question-type.enum';
 import {
   AttemptAnswerChainItemDto,
   AttemptAnswerOptionDto,
@@ -180,7 +181,15 @@ export class AttemptService {
             where: { questionId: In(submittedQuestionIds) },
           })
         : [];
+      const questionEntities = submittedQuestionIds.length
+        ? await this.questionRepo.find({
+            where: { id: In(submittedQuestionIds) },
+          })
+        : [];
       const answerMap = new Map(answerEntities.map((item) => [item.id, item]));
+      const questionTypeById = new Map(
+        questionEntities.map((item) => [item.id, item.type]),
+      );
       const pointsByQuestionId = new Map(
         questionLinks.map((item) => [item.questionId, item.points]),
       );
@@ -198,6 +207,11 @@ export class AttemptService {
       }
 
       for (const submitted of submittedAnswers) {
+        const questionType =
+          questionTypeById.get(submitted.questionId) ??
+          QuestionType.SINGLE_CHOICE;
+        this.validateSubmittedAnswerByQuestionType(submitted, questionType);
+
         if (submitted.answerId) {
           const answer = answerMap.get(submitted.answerId);
           if (!answer || answer.questionId !== submitted.questionId) {
@@ -218,6 +232,9 @@ export class AttemptService {
       }
 
       const records = submittedAnswers.map((submitted) => {
+        const questionType =
+          questionTypeById.get(submitted.questionId) ??
+          QuestionType.SINGLE_CHOICE;
         const selectedIds = [
           ...(submitted.answerId ? [submitted.answerId] : []),
           ...(submitted.selectedAnswerIds ?? []),
@@ -227,14 +244,17 @@ export class AttemptService {
           ...(correctAnswerIdsByQuestionId.get(submitted.questionId) ?? []),
         ].sort();
         const isCorrect =
-          correctIds.length > 0 &&
-          normalizedSelectedIds.length === correctIds.length &&
-          normalizedSelectedIds.every(
-            (item, index) => item === correctIds[index],
-          );
-        const pointsEarned = isCorrect
-          ? (pointsByQuestionId.get(submitted.questionId) ?? 0)
-          : 0;
+          questionType === QuestionType.TEXT_INPUT
+            ? undefined
+            : correctIds.length > 0 &&
+              normalizedSelectedIds.length === correctIds.length &&
+              normalizedSelectedIds.every(
+                (item, index) => item === correctIds[index],
+              );
+        const pointsEarned =
+          isCorrect === true
+            ? (pointsByQuestionId.get(submitted.questionId) ?? 0)
+            : 0;
 
         totalScore += pointsEarned;
 
@@ -420,6 +440,7 @@ export class AttemptService {
         id: rootQuestion.id,
         orderNo: link.orderNo,
         points: link.points,
+        type: rootQuestion.type,
         contentType: rootQuestion.contentType,
         content: rootQuestion.content,
         nextContent: rootQuestion.nextContent ?? null,
@@ -756,6 +777,7 @@ export class AttemptService {
         id: rootQuestion.id,
         orderNo: link.orderNo,
         points: link.points,
+        type: rootQuestion.type,
         contentType: rootQuestion.contentType,
         content: rootQuestion.content,
         nextContent: rootQuestion.nextContent ?? null,
@@ -881,10 +903,44 @@ export class AttemptService {
   ): AttemptQuestionChainItemDto[] {
     return chain.map((item) => ({
       id: item.id,
+      type: item.type,
       contentType: item.contentType,
       content: item.content,
       nextContent: item.nextContent ?? null,
     }));
+  }
+
+  private validateSubmittedAnswerByQuestionType(
+    submitted: EndAttemptAnswerDto,
+    questionType: QuestionType,
+  ): void {
+    const selectedCount = submitted.selectedAnswerIds?.length ?? 0;
+    const hasAnswerId = Boolean(submitted.answerId);
+    const hasTextValue = Boolean(submitted.textValue?.trim());
+
+    if (questionType === QuestionType.SINGLE_CHOICE) {
+      if (!hasAnswerId || selectedCount > 0 || hasTextValue) {
+        throw new BadRequestException(
+          'SINGLE_CHOICE question must submit exactly one answerId',
+        );
+      }
+      return;
+    }
+
+    if (questionType === QuestionType.MULTIPLE_CHOICE) {
+      if (hasTextValue || (!hasAnswerId && selectedCount === 0)) {
+        throw new BadRequestException(
+          'MULTIPLE_CHOICE question must submit answerId or selectedAnswerIds',
+        );
+      }
+      return;
+    }
+
+    if (!hasTextValue || hasAnswerId || selectedCount > 0) {
+      throw new BadRequestException(
+        'TEXT_INPUT question must submit textValue only',
+      );
+    }
   }
 
   private mapAnswerChain(chain: AnswerEntity[]): AttemptAnswerOptionDto {

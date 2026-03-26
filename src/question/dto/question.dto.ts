@@ -2,8 +2,16 @@ import { ApiProperty } from '@nestjs/swagger';
 import { PaginationResponseDto } from 'src/common/dto/pagination.dto';
 import { BaseDto } from 'src/common/dto/base.dto';
 import { ContentTypes } from 'src/common/enum/content-type.enum';
+import { QuestionType } from '../enum/question-type.enum';
 
 export class NextContentDto {
+  @ApiProperty({
+    description: 'Loai cau hoi',
+    enum: QuestionType,
+    example: QuestionType.SINGLE_CHOICE,
+  })
+  type!: QuestionType;
+
   @ApiProperty({
     description: 'ID cua noi dung tiep theo',
     example: '550e8400-e29b-41d4-a716-446655440000',
@@ -25,6 +33,13 @@ export class NextContentDto {
 }
 
 export class QuestionResponseDto extends BaseDto {
+  @ApiProperty({
+    description: 'Loai cau hoi',
+    enum: QuestionType,
+    example: QuestionType.SINGLE_CHOICE,
+  })
+  type!: QuestionType;
+
   @ApiProperty({
     description: 'Loai du lieu cua cau hoi',
     enum: ContentTypes,

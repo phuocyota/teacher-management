@@ -27,6 +27,7 @@ import {
   QuestionResponseDto,
 } from './dto/question.dto';
 import { PaginationResponseDto } from 'src/common/dto/pagination.dto';
+import { QuestionType } from './enum/question-type.enum';
 
 @ApiTags('Question')
 @ApiBearerAuth('access-token')
@@ -57,18 +58,27 @@ export class QuestionController {
     type: String,
     description: 'Filter by content type (TEXT, IMAGE, or AUDIO)',
   })
+  @ApiQuery({
+    name: 'type',
+    required: false,
+    enum: QuestionType,
+    description:
+      'Filter by question type (SINGLE_CHOICE, MULTIPLE_CHOICE, or TEXT_INPUT)',
+  })
   @ApiOkResponse({ type: QuestionListResponseDto })
   findAll(
     @Query('page') page?: number,
     @Query('size') size?: number,
     @Query('questionBankId') questionBankId?: string,
     @Query('questionType') questionType?: string,
+    @Query('type') type?: QuestionType,
   ): Promise<PaginationResponseDto<QuestionResponseDto>> {
     return this.questionService.findAll(
       page,
       size,
       questionBankId,
       questionType,
+      type,
     );
   }
 

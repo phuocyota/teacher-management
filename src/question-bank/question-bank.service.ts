@@ -24,6 +24,7 @@ import { QuestionService } from 'src/question/question.service';
 import { AnswerService } from 'src/answer/answer.service';
 import { ContentTypes } from 'src/common/enum/content-type.enum';
 import { ImportExamResultDto, ParsedQuestion } from './dto/import-exam.dto';
+import { QuestionType } from 'src/question/enum/question-type.enum';
 import * as fs from 'fs';
 import * as path from 'path';
 import { v4 as uuidv4 } from 'uuid';
@@ -45,6 +46,7 @@ interface PdfData {
 interface CreatedQuestionSummary {
   id: string;
   content: string;
+  type: QuestionType;
   contentType: ContentTypes;
   answerCount: number;
 }
@@ -568,7 +570,7 @@ export class QuestionBankService {
                 contentType: ContentTypes.IMAGE,
               },
             ],
-            {},
+            { type: QuestionType.TEXT_INPUT },
             this.questionService.createBulk.bind(this.questionService),
             this.questionService.updateBulk.bind(this.questionService),
           );
@@ -582,6 +584,7 @@ export class QuestionBankService {
           createdQuestions.push({
             id: savedParts[0].id,
             content: (savedParts[0] as any).content,
+            type: (savedParts[0] as any).type,
             contentType: (savedParts[0] as any).contentType,
             answerCount: 0,
           });
@@ -599,6 +602,12 @@ export class QuestionBankService {
       const remainingText = questionContent
         .substring(questionEndIndex + 1)
         .trim();
+      const answerPattern = /([A-D])[\.\)]\s*([^\n]+)/gi;
+      const answerMatches = [...remainingText.matchAll(answerPattern)];
+      const resolvedQuestionType =
+        answerMatches.length > 0
+          ? QuestionType.SINGLE_CHOICE
+          : QuestionType.TEXT_INPUT;
 
       // Parse question content parts
       const contentParts: { content: string; contentType: ContentTypes }[] = [];
@@ -665,7 +674,7 @@ export class QuestionBankService {
       // Create question chain
       const savedParts = await this.createContentChain(
         contentParts,
-        {},
+        { type: resolvedQuestionType },
         this.questionService.createBulk.bind(this.questionService),
         this.questionService.updateBulk.bind(this.questionService),
       );
@@ -680,8 +689,6 @@ export class QuestionBankService {
       );
 
       // Parse and create answers
-      const answerPattern = /([A-D])[\.\)]\s*([^\n]+)/gi;
-      const answerMatches = [...remainingText.matchAll(answerPattern)];
       let answerCount = 0;
 
       for (const answerMatch of answerMatches) {
@@ -749,6 +756,7 @@ export class QuestionBankService {
       createdQuestions.push({
         id: rootQuestion.id,
         content: (rootQuestion as any).content,
+        type: (rootQuestion as any).type,
         contentType: (rootQuestion as any).contentType,
         answerCount,
       });

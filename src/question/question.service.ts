@@ -21,6 +21,7 @@ import { QuestionResponseDto } from './dto/question.dto';
 import { autoMapListToDto } from 'src/common/utils/auto-map.util';
 import { QuestionBankQuestionEntity } from 'src/question-bank-question/question-bank-question.entity';
 import { QuestionBankQuestionService } from 'src/question-bank-question/question-bank-question.service';
+import { QuestionType } from './enum/question-type.enum';
 
 @Injectable()
 export class QuestionService {
@@ -35,6 +36,7 @@ export class QuestionService {
 
   async create(dto: CreateQuestionDto): Promise<QuestionEntity> {
     const record = this.questionRepo.create({
+      type: dto.type ?? QuestionType.SINGLE_CHOICE,
       contentType: dto.contentType,
       content: dto.content,
       nextContent: dto.nextContent,
@@ -80,6 +82,7 @@ export class QuestionService {
     size = 10,
     questionBankId?: string,
     questionType?: string,
+    type?: QuestionType,
   ): Promise<PaginationResponseDto<QuestionResponseDto>> {
     const skip = (page - 1) * size;
 
@@ -108,6 +111,10 @@ export class QuestionService {
       qb.andWhere('question.content_type = :questionType', { questionType });
     }
 
+    if (type) {
+      qb.andWhere('question.question_type = :type', { type });
+    }
+
     qb.andWhere('question.isRoot = :isRoot', { isRoot: true });
 
     if (questionBankId) {
@@ -129,12 +136,13 @@ export class QuestionService {
         if (question.nextContent) {
           const nextContentEntity = await this.questionRepo.findOne({
             where: { id: question.nextContent },
-            select: ['id', 'content', 'contentType'],
+            select: ['id', 'type', 'content', 'contentType'],
           });
 
           if (nextContentEntity) {
             (question as any).nextContentDetails = {
               id: nextContentEntity.id,
+              type: nextContentEntity.type,
               content: nextContentEntity.content,
               contentType: nextContentEntity.contentType,
             };
@@ -170,12 +178,13 @@ export class QuestionService {
     if (record.nextContent) {
       const nextContentEntity = await this.questionRepo.findOne({
         where: { id: record.nextContent },
-        select: ['id', 'content', 'contentType'],
+        select: ['id', 'type', 'content', 'contentType'],
       });
 
       if (nextContentEntity) {
         (record as any).nextContentDetails = {
           id: nextContentEntity.id,
+          type: nextContentEntity.type,
           content: nextContentEntity.content,
           contentType: nextContentEntity.contentType,
         };
@@ -208,6 +217,10 @@ export class QuestionService {
       record.contentType = dto.contentType;
     }
 
+    if (dto.type !== undefined) {
+      record.type = dto.type;
+    }
+
     if (dto.content !== undefined) {
       record.content = dto.content;
     }
@@ -227,7 +240,12 @@ export class QuestionService {
   async createBulk(
     questions: Partial<QuestionEntity>[],
   ): Promise<QuestionEntity[]> {
-    const records = this.questionRepo.create(questions);
+    const records = this.questionRepo.create(
+      questions.map((question) => ({
+        ...question,
+        type: question.type ?? QuestionType.SINGLE_CHOICE,
+      })),
+    );
     return this.questionRepo.save(records);
   }
 
