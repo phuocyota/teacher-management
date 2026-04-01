@@ -205,4 +205,12 @@ export class UserQueryDto {
   @IsOptional()
   @IsString()
   groupId?: string;
+
+  @ApiPropertyOptional({
+    example: 'a1b2c3d4-e5f6-7890-abcd-ef1234567890',
+    description: 'Loại bỏ user đã thuộc group ID này',
+  })
+  @IsOptional()
+  @IsString()
+  excludeGroupId?: string;
 }

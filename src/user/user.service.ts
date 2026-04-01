@@ -358,6 +358,7 @@ export class UserService extends BaseService<UserEntity> {
       status,
       isDisabled,
       groupId,
+      excludeGroupId,
     } = query;
 
     const skip = (page - 1) * limit;
@@ -374,6 +375,15 @@ export class UserService extends BaseService<UserEntity> {
         'ug.user_id = user.id AND ug.group_id = :groupId',
         { groupId },
       );
+    }
+
+    if (excludeGroupId) {
+      qb.leftJoin(
+        'user_group',
+        'ug_exclude',
+        'ug_exclude.user_id = user.id AND ug_exclude.group_id = :excludeGroupId',
+        { excludeGroupId },
+      ).andWhere('ug_exclude.user_id IS NULL');
     }
 
     /* =====================
