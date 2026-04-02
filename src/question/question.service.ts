@@ -95,16 +95,16 @@ export class QuestionService {
         'qbq.question_id = question.id AND qbq.question_bank_id = :questionBankId',
         { questionBankId },
       );
-      qb.addSelect('qbq.question_bank_id', 'questionBankId');
-      qb.addSelect('qbq.order_no', 'orderNo');
+      qb.addSelect('qbq.question_bank_id', 'qbq_question_bank_id');
+      qb.addSelect('qbq.order_no', 'qbq_order_no');
     } else {
       qb.leftJoin(
         QuestionBankQuestionEntity,
         'qbq',
         'qbq.question_id = question.id',
       );
-      qb.addSelect('qbq.question_bank_id', 'questionBankId');
-      qb.addSelect('qbq.order_no', 'orderNo');
+      qb.addSelect('qbq.question_bank_id', 'qbq_question_bank_id');
+      qb.addSelect('qbq.order_no', 'qbq_order_no');
     }
 
     if (questionType) {
@@ -118,7 +118,7 @@ export class QuestionService {
     qb.andWhere('question.isRoot = :isRoot', { isRoot: true });
 
     if (questionBankId) {
-      qb.orderBy('qbq.orderNo', 'ASC');
+      qb.orderBy('qbq.order_no', 'ASC');
     } else {
       qb.orderBy('question.createdAt', 'DESC');
     }
@@ -129,8 +129,8 @@ export class QuestionService {
 
     const questionsWithDetails = await Promise.all(
       entities.map(async (question, index) => {
-        if (raw[index]?.questionBankId) {
-          (question as any).questionBankId = raw[index].questionBankId;
+        if (raw[index]?.qbq_question_bank_id) {
+          (question as any).questionBankId = raw[index].qbq_question_bank_id;
         }
 
         if (question.nextContent) {
