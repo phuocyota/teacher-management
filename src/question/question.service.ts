@@ -11,7 +11,7 @@ import {
   CreateQuestionDto,
   UpdateQuestionDto,
 } from './dto/create-question.dto';
-import { QuestionBankService } from 'src/question-bank/question-bank.service';
+import { QuestionBankService } from 'src/question-bank/services/question-bank.service';
 import {
   ERROR_MESSAGES,
   ENTITY_NAMES,
@@ -147,7 +147,6 @@ export class QuestionService {
               contentType: nextContentEntity.contentType,
             };
           }
-
         }
         return question;
       }),
@@ -189,7 +188,6 @@ export class QuestionService {
           contentType: nextContentEntity.contentType,
         };
       }
-
     }
 
     const questionBankLink =

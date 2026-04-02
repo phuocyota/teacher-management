@@ -1,4 +1,9 @@
-import { Injectable, NotFoundException, Inject, forwardRef } from '@nestjs/common';
+import {
+  Injectable,
+  NotFoundException,
+  Inject,
+  forwardRef,
+} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { QuestionBankQuestionEntity } from './question-bank-question.entity';
@@ -6,16 +11,14 @@ import {
   CreateQuestionBankQuestionDto,
   UpdateQuestionBankQuestionDto,
 } from './dto/create-question-bank-question.dto';
-import { QuestionBankService } from 'src/question-bank/question-bank.service';
+import { QuestionBankService } from 'src/question-bank/services/question-bank.service';
 import { QuestionService } from 'src/question/question.service';
 import {
   ENTITY_NAMES,
   ERROR_MESSAGES,
 } from 'src/common/constant/error-messages.constant';
 import { PaginationResponseDto } from 'src/common/dto/pagination.dto';
-import {
-  QuestionBankQuestionResponseDto,
-} from './dto/question-bank-question.dto';
+import { QuestionBankQuestionResponseDto } from './dto/question-bank-question.dto';
 import { autoMapListToDto } from 'src/common/utils/auto-map.util';
 
 @Injectable()

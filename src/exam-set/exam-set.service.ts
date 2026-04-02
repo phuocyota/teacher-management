@@ -150,7 +150,9 @@ export class ExamSetService {
     });
     const questionBankIds = links
       .map((item) => item.questionBank?.id)
-      .filter((questionBankId): questionBankId is string => Boolean(questionBankId));
+      .filter((questionBankId): questionBankId is string =>
+        Boolean(questionBankId),
+      );
     const questionCounts =
       questionBankIds.length > 0
         ? await this.getQuestionCountsByBankIds(questionBankIds)

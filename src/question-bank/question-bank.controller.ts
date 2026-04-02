@@ -22,17 +22,19 @@ import {
   ApiConsumes,
   ApiBody,
 } from '@nestjs/swagger';
-import { QuestionBankService } from './question-bank.service';
+import { QuestionBankService } from './services/question-bank.service';
 import {
   CreateQuestionBankDto,
   UpdateQuestionBankDto,
 } from './dto/create-question-bank.dto';
+import { AddQuestionToQuestionBankDto } from './dto/add-question-to-question-bank.dto';
 import {
   QuestionBankListResponseDto,
   QuestionBankResponseDto,
 } from './dto/question-bank.dto';
 import { PaginationResponseDto } from 'src/common/dto/pagination.dto';
 import { ImportExamResultDto } from './dto/import-exam.dto';
+import { QuestionBankQuestionResponseDto } from 'src/question-bank-question/dto/question-bank-question.dto';
 
 @ApiTags('Question Bank')
 @ApiBearerAuth('access-token')
@@ -45,6 +47,16 @@ export class QuestionBankController {
   @ApiCreatedResponse({ type: QuestionBankResponseDto })
   create(@Body() dto: CreateQuestionBankDto) {
     return this.questionBankService.create(dto);
+  }
+
+  @Post(':id/questions')
+  @ApiOperation({ summary: 'Thêm câu hỏi vào ngân hàng câu hỏi' })
+  @ApiCreatedResponse({ type: QuestionBankQuestionResponseDto })
+  addQuestion(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: AddQuestionToQuestionBankDto,
+  ) {
+    return this.questionBankService.addQuestion(id, dto);
   }
 
   @Get()

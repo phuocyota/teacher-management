@@ -9,7 +9,7 @@ import { In, Repository } from 'typeorm';
 import { AttemptEntity } from './attempt.entity';
 import { StudentService } from 'src/student/student.service';
 import { StudentEntity } from 'src/student/student.entity';
-import { QuestionBankService } from 'src/question-bank/question-bank.service';
+import { QuestionBankService } from 'src/question-bank/services/question-bank.service';
 import {
   ENTITY_NAMES,
   ERROR_MESSAGES,
@@ -302,10 +302,7 @@ export class AttemptService {
       throw new ForbiddenException(ERROR_MESSAGES.INVALID_TOKEN_STRUCTURE);
     }
 
-    if (
-      (questionBankId && !examSetId) ||
-      (!questionBankId && examSetId)
-    ) {
+    if ((questionBankId && !examSetId) || (!questionBankId && examSetId)) {
       throw new BadRequestException(
         'questionBankId and examSetId must be provided together',
       );
@@ -485,7 +482,7 @@ export class AttemptService {
     const qb = this.attemptRepo
       .createQueryBuilder('attempt')
       .innerJoin('attempt.questionBank', 'questionBank')
-      .select("DATE(attempt.started_at)", 'date')
+      .select('DATE(attempt.started_at)', 'date')
       .addSelect('questionBank.id', 'questionBankId')
       .addSelect('attempt.examSetId', 'examSetId')
       .addSelect('questionBank.name', 'examName')
@@ -493,19 +490,19 @@ export class AttemptService {
       .where('attempt.studentId = :userId', { userId: user.userId });
 
     if (fromDate) {
-      qb.andWhere("DATE(attempt.started_at) >= :fromDate", { fromDate });
+      qb.andWhere('DATE(attempt.started_at) >= :fromDate', { fromDate });
     }
 
     if (toDate) {
-      qb.andWhere("DATE(attempt.started_at) <= :toDate", { toDate });
+      qb.andWhere('DATE(attempt.started_at) <= :toDate', { toDate });
     }
 
     const rows = await qb
-      .groupBy("DATE(attempt.started_at)")
+      .groupBy('DATE(attempt.started_at)')
       .addGroupBy('questionBank.id')
       .addGroupBy('attempt.examSetId')
       .addGroupBy('questionBank.name')
-      .orderBy("DATE(attempt.started_at)", 'DESC')
+      .orderBy('DATE(attempt.started_at)', 'DESC')
       .addOrderBy('questionBank.name', 'ASC')
       .getRawMany<{
         date: string;
@@ -541,7 +538,7 @@ export class AttemptService {
       .where('attempt.studentId = :userId', { userId: user.userId })
       .andWhere('attempt.questionBankId = :questionBankId', { questionBankId })
       .andWhere('attempt.examSetId = :examSetId', { examSetId })
-      .andWhere("DATE(attempt.started_at) = :date", { date })
+      .andWhere('DATE(attempt.started_at) = :date', { date })
       .orderBy('attempt.startedAt', 'DESC')
       .getMany();
 
@@ -581,7 +578,9 @@ export class AttemptService {
     }
 
     if (fromDate && toDate && fromDate > toDate) {
-      throw new BadRequestException('fromDate must be less than or equal to toDate');
+      throw new BadRequestException(
+        'fromDate must be less than or equal to toDate',
+      );
     }
   }
 

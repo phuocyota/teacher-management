@@ -13,7 +13,7 @@ import {
 import { PaginationResponseDto } from 'src/common/dto/pagination.dto';
 import { ExamSetQuestionBankResponseDto } from './dto/exam-set-question-bank.dto';
 import { ExamSetService } from 'src/exam-set/exam-set.service';
-import { QuestionBankService } from 'src/question-bank/question-bank.service';
+import { QuestionBankService } from 'src/question-bank/services/question-bank.service';
 import { BadRequestException } from '@nestjs/common';
 
 @Injectable()
@@ -29,7 +29,9 @@ export class ExamSetQuestionBankService {
     dto: CreateExamSetQuestionBankDto,
   ): Promise<ExamSetQuestionBankEntity> {
     const examSet = await this.examSetService.findOne(dto.examSetId);
-    const questionBank = await this.questionBankService.findOne(dto.questionBankId);
+    const questionBank = await this.questionBankService.findOne(
+      dto.questionBankId,
+    );
 
     const record = this.examSetQuestionBankRepo.create({
       examSetId: examSet.id,
@@ -59,7 +61,9 @@ export class ExamSetQuestionBankService {
     }
 
     if (questionBankId) {
-      qb.andWhere('esqb.question_bank_id = :questionBankId', { questionBankId });
+      qb.andWhere('esqb.question_bank_id = :questionBankId', {
+        questionBankId,
+      });
     }
 
     qb.orderBy('esqb.order', 'ASC');
