@@ -95,16 +95,8 @@ export class QuestionService {
         'qbq.question_id = question.id AND qbq.question_bank_id = :questionBankId',
         { questionBankId },
       );
-      qb.addSelect('qbq.question_bank_id', 'qbq_question_bank_id');
-      qb.addSelect('qbq.order_no', 'qbq_order_no');
-    } else {
-      qb.leftJoin(
-        QuestionBankQuestionEntity,
-        'qbq',
-        'qbq.question_id = question.id',
-      );
-      qb.addSelect('qbq.question_bank_id', 'qbq_question_bank_id');
-      qb.addSelect('qbq.order_no', 'qbq_order_no');
+      // Required for TypeORM pagination with ORDER BY joined column.
+      qb.addSelect('qbq.orderNo');
     }
 
     if (questionType) {
@@ -118,19 +110,18 @@ export class QuestionService {
     qb.andWhere('question.isRoot = :isRoot', { isRoot: true });
 
     if (questionBankId) {
-      qb.orderBy('qbq.order_no', 'ASC');
+      qb.orderBy('qbq.orderNo', 'ASC');
     } else {
       qb.orderBy('question.createdAt', 'DESC');
     }
     qb.skip(skip).take(size);
 
-    const { entities, raw } = await qb.getRawAndEntities();
-    const total = await qb.clone().skip(undefined).take(undefined).getCount();
+    const [entities, total] = await qb.getManyAndCount();
 
     const questionsWithDetails = await Promise.all(
-      entities.map(async (question, index) => {
-        if (raw[index]?.qbq_question_bank_id) {
-          (question as any).questionBankId = raw[index].qbq_question_bank_id;
+      entities.map(async (question) => {
+        if (questionBankId) {
+          (question as any).questionBankId = questionBankId;
         }
 
         if (question.nextContent) {
