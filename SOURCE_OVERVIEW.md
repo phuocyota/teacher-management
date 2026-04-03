@@ -352,7 +352,83 @@ Các prefix controller hiện có:
 - `/exam-set`
 - `/exam-set-question-bank`
 
-## 10. Gợi Ý Đọc Code Theo Thứ Tự
+## 10. API Quick Lookup (Question / Answer / Attempt)
+
+Muc nay de tim nhanh API theo nhu cau hay gap khi lam de va nop bai.
+
+### 10.1 Tra cuu nhanh endpoint
+
+| Nhu cau | Method + path | Ghi chu |
+|---|---|---|
+| Tao cau hoi | `POST /question` | Tao 1 phan noi dung cau hoi goc |
+| Cap nhat cau hoi | `PATCH /question/:id` | Sua noi dung/loai cau hoi |
+| Lay chain cau hoi | `GET /question/:id/chain` | Lay day du cac phan noi dung theo `nextContent` |
+| Tao dap an cho cau hoi cu the | `POST /answer` | Body can `questionId`, `contentType`, `content` |
+| Cap nhat dap an | `PATCH /answer/:id` | Co the sua `isCorrect`, `orderNo`, `content`, ... |
+| Lay dap an theo cau hoi | `GET /answer?questionId=<questionId>` | Loc nhanh toan bo dap an cua 1 cau hoi |
+| Lay chain dap an | `GET /answer/:id/chain` | Lay day du chuoi noi dung dap an |
+| Tao student-answer thu cong | `POST /student-answer` | Luu cau tra loi hoc sinh cho 1 cau hoi |
+| Nop bai va luu toan bo cau tra loi | `POST /attempt/:id/end` | API chinh khi student submit bai |
+| Xem bai da nop (dung/sai) | `GET /attempt/:id/review` | Tra ve dap an hoc sinh + dap an dung |
+
+### 10.2 Payload toi thieu thuong dung
+
+1. Tao dap an cho 1 cau hoi (`POST /answer`)
+
+```json
+{
+  "questionId": "2233abe3-1961-4af5-a482-542f1227d844",
+  "contentType": "TEXT",
+  "content": "Paris",
+  "isCorrect": true
+}
+```
+
+2. Nop bai va luu cau tra loi theo tung cau (`POST /attempt/:id/end`) - object format
+
+```json
+{
+  "answers": [
+    {
+      "questionId": "5233abe3-1961-4af5-a482-542f1227d844",
+      "answerId": "6233abe3-1961-4af5-a482-542f1227d844"
+    }
+  ]
+}
+```
+
+3. Nop bai theo format FE rut gon (`POST /attempt/:id/end`) - string format
+
+```json
+{
+  "answers": ["1B", "2A", "3A", "4A", "7C", "8C", "9B", "10A"]
+}
+```
+
+Quy uoc:
+- `1B` = cau thu tu 1, chon dap an B.
+- `10A` = cau thu tu 10, chon dap an A.
+- Co ho tro nhieu lua chon, vi du `2BD` (chon B va D cho cau 2).
+- Khong truyen rong ky tu dap an (chi A-Z) va so thu tu cau phai ton tai trong de.
+
+4. Tao student-answer thu cong (`POST /student-answer`)
+
+```json
+{
+  "attemptId": "2233abe3-1961-4af5-a482-542f1227d844",
+  "questionId": "3233abe3-1961-4af5-a482-542f1227d844",
+  "answerId": "4233abe3-1961-4af5-a482-542f1227d844"
+}
+```
+
+### 10.3 Rule chon API nhanh
+
+- Neu la teacher/admin dang soan de: uu tien `question` + `answer`.
+- Neu la student dang lam bai: uu tien `attempt/start` va `attempt/:id/end`.
+- `student-answer` dung cho luu/chinh sua thu cong tung dong; submit chuan van la `attempt/:id/end`.
+- Khi goi `attempt/:id/end`, nen dung mot kieu format nhat quan trong ca mang `answers` (toan object hoac toan string).
+
+## 11. Gợi Ý Đọc Code Theo Thứ Tự
 
 Nếu cần onboard nhanh, nên đọc theo thứ tự:
 
@@ -366,7 +442,7 @@ Nếu cần onboard nhanh, nên đọc theo thứ tự:
 8. `src/upload/*`
 9. `src/lecture/*`
 
-## 11. File Quan Trọng
+## 12. File Quan Trọng
 
 - `src/main.ts`
 - `src/app.module.ts`
