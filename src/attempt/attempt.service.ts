@@ -841,6 +841,7 @@ export class AttemptService {
     const questionOrderMap = new Map(
       questionLinks.map((item) => [item.orderNo, item.questionId]),
     );
+    const questionIdByPosition = questionLinks.map((item) => item.questionId);
     const questionIds = questionLinks.map((item) => item.questionId);
     const answerOptions = questionIds.length
       ? await this.answerRepo.find({
@@ -869,18 +870,22 @@ export class AttemptService {
 
       const orderNo = Number(matched[1]);
       const choiceCodes = [...new Set(matched[2].split(''))];
-      const questionId = questionOrderMap.get(orderNo);
+      const questionId =
+        questionOrderMap.get(orderNo) ?? questionIdByPosition[orderNo - 1];
 
       if (!questionId) {
         throw new BadRequestException(ERROR_MESSAGES.INVALID_INPUT);
       }
 
-      const questionAnswers = answersByQuestionId.get(questionId) ?? [];
+      const questionAnswers = [...(answersByQuestionId.get(questionId) ?? [])];
+      questionAnswers.sort(
+        (a, b) => (a.orderNo ?? Number.MAX_SAFE_INTEGER) - (b.orderNo ?? Number.MAX_SAFE_INTEGER),
+      );
       const selectedAnswerIds = choiceCodes.map((choiceCode) => {
         const answerOrderNo = choiceCode.charCodeAt(0) - 64;
-        const answer = questionAnswers.find(
-          (item) => item.orderNo === answerOrderNo,
-        );
+        const answer =
+          questionAnswers.find((item) => item.orderNo === answerOrderNo) ??
+          questionAnswers[answerOrderNo - 1];
         if (!answer) {
           throw new BadRequestException(ERROR_MESSAGES.INVALID_INPUT);
         }

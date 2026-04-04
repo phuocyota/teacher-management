@@ -68,7 +68,7 @@ export class AttemptController {
   @ApiOperation({ summary: 'End attempt and record submitted answers' })
   @ApiOkResponse({ type: EndAttemptResponseDto })
   end(
-    @Param('id', ParseUUIDPipe) id: string,
+    @Param('id') id: string,
     @Body() dto: EndAttemptDto,
     @User() user: JwtPayload,
   ) {
