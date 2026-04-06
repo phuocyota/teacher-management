@@ -1,13 +1,14 @@
-import { ApiProperty } from '@nestjs/swagger';
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { BaseDto } from 'src/common/dto/base.dto';
 import { PaginationResponseDto } from 'src/common/dto/pagination.dto';
 
 export class StudentResponseDto extends BaseDto {
-  @ApiProperty({
+  @ApiPropertyOptional({
     description: 'ID cua nhom hoc sinh',
     example: '3344abe3-1961-4af5-a482-542f1227d855',
+    nullable: true,
   })
-  studentGroupId!: string;
+  studentGroupId!: string | null;
 
   @ApiProperty({
     description: 'Ma hoc sinh',

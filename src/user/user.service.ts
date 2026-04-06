@@ -22,7 +22,6 @@ import { runInTransaction } from 'src/common/database/transaction.utils';
 import { UserType } from 'src/common/enum/user-type.enum';
 import { StudentEntity } from 'src/student/student.entity';
 import { TeacherEntity } from 'src/teacher/teacher.entity';
-import { StudentGroupEntity } from 'src/student-group/student-group.entity';
 
 @Injectable()
 export class UserService extends BaseService<UserEntity> {
@@ -120,8 +119,6 @@ export class UserService extends BaseService<UserEntity> {
       const userRepo = manager.getRepository(UserEntity);
       const studentRepo = manager.getRepository(StudentEntity);
       const teacherRepo = manager.getRepository(TeacherEntity);
-      const studentGroupRepo = manager.getRepository(StudentGroupEntity);
-
       await this.checkUserExisting(dto);
 
       const {
@@ -148,18 +145,10 @@ export class UserService extends BaseService<UserEntity> {
       if (savedUser.userType === UserType.STUDENT) {
         const studentCodeValue = code ?? studentCode;
 
-        if (!studentGroupId || !studentCodeValue) {
+        if (!studentCodeValue) {
           throw new BadRequestException(
-            'studentGroupId va code la bat buoc khi tao user STUDENT',
+            'code la bat buoc khi tao user STUDENT',
           );
-        }
-
-        const studentGroup = await studentGroupRepo.findOne({
-          where: { id: studentGroupId },
-        });
-
-        if (!studentGroup) {
-          throw new NotFoundException('Khong tim thay nhom hoc sinh');
         }
 
         const existingStudentByCode = await studentRepo.findOne({
@@ -173,7 +162,7 @@ export class UserService extends BaseService<UserEntity> {
         await studentRepo.save(
           studentRepo.create({
             id: savedUser.id,
-            studentGroupId,
+            studentGroupId: studentGroupId ?? null,
             code: studentCodeValue,
             createdBy: user?.userId,
           }),

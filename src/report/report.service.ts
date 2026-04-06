@@ -33,7 +33,7 @@ type ReportStudentRow = {
   fullName: string | null;
   userName: string;
   code: string;
-  studentGroupId: string;
+  studentGroupId: string | null;
   studentGroupName: string | null;
 };
 

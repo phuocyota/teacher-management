@@ -49,11 +49,12 @@ export class ReportStudentOptionDto {
   })
   code!: string;
 
-  @ApiProperty({
+  @ApiPropertyOptional({
     description: 'ID nhom hoc sinh',
     example: '7233abe3-1961-4af5-a482-542f1227d844',
+    nullable: true,
   })
-  studentGroupId!: string;
+  studentGroupId!: string | null;
 
   @ApiPropertyOptional({
     description: 'Ten nhom hoc sinh',

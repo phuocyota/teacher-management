@@ -25,9 +25,9 @@ export class StudentService {
   ) {}
 
   async create(dto: CreateStudentDto): Promise<StudentEntity> {
-    const studentGroup = await this.studentGroupService.findOne(
-      dto.studentGroupId,
-    );
+    const studentGroup = dto.studentGroupId
+      ? await this.studentGroupService.findOne(dto.studentGroupId)
+      : null;
 
     const existingStudent = await this.studentRepo.findOne({
       where: { code: dto.code },
@@ -38,7 +38,7 @@ export class StudentService {
     }
 
     const record = this.studentRepo.create({
-      studentGroupId: dto.studentGroupId,
+      studentGroupId: dto.studentGroupId ?? null,
       code: dto.code,
       studentGroup,
     });
