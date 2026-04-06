@@ -62,6 +62,7 @@ import { ExamSetModule } from './exam-set/exam-set.module';
 import { ExamSetEntity } from './exam-set/exam-set.entity';
 import { ExamSetQuestionBankModule } from './exam-set-question-bank/exam-set-question-bank.module';
 import { ExamSetQuestionBankEntity } from './exam-set-question-bank/exam-set-question-bank.entity';
+import { ReportModule } from './report/report.module';
 
 @Module({
   imports: [
@@ -142,6 +143,7 @@ import { ExamSetQuestionBankEntity } from './exam-set-question-bank/exam-set-que
     SubjectModule,
     ExamSetModule,
     ExamSetQuestionBankModule,
+    ReportModule,
   ],
   providers: [
     {
