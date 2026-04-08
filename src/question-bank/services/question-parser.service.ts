@@ -16,9 +16,11 @@ export class QuestionParserService {
     currentState: QuestionBlockState | null,
   ): Promise<{
     questionState: QuestionBlockState | null;
+    completedQuestions: QuestionBlockState[];
     totalAnswers: number;
   }> {
     let totalAnswers = 0;
+    const completedQuestions: QuestionBlockState[] = [];
 
     for (const line of pageContent.lines) {
       let lineBuffer = '';
@@ -29,6 +31,9 @@ export class QuestionParserService {
             const processed = this.processTextLine(lineBuffer, currentState);
 
             currentState = processed.questionState;
+            if (processed.completedQuestion) {
+              completedQuestions.push(processed.completedQuestion);
+            }
             lineBuffer = '';
           }
 
@@ -45,10 +50,13 @@ export class QuestionParserService {
       if (lineBuffer.trim().length > 0) {
         const processed = this.processTextLine(lineBuffer, currentState);
         currentState = processed.questionState;
+        if (processed.completedQuestion) {
+          completedQuestions.push(processed.completedQuestion);
+        }
       }
     }
 
-    return { questionState: currentState, totalAnswers };
+    return { questionState: currentState, completedQuestions, totalAnswers };
   }
 
   private processTextLine(
@@ -56,59 +64,141 @@ export class QuestionParserService {
     currentState: QuestionBlockState | null,
   ): {
     questionState: QuestionBlockState | null;
+    completedQuestion: QuestionBlockState | null;
     totalAnswers: number;
   } {
     const normalizedLine = line.trim();
 
     if (!normalizedLine) {
-      return { questionState: currentState, totalAnswers: 0 };
+      return {
+        questionState: currentState,
+        completedQuestion: null,
+        totalAnswers: 0,
+      };
     }
 
-    const startMatch = normalizedLine.match(
-      PDF_PARSER_CONFIG.QUESTION_START_PATTERN,
-    );
+    const questionStart = this.extractQuestionStart(normalizedLine);
 
-    if (startMatch) {
+    if (questionStart) {
+      const completedQuestion = this.hasImportableContent(currentState)
+        ? currentState
+        : null;
+
       currentState = {
-        number: Number.parseInt(startMatch[1], 10) || 1,
+        number: questionStart.number,
         questionParts: [],
         answerPartsList: [],
         currentAnswerParts: null,
       };
 
-      this.appendLineToParts(currentState.questionParts, startMatch[2] ?? '');
-      return { questionState: currentState, totalAnswers: 0 };
+      this.appendLineToParts(currentState.questionParts, questionStart.content);
+      return {
+        questionState: currentState,
+        completedQuestion,
+        totalAnswers: 0,
+      };
     }
 
     if (!currentState) {
-      return { questionState: currentState, totalAnswers: 0 };
+      return {
+        questionState: currentState,
+        completedQuestion: null,
+        totalAnswers: 0,
+      };
     }
 
-    if (this.isAnswerLine(normalizedLine)) {
-      const answerParts: Array<{
-        content: string;
-        contentType: ContentTypes;
-      }> = [];
+    const answerSegments = this.extractAnswerSegments(normalizedLine);
 
-      currentState.answerPartsList.push(answerParts);
-      currentState.currentAnswerParts = answerParts;
+    if (answerSegments.length > 0) {
+      for (const answerSegment of answerSegments) {
+        const answerParts: Array<{
+          content: string;
+          contentType: ContentTypes;
+        }> = [];
 
-      const answerContent = normalizedLine.replace(
-        PDF_PARSER_CONFIG.ANSWER_LINE_PATTERN,
-        '',
-      );
-      this.appendLineToParts(answerParts, answerContent);
+        currentState.answerPartsList.push(answerParts);
+        currentState.currentAnswerParts = answerParts;
+        this.appendLineToParts(answerParts, answerSegment);
+      }
     } else if (currentState.currentAnswerParts) {
       this.appendLineToParts(currentState.currentAnswerParts, normalizedLine);
     } else {
       this.appendLineToParts(currentState.questionParts, normalizedLine);
     }
 
-    return { questionState: currentState, totalAnswers: 0 };
+    return {
+      questionState: currentState,
+      completedQuestion: null,
+      totalAnswers: 0,
+    };
   }
 
   private isAnswerLine(line: string): boolean {
     return PDF_PARSER_CONFIG.ANSWER_LINE_PATTERN.test(line.trim());
+  }
+
+  private extractAnswerSegments(line: string): string[] {
+    if (!this.isAnswerLine(line)) {
+      return [];
+    }
+
+    const normalizedLine = line.trim();
+    const matches = [
+      ...normalizedLine.matchAll(/([A-D])[\.\)]\s*/g),
+    ].filter((match) => typeof match.index === 'number');
+
+    if (matches.length === 0 || matches[0].index !== 0) {
+      return [];
+    }
+
+    return matches
+      .map((match, index) => {
+        const startIndex = (match.index ?? 0) + match[0].length;
+        const endIndex =
+          index + 1 < matches.length
+            ? (matches[index + 1].index ?? normalizedLine.length)
+            : normalizedLine.length;
+
+        return normalizedLine.slice(startIndex, endIndex).trim();
+      })
+      .filter((segment) => segment.length > 0);
+  }
+
+  private extractQuestionStart(
+    line: string,
+  ): { number: number; content: string } | null {
+    const match = line.match(PDF_PARSER_CONFIG.QUESTION_START_PATTERN);
+
+    if (!match) {
+      return null;
+    }
+
+    const questionNumber = match[1] ?? match[3];
+    const questionContent = match[2] ?? match[4] ?? '';
+    const parsedNumber = Number.parseInt(questionNumber, 10);
+
+    if (Number.isNaN(parsedNumber)) {
+      return null;
+    }
+
+    return {
+      number: parsedNumber,
+      content: questionContent,
+    };
+  }
+
+  private hasImportableContent(
+    currentState: QuestionBlockState | null,
+  ): currentState is QuestionBlockState {
+    if (!currentState) {
+      return false;
+    }
+
+    if (currentState.questionParts.length > 0) {
+      return true;
+    }
+
+    return currentState.answerPartsList.some((answerParts) => answerParts.length > 0);
   }
 
   private appendLineToParts(
@@ -144,7 +234,12 @@ export class QuestionParserService {
   private appendImageToState(
     currentState: QuestionBlockState | null,
     imageContent: string,
-  ): QuestionBlockState {
+  ): QuestionBlockState | null {
+    if (!currentState) {
+      this.logger.debug('Ignoring image fragment before question start');
+      return null;
+    }
+
     const targetParts =
       currentState?.currentAnswerParts ?? currentState?.questionParts;
 
@@ -157,18 +252,7 @@ export class QuestionParserService {
       return currentState as QuestionBlockState;
     }
 
-    // No state, create new one with image
-    return {
-      number: 1,
-      questionParts: [
-        {
-          content: imageContent,
-          contentType: ContentTypes.IMAGE,
-        },
-      ],
-      answerPartsList: [],
-      currentAnswerParts: null,
-    };
+    return currentState;
   }
 
   getQuestionType(answerCount: number): QuestionType {

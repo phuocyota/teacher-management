@@ -73,10 +73,8 @@ export class QuestionBankImportService {
     const questionBank = await this.findQuestionBankById(questionBankId);
 
     try {
-      const { createdQuestions, totalAnswers } = await this.processPdfOnTheFly(
-        pdfBuffer,
-        questionBank.id,
-      );
+      const { createdQuestions, totalAnswers, detectedQuestions } =
+        await this.processPdfOnTheFly(pdfBuffer, questionBank.id);
 
       const totalQuestions = await this.questionBankQuestionRepo.count({
         where: { questionBankId: questionBank.id },
@@ -86,6 +84,10 @@ export class QuestionBankImportService {
       await this.questionBankRepo.save(questionBank);
 
       const duration = Date.now() - startTime;
+      this.logger.log(
+        `PDF import summary for question bank ${questionBankId}: ` +
+          `imported ${createdQuestions.length}/${detectedQuestions} questions successfully`,
+      );
       this.logger.log(
         `PDF import completed in ${duration}ms: ` +
           `${createdQuestions.length} questions, ${totalAnswers} answers`,
@@ -151,6 +153,7 @@ export class QuestionBankImportService {
   ): Promise<{
     createdQuestions: CreatedQuestionSummary[];
     totalAnswers: number;
+    detectedQuestions: number;
   }> {
     try {
       const pdfjsLib: any = await import('pdfjs-dist/legacy/build/pdf.mjs');
@@ -166,6 +169,7 @@ export class QuestionBankImportService {
 
       const createdQuestions: CreatedQuestionSummary[] = [];
       let totalAnswers = 0;
+      let detectedQuestions = 0;
       let questionState: QuestionBlockState | null = null;
 
       for (let pageNumber = 1; pageNumber <= totalPages; pageNumber++) {
@@ -181,6 +185,17 @@ export class QuestionBankImportService {
             pageContent,
             questionState,
           );
+
+          detectedQuestions += result.completedQuestions.length;
+
+          for (const completedQuestion of result.completedQuestions) {
+            const flushResult = await this.flushQuestionBlock(
+              completedQuestion,
+              questionBankId,
+              createdQuestions,
+            );
+            totalAnswers += flushResult.totalAnswers;
+          }
 
           questionState = result.questionState;
           totalAnswers += result.totalAnswers;
@@ -198,6 +213,7 @@ export class QuestionBankImportService {
 
       // Flush remaining question
       if (questionState) {
+        detectedQuestions++;
         const result = await this.flushQuestionBlock(
           questionState,
           questionBankId,
@@ -206,7 +222,7 @@ export class QuestionBankImportService {
         totalAnswers += result.totalAnswers;
       }
 
-      return { createdQuestions, totalAnswers };
+      return { createdQuestions, totalAnswers, detectedQuestions };
     } catch (error) {
       if (error instanceof PdfParsingError) {
         throw error;
@@ -331,7 +347,19 @@ export class QuestionBankImportService {
     questionBankId: string,
     createdQuestions: CreatedQuestionSummary[],
   ): Promise<{ totalAnswers: number }> {
-    if (state.questionParts.length === 0) {
+    const questionParts =
+      state.questionParts.length > 0
+        ? state.questionParts
+        : state.answerPartsList.length > 0
+          ? [
+              {
+                content: '',
+                contentType: ContentTypes.TEXT,
+              },
+            ]
+          : [];
+
+    if (questionParts.length === 0) {
       return { totalAnswers: 0 };
     }
 
@@ -340,7 +368,7 @@ export class QuestionBankImportService {
     );
 
     const savedParts = await this.createContentChain(
-      state.questionParts,
+      questionParts,
       { type: resolvedQuestionType },
       this.questionService.createBulk.bind(this.questionService),
       this.questionService.updateBulk.bind(this.questionService),

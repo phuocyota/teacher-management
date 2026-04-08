@@ -6,15 +6,18 @@
 export const PDF_PARSER_CONFIG = {
   /**
    * Regex pattern to detect question start line
-   * Matches: "Câu 1:", "Question 1:", "Câu 1.", etc.
+   * Matches:
+   * - "Câu 1:", "Question 1:", "Câu 1.", etc.
+   * - "1. Question text", "11.Question text", "8.. Question text"
    */
-  QUESTION_START_PATTERN: /^(?:Câu|Question)\s*(\d+)[:\.]?\s*(.*)$/i,
+  QUESTION_START_PATTERN:
+    /^(?:(?:Câu|Question)\s*(\d+)\s*[:\.]?\s*(.*)|(\d+)\s*[\.:]+\s*(.*))$/i,
 
   /**
    * Regex pattern to detect answer line
-   * Matches: "A) answer", "B. answer", "C) answer", "D. answer"
+   * Matches: "A) answer", "B. answer", "C) answer", "D.answer"
    */
-  ANSWER_LINE_PATTERN: /^([A-D])[\.\)]\s+/,
+  ANSWER_LINE_PATTERN: /^([A-D])[\.\)]\s*/,
 
   /**
    * Tolerance (in pixels) for grouping fragments into same line
