@@ -2,6 +2,7 @@ import { ApiProperty } from '@nestjs/swagger';
 import { IsNotEmpty, IsUUID } from 'class-validator';
 import { ContentTypes } from 'src/common/enum/content-type.enum';
 import { QuestionType } from 'src/question/enum/question-type.enum';
+import { AnswerKeyOption } from '../types/question-bank-import.types';
 
 export class ImportExamDto {
   @ApiProperty({
@@ -71,4 +72,11 @@ export class ImportExamResultDto {
     type: [ImportExamQuestionSummaryDto],
   })
   questions!: ImportExamQuestionSummaryDto[];
+
+  @ApiProperty({
+    description: 'Bang dap an parse duoc o cuoi de neu co',
+    required: false,
+    example: { '1': 'A', '2': 'C' },
+  })
+  answerKey?: Record<string, AnswerKeyOption>;
 }

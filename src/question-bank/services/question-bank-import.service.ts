@@ -25,6 +25,7 @@ import {
   CreatedQuestionSummary,
   LayoutFragment,
   PageContent,
+  PdfParserState,
   QuestionBlockState,
   LayoutLine,
 } from '../types/question-bank-import.types';
@@ -73,7 +74,7 @@ export class QuestionBankImportService {
     const questionBank = await this.findQuestionBankById(questionBankId);
 
     try {
-      const { createdQuestions, totalAnswers, detectedQuestions } =
+      const { createdQuestions, totalAnswers, detectedQuestions, answerKey } =
         await this.processPdfOnTheFly(pdfBuffer, questionBank.id);
 
       const totalQuestions = await this.questionBankQuestionRepo.count({
@@ -97,6 +98,7 @@ export class QuestionBankImportService {
         totalQuestions,
         totalAnswers,
         questions: createdQuestions,
+        answerKey: this.serializeAnswerKey(answerKey),
       };
     } catch (error) {
       const duration = Date.now() - startTime;
@@ -154,6 +156,7 @@ export class QuestionBankImportService {
     createdQuestions: CreatedQuestionSummary[];
     totalAnswers: number;
     detectedQuestions: number;
+    answerKey: Record<number, 'A' | 'B' | 'C' | 'D'>;
   }> {
     try {
       const pdfjsLib: any = await import('pdfjs-dist/legacy/build/pdf.mjs');
@@ -170,7 +173,7 @@ export class QuestionBankImportService {
       const createdQuestions: CreatedQuestionSummary[] = [];
       let totalAnswers = 0;
       let detectedQuestions = 0;
-      let questionState: QuestionBlockState | null = null;
+      let parserState: PdfParserState | null = null;
 
       for (let pageNumber = 1; pageNumber <= totalPages; pageNumber++) {
         try {
@@ -183,7 +186,7 @@ export class QuestionBankImportService {
 
           const result = await this.questionParser.processPageContent(
             pageContent,
-            questionState,
+            parserState,
           );
 
           detectedQuestions += result.completedQuestions.length;
@@ -197,7 +200,7 @@ export class QuestionBankImportService {
             totalAnswers += flushResult.totalAnswers;
           }
 
-          questionState = result.questionState;
+          parserState = result.parserState;
           totalAnswers += result.totalAnswers;
 
           this.logger.debug(`Page ${pageNumber} processed`);
@@ -212,17 +215,22 @@ export class QuestionBankImportService {
       await pdfDocument.destroy();
 
       // Flush remaining question
-      if (questionState) {
+      if (parserState?.currentQuestion) {
         detectedQuestions++;
         const result = await this.flushQuestionBlock(
-          questionState,
+          parserState.currentQuestion,
           questionBankId,
           createdQuestions,
         );
         totalAnswers += result.totalAnswers;
       }
 
-      return { createdQuestions, totalAnswers, detectedQuestions };
+      return {
+        createdQuestions,
+        totalAnswers,
+        detectedQuestions,
+        answerKey: parserState?.answerKey ?? {},
+      };
     } catch (error) {
       if (error instanceof PdfParsingError) {
         throw error;
@@ -422,5 +430,17 @@ export class QuestionBankImportService {
     });
 
     await this.questionBankQuestionRepo.save(link);
+  }
+
+  private serializeAnswerKey(
+    answerKey: Record<number, 'A' | 'B' | 'C' | 'D'>,
+  ): Record<string, 'A' | 'B' | 'C' | 'D'> | undefined {
+    const entries = Object.entries(answerKey);
+
+    if (entries.length === 0) {
+      return undefined;
+    }
+
+    return Object.fromEntries(entries.map(([key, value]) => [String(key), value]));
   }
 }

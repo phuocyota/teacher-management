@@ -11,13 +11,49 @@ export const PDF_PARSER_CONFIG = {
    * - "1. Question text", "11.Question text", "8.. Question text"
    */
   QUESTION_START_PATTERN:
-    /^(?:(?:Câu|Question)\s*(\d+)\s*[:\.]?\s*(.*)|(\d+)\s*[\.:]+\s*(.*))$/i,
+    /^(?:(?:C\u00e2u|Question)\s*(\d+)\s*[:\.]?\s*(.*)|(\d+)\s*[\.:]+\s*(.*))$/i,
 
   /**
    * Regex pattern to detect answer line
-   * Matches: "A) answer", "B. answer", "C) answer", "D.answer"
+   * Matches: "A) answer", "B. answer", "C) answer", "D.answer", "B . answer"
    */
-  ANSWER_LINE_PATTERN: /^([A-D])[\.\)]\s*/,
+  ANSWER_LINE_PATTERN: /^([A-D])\s*[\.\)]\s*/,
+
+  /**
+   * Regex pattern to split answer segments from a single line
+   * Matches: "A. foo B . bar C) baz"
+   */
+  ANSWER_SEGMENT_PATTERN: /([A-D])\s*[\.\)]\s*/g,
+
+  /**
+   * Regex pattern to detect the start of answer key section
+   * Matches: "Đáp án", "Đáp án:", "Answer Key"
+   */
+  ANSWER_KEY_START_PATTERN:
+    /^(?:\u0110\u00e1p\s*\u00e1n|Answer\s*Key)\s*:?\s*$/i,
+
+  /**
+   * Regex pattern to detect answer key entries
+   * Matches: "Câu 1: A", "Question 2. B"
+   */
+  ANSWER_KEY_ENTRY_PATTERN:
+    /(?:C\u00e2u|Question)\s*(\d+)\s*[:.\-]?\s*([A-D])(?:\b|$)/gi,
+
+  /**
+   * Regex patterns to ignore repeated headers and footers after text is
+   * normalized to lowercase ASCII and collapsed whitespace.
+   */
+  NOISE_LINE_PATTERNS: [
+    /^CHƯƠNG\s+TRÌNH\s+GIÁO\s+DỤC\s+KỸ\s+NĂNG\s+SỐNG(?:\s*_?\s*ICHISKILL)?$/iu,
+    /^Khối\s+\d+\s*\.\s*Đề kiểm tra học kì\s+[IVX]+\s+\d+$/iu,
+    /^chuong trinh giao duc ky nang song(?:\s*_?\s*ichiskill)?$/,
+    /^khoi\s+\d+\s*\.\s*de kiem tra hoc ki\s+[ivx]+\s+\d+$/,
+  ],
+
+  /**
+   * Regex pattern to ignore standalone figure captions like "Hình 1"
+   */
+  FIGURE_LABEL_PATTERN: /^(?:H\u00ecnh|Hinh)\s+\d+[\.:]?$/i,
 
   /**
    * Tolerance (in pixels) for grouping fragments into same line

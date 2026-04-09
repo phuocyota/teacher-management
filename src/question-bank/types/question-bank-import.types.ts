@@ -31,6 +31,8 @@ export interface PageContent {
   lines: LayoutLine[];
 }
 
+export type AnswerKeyOption = 'A' | 'B' | 'C' | 'D';
+
 export interface QuestionBlockState {
   number: number;
   questionParts: Array<{ content: string; contentType: ContentTypes }>;
@@ -39,4 +41,10 @@ export interface QuestionBlockState {
     content: string;
     contentType: ContentTypes;
   }> | null;
+}
+
+export interface PdfParserState {
+  mode: 'questions' | 'answer_key';
+  currentQuestion: QuestionBlockState | null;
+  answerKey: Record<number, AnswerKeyOption>;
 }
