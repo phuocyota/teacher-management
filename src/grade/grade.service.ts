@@ -66,7 +66,8 @@ export class GradeService {
         FROM grade g
         INNER JOIN class c ON c.grade_id = g.id
         LEFT JOIN subject s ON s.id = c.subject_id
-        LEFT JOIN exam_set es ON es.class_id = c.id
+        LEFT JOIN exam_set_class esc ON esc.class_id = c.id
+        LEFT JOIN exam_set es ON es.id = esc.exam_set_id OR es.class_id = c.id
         ${whereClause}
         ORDER BY g.code ASC, s.name ASC, es.name ASC
         LIMIT $${limitParamIndex}

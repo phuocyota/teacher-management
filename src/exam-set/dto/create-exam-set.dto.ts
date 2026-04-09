@@ -1,5 +1,13 @@
 import { ApiProperty, PartialType } from '@nestjs/swagger';
-import { IsEnum, IsNotEmpty, IsOptional, IsString, IsUUID } from 'class-validator';
+import {
+  ArrayUnique,
+  IsArray,
+  IsEnum,
+  IsNotEmpty,
+  IsOptional,
+  IsString,
+  IsUUID,
+} from 'class-validator';
 import { ExamSetStatus } from '../enum/exam-set-status.enum';
 
 export class CreateExamSetDto {
@@ -32,11 +40,26 @@ export class CreateExamSetDto {
   @IsUUID()
   @IsOptional()
   @ApiProperty({
-    description: 'ID lop hoc',
+    description: 'ID lop hoc dau tien, giu lai de tuong thich API cu',
     example: '2233abe3-1961-4af5-a482-542f1227d844',
     required: false,
   })
   classId?: string;
+
+  @IsArray()
+  @ArrayUnique()
+  @IsUUID('4', { each: true })
+  @IsOptional()
+  @ApiProperty({
+    description: 'Danh sach ID lop hoc thuoc bo de thi',
+    example: [
+      '2233abe3-1961-4af5-a482-542f1227d844',
+      '3233abe3-1961-4af5-a482-542f1227d844',
+    ],
+    required: false,
+    type: [String],
+  })
+  classIds?: string[];
 
   @IsEnum(ExamSetStatus)
   @IsOptional()

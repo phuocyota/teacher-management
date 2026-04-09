@@ -25,11 +25,22 @@ export class ExamSetResponseDto extends BaseDto {
   image?: string;
 
   @ApiProperty({
-    description: 'ID lop hoc',
+    description: 'ID lop hoc dau tien, giu lai de tuong thich API cu',
     example: '2233abe3-1961-4af5-a482-542f1227d844',
     required: false,
   })
   classId?: string;
+
+  @ApiProperty({
+    description: 'Danh sach ID lop hoc thuoc bo de',
+    example: [
+      '2233abe3-1961-4af5-a482-542f1227d844',
+      '3233abe3-1961-4af5-a482-542f1227d844',
+    ],
+    required: false,
+    type: [String],
+  })
+  classIds?: string[];
 
   @ApiProperty({
     description: 'Trang thai bo de',
@@ -101,6 +112,26 @@ export class ExamSetDetailQuestionBankDto {
   createdAt!: Date;
 }
 
+export class ExamSetDetailClassDto {
+  @ApiProperty({
+    description: 'ID lop hoc',
+    example: '2233abe3-1961-4af5-a482-542f1227d844',
+  })
+  id!: string;
+
+  @ApiProperty({
+    description: 'Ma lop hoc',
+    example: 'L1',
+  })
+  code!: string;
+
+  @ApiProperty({
+    description: 'Ten lop hoc',
+    example: 'Lop 1',
+  })
+  name!: string;
+}
+
 export class ExamSetDetailStatsDto {
   @ApiProperty({
     description: 'So luong de thi trong bo de',
@@ -133,6 +164,12 @@ export class ExamSetDetailResponseDto extends ExamSetResponseDto {
   questionBanks!: ExamSetDetailQuestionBankDto[];
 
   @ApiProperty({
+    description: 'Danh sach lop hoc thuoc bo de',
+    type: [ExamSetDetailClassDto],
+  })
+  classes!: ExamSetDetailClassDto[];
+
+  @ApiProperty({
     description: 'Thong ke cua bo de',
     type: ExamSetDetailStatsDto,
   })
@@ -159,11 +196,22 @@ export class ExamSetOptionDto {
   name!: string;
 
   @ApiProperty({
-    description: 'Related class ID',
+    description: 'Related class ID dau tien, giu lai de tuong thich API cu',
     example: '3233abe3-1961-4af5-a482-542f1227d844',
     required: false,
   })
   classId?: string;
+
+  @ApiProperty({
+    description: 'Danh sach class ID cua exam set',
+    example: [
+      '2233abe3-1961-4af5-a482-542f1227d844',
+      '3233abe3-1961-4af5-a482-542f1227d844',
+    ],
+    required: false,
+    type: [String],
+  })
+  classIds?: string[];
 
   @ApiProperty({
     description: 'Exam set status',
