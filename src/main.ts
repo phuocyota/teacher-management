@@ -38,7 +38,7 @@ async function bootstrap() {
     origin: [
       'http://localhost:5173',
       'http://160.250.132.143:5173',
-      'http://fe.kidostudent.kidoedu.vn/',
+      'https://fe.kidostudent.kidoedu.vn/',
       'https://kidostudent.kidoedu.vn/',
     ],
     credentials: true,
