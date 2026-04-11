@@ -1,14 +1,38 @@
-﻿import {
-  IsNotEmpty,
-  IsInt,
+import { ApiProperty, PartialType } from '@nestjs/swagger';
+import { Type } from 'class-transformer';
+import {
+  ArrayUnique,
+  IsArray,
   IsDateString,
-  IsUUID,
-  Min,
+  IsDefined,
+  IsInt,
+  IsNotEmpty,
   IsOptional,
   IsString,
+  IsUUID,
   MaxLength,
+  Min,
+  ValidateNested,
 } from 'class-validator';
-import { ApiProperty, PartialType } from '@nestjs/swagger';
+
+export class QuestionBankExamSetDto {
+  @IsUUID()
+  @IsDefined()
+  @ApiProperty({
+    description: 'ID bo de thi can gan de thi vao',
+    example: '2233abe3-1961-4af5-a482-542f1227d844',
+  })
+  examSetId!: string;
+
+  @IsInt()
+  @Min(1)
+  @IsDefined()
+  @ApiProperty({
+    description: 'Thu tu cua de thi trong bo de',
+    example: 1,
+  })
+  order!: number;
+}
 
 export class CreateQuestionBankDto {
   @IsString()
@@ -101,6 +125,28 @@ export class CreateQuestionBankDto {
     required: false,
   })
   image?: string;
+
+  @IsArray()
+  @ArrayUnique((item: QuestionBankExamSetDto) => item.examSetId)
+  @ValidateNested({ each: true })
+  @Type(() => QuestionBankExamSetDto)
+  @IsOptional()
+  @ApiProperty({
+    description: 'Danh sach bo de thi can lien ket ngay khi tao de thi',
+    required: false,
+    type: [QuestionBankExamSetDto],
+    example: [
+      {
+        examSetId: '2233abe3-1961-4af5-a482-542f1227d844',
+        order: 1,
+      },
+      {
+        examSetId: '3233abe3-1961-4af5-a482-542f1227d844',
+        order: 2,
+      },
+    ],
+  })
+  examSets?: QuestionBankExamSetDto[];
 }
 
 export class UpdateQuestionBankDto extends PartialType(CreateQuestionBankDto) {}

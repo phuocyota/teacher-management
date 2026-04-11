@@ -6,10 +6,11 @@ import {
   forwardRef,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { EntityManager, In, Repository } from 'typeorm';
 import { QuestionBankEntity } from '../question-bank.entity';
 import {
   CreateQuestionBankDto,
+  QuestionBankExamSetDto,
   UpdateQuestionBankDto,
 } from '../dto/create-question-bank.dto';
 import { AddQuestionToQuestionBankDto } from '../dto/add-question-to-question-bank.dto';
@@ -25,6 +26,9 @@ import { ImportExamResultDto } from '../dto/import-exam.dto';
 import { QuestionBankQuestionEntity } from 'src/question-bank-question/question-bank-question.entity';
 import { QuestionBankImportService } from './question-bank-import.service';
 import { QuestionService } from 'src/question/question.service';
+import { ExamSetEntity } from 'src/exam-set/exam-set.entity';
+import { ExamSetQuestionBankEntity } from 'src/exam-set-question-bank/exam-set-question-bank.entity';
+import { runInTransaction } from 'src/common/database/transaction.utils';
 
 @Injectable()
 export class QuestionBankService {
@@ -33,6 +37,9 @@ export class QuestionBankService {
     private readonly questionBankRepo: Repository<QuestionBankEntity>,
     @InjectRepository(QuestionBankQuestionEntity)
     private readonly questionBankQuestionRepo: Repository<QuestionBankQuestionEntity>,
+    @InjectRepository(ExamSetEntity)
+    private readonly examSetRepo: Repository<ExamSetEntity>,
+    private readonly entityManager: EntityManager,
     private readonly classService: ClassService,
     private readonly questionBankImportService: QuestionBankImportService,
     @Inject(forwardRef(() => QuestionService))
@@ -41,20 +48,28 @@ export class QuestionBankService {
 
   async create(dto: CreateQuestionBankDto): Promise<QuestionBankEntity> {
     await this.classService.findOne(dto.classId);
+    const examSets = await this.resolveValidatedExamSets(dto.examSets);
 
-    const record = this.questionBankRepo.create({
-      code: dto.code,
-      name: dto.name,
-      totalQuestions: dto.totalQuestions,
-      timeLimit: dto.timeLimit,
-      totalScore: dto.totalScore,
-      maxAttempts: dto.maxAttempts,
-      totalMarks: dto.totalMarks,
-      examDate: dto.examDate,
-      classId: dto.classId,
-      image: dto.image,
+    return runInTransaction(this.entityManager, async (manager) => {
+      const questionBankRepo = manager.getRepository(QuestionBankEntity);
+      const record = questionBankRepo.create({
+        code: dto.code,
+        name: dto.name,
+        totalQuestions: dto.totalQuestions,
+        timeLimit: dto.timeLimit,
+        totalScore: dto.totalScore,
+        maxAttempts: dto.maxAttempts,
+        totalMarks: dto.totalMarks,
+        examDate: dto.examDate,
+        classId: dto.classId,
+        image: dto.image,
+      });
+      const savedRecord = await questionBankRepo.save(record);
+
+      await this.replaceQuestionBankExamSets(savedRecord.id, examSets, manager);
+
+      return savedRecord;
     });
-    return this.questionBankRepo.save(record);
   }
 
   async findAll(
@@ -124,6 +139,10 @@ export class QuestionBankService {
     dto: UpdateQuestionBankDto,
   ): Promise<QuestionBankEntity> {
     const record = await this.findOne(id);
+    const examSets =
+      dto.examSets !== undefined
+        ? await this.resolveValidatedExamSets(dto.examSets)
+        : undefined;
 
     if (dto.classId !== undefined) {
       const cls = await this.classService.findOne(dto.classId);
@@ -167,7 +186,16 @@ export class QuestionBankService {
       record.image = dto.image;
     }
 
-    return this.questionBankRepo.save(record);
+    return runInTransaction(this.entityManager, async (manager) => {
+      const questionBankRepo = manager.getRepository(QuestionBankEntity);
+      const savedRecord = await questionBankRepo.save(record);
+
+      if (examSets !== undefined) {
+        await this.replaceQuestionBankExamSets(savedRecord.id, examSets, manager);
+      }
+
+      return savedRecord;
+    });
   }
 
   async addQuestion(
@@ -217,5 +245,78 @@ export class QuestionBankService {
       questionBankId,
       pdfBuffer,
     );
+  }
+
+  private async resolveValidatedExamSets(
+    examSets?: QuestionBankExamSetDto[],
+  ): Promise<QuestionBankExamSetDto[]> {
+    if (!examSets || examSets.length === 0) {
+      return [];
+    }
+
+    const uniqueExamSetIds = Array.from(
+      new Set(examSets.map((item) => item.examSetId)),
+    );
+
+    if (uniqueExamSetIds.length !== examSets.length) {
+      throw new BadRequestException(
+        'examSets khong duoc chua examSetId trung lap',
+      );
+    }
+
+    const invalidOrder = examSets.find(
+      (item) => !Number.isInteger(item.order) || item.order < 1,
+    );
+    if (invalidOrder) {
+      throw new BadRequestException('examSets.order phai la so nguyen >= 1');
+    }
+
+    const existedExamSets = await this.examSetRepo.find({
+      where: { id: In(uniqueExamSetIds) },
+    });
+    const existedExamSetIds = new Set(existedExamSets.map((item) => item.id));
+    const missingExamSetId = uniqueExamSetIds.find(
+      (examSetId) => !existedExamSetIds.has(examSetId),
+    );
+
+    if (missingExamSetId) {
+      throw new NotFoundException(
+        ERROR_MESSAGES.NOT_FOUND_WITH_ID(
+          ENTITY_NAMES.EXAM_SET,
+          missingExamSetId,
+        ),
+      );
+    }
+
+    return examSets.map((item) => ({
+      examSetId: item.examSetId,
+      order: item.order,
+    }));
+  }
+
+  private async replaceQuestionBankExamSets(
+    questionBankId: string,
+    examSets: QuestionBankExamSetDto[],
+    manager: EntityManager,
+  ): Promise<void> {
+    const examSetQuestionBankRepo = manager.getRepository(
+      ExamSetQuestionBankEntity,
+    );
+
+    await examSetQuestionBankRepo.delete({ questionBankId });
+
+    if (examSets.length === 0) {
+      return;
+    }
+
+    const entities = examSets.map((item) =>
+      examSetQuestionBankRepo.create({
+        examSetId: item.examSetId,
+        questionBankId,
+        order: item.order,
+      }),
+    );
+
+    await examSetQuestionBankRepo.save(entities);
   }
 }

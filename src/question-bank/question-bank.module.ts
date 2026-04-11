@@ -10,10 +10,15 @@ import { QuestionBankQuestionEntity } from 'src/question-bank-question/question-
 import { QuestionBankImportService } from './services/question-bank-import.service';
 import { PdfImageExtractorService } from './services/pdf-image-extractor.service';
 import { QuestionParserService } from './services/question-parser.service';
+import { ExamSetEntity } from 'src/exam-set/exam-set.entity';
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([QuestionBankEntity, QuestionBankQuestionEntity]),
+    TypeOrmModule.forFeature([
+      QuestionBankEntity,
+      QuestionBankQuestionEntity,
+      ExamSetEntity,
+    ]),
     ClassModule,
     forwardRef(() => QuestionModule),
     forwardRef(() => AnswerModule),
