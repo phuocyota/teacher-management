@@ -63,7 +63,11 @@ export class PdfImageExtractorService {
         }
 
         try {
-          const imageObject = await this.resolveImageObject(page, args[0]);
+          const imageObject = await this.resolveImageObject(
+            page,
+            args[0],
+            pageNumber,
+          );
           const encodedImage = await this.encodeImageObject(imageObject);
 
           if (!encodedImage) {
@@ -108,15 +112,31 @@ export class PdfImageExtractorService {
   private async resolveImageObject(
     page: PdfPage,
     imageName: any,
+    pageNumber: number,
   ): Promise<any> {
+    if (imageName && typeof imageName === 'object') {
+      return imageName;
+    }
+
     if (typeof imageName !== 'string') {
       return null;
     }
 
     return await new Promise((resolve) => {
+      const timeout = setTimeout(() => {
+        this.logger.warn(
+          `Timed out resolving image object "${imageName}" on page ${pageNumber}`,
+        );
+        resolve(null);
+      }, PDF_PARSER_CONFIG.IMAGE_OBJECT_TIMEOUT_MS);
+
       try {
-        page.objs.get(imageName, (image: any) => resolve(image));
+        page.objs.get(imageName, (image: any) => {
+          clearTimeout(timeout);
+          resolve(image);
+        });
       } catch {
+        clearTimeout(timeout);
         resolve(null);
       }
     });

@@ -74,6 +74,12 @@ export const PDF_PARSER_CONFIG = {
   IMAGE_ORDER_START: 100000,
 
   /**
+   * Maximum time to wait for pdf.js to resolve an image object before skipping it.
+   * This prevents a single unresolved XObject from stalling the whole page import.
+   */
+  IMAGE_OBJECT_TIMEOUT_MS: 2000,
+
+  /**
    * PDF.js library worker and security options
    */
   PDF_WORKER_OPTIONS: {
