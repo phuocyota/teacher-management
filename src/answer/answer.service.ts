@@ -14,7 +14,11 @@ import {
   ENTITY_NAMES,
 } from 'src/common/constant/error-messages.constant';
 import { PaginationResponseDto } from 'src/common/dto/pagination.dto';
-import { AnswerResponseDto } from './dto/answer.dto';
+import {
+  AnswerResponseDto,
+  AnswerChainResponseDto,
+  AnswerChainNodeDto,
+} from './dto/answer.dto';
 import { autoMapListToDto } from 'src/common/utils/auto-map.util';
 
 @Injectable()
@@ -147,7 +151,7 @@ export class AnswerService {
    * Get answer with full content chain (following nextContent links)
    * Returns array of answer parts in order
    */
-  async getAnswerWithChain(id: string): Promise<AnswerEntity[]> {
+  async getAnswerWithChain(id: string): Promise<AnswerChainResponseDto> {
     const chain: AnswerEntity[] = [];
     let currentId: string | undefined = id;
 
@@ -176,6 +180,30 @@ export class AnswerService {
       );
     }
 
-    return chain;
+    return this.buildChainResponse(chain);
+  }
+
+  private buildChainResponse(chain: AnswerEntity[]): AnswerChainResponseDto {
+    const root = chain[0];
+
+    return {
+      id: root.id,
+      contentType: root.contentType,
+      content: root.content,
+      nextContent: root.nextContent ?? chain[1]?.id ?? null,
+      chain: chain.map((answer, index) => this.toChainNode(answer, chain[index + 1])),
+    };
+  }
+
+  private toChainNode(
+    answer: AnswerEntity,
+    nextAnswer?: AnswerEntity,
+  ): AnswerChainNodeDto {
+    return {
+      id: answer.id,
+      content: answer.content,
+      contentType: answer.contentType,
+      nextContent: nextAnswer?.id ?? answer.nextContent ?? null,
+    };
   }
 }

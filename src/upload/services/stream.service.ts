@@ -153,6 +153,14 @@ export class StreamService {
       throw new Error('Filename is required');
     }
 
+    const uploadRootPrefix = `/${this.uploadDir.replace(/\\/g, '/')}/`;
+    const normalizedInput = filename.replace(/\\/g, '/');
+
+    if (normalizedInput.startsWith(uploadRootPrefix)) {
+      const relative = normalizedInput.substring(uploadRootPrefix.length);
+      return join(process.cwd(), this.uploadDir, relative);
+    }
+
     // If absolute filesystem path, return normalized
     if (isAbsolute(filename)) {
       return normalize(filename);
@@ -163,10 +171,10 @@ export class StreamService {
       try {
         const url = new URL(filename);
         let pathname = url.pathname.replace(/^\//, '');
-        const uploadPrefix = this.uploadDir.replace(/\\/g, '/');
+        const uploadDirPrefix = this.uploadDir.replace(/\\/g, '/');
         // If pathname starts with uploadDir, strip it to avoid duplication
-        if (pathname.startsWith(uploadPrefix + '/')) {
-          pathname = pathname.substring(uploadPrefix.length + 1);
+        if (pathname.startsWith(uploadDirPrefix + '/')) {
+          pathname = pathname.substring(uploadDirPrefix.length + 1);
         }
         return join(process.cwd(), this.uploadDir, pathname);
       } catch (err) {
@@ -175,12 +183,12 @@ export class StreamService {
     }
 
     // Normalize separators for relative paths
-    let normalized = filename.replace(/\\/g, '/');
+    let normalized = normalizedInput;
 
-    const uploadPrefix = this.uploadDir.replace(/\\/g, '/');
-    if (normalized.startsWith(uploadPrefix + '/')) {
+    const uploadDirPrefix = this.uploadDir.replace(/\\/g, '/');
+    if (normalized.startsWith(uploadDirPrefix + '/')) {
       // remove leading uploadDir/
-      normalized = normalized.substring(uploadPrefix.length + 1);
+      normalized = normalized.substring(uploadDirPrefix.length + 1);
     }
 
     return join(process.cwd(), this.uploadDir, normalized);
@@ -194,6 +202,15 @@ export class StreamService {
     if (!filename) {
       throw new Error('Filename is required');
     }
+
+    const uploadRootPrefix = `/${this.uploadDir.replace(/\\/g, '/')}/`;
+    const normalizedInput = filename.replace(/\\/g, '/');
+
+    if (normalizedInput.startsWith(uploadRootPrefix)) {
+      const relative = normalizedInput.substring(uploadRootPrefix.length);
+      return join(process.cwd(), this.uploadDir, relative);
+    }
+
     if (isAbsolute(filename)) {
       return normalize(filename);
     }
@@ -201,19 +218,19 @@ export class StreamService {
       try {
         const url = new URL(filename);
         let pathname = url.pathname.replace(/^\//, '');
-        const uploadPrefix = this.uploadDir.replace(/\\/g, '/');
-        if (pathname.startsWith(uploadPrefix + '/')) {
-          pathname = pathname.substring(uploadPrefix.length + 1);
+        const uploadDirPrefix = this.uploadDir.replace(/\\/g, '/');
+        if (pathname.startsWith(uploadDirPrefix + '/')) {
+          pathname = pathname.substring(uploadDirPrefix.length + 1);
         }
         return join(process.cwd(), this.uploadDir, pathname);
       } catch (err) {
         throw new Error('Invalid URL stored for file path');
       }
     }
-    let normalized = filename.replace(/\\/g, '/');
-    const uploadPrefix = this.uploadDir.replace(/\\/g, '/');
-    if (normalized.startsWith(uploadPrefix + '/')) {
-      normalized = normalized.substring(uploadPrefix.length + 1);
+    let normalized = normalizedInput;
+    const uploadDirPrefix = this.uploadDir.replace(/\\/g, '/');
+    if (normalized.startsWith(uploadDirPrefix + '/')) {
+      normalized = normalized.substring(uploadDirPrefix.length + 1);
     }
     return join(process.cwd(), this.uploadDir, normalized);
   }

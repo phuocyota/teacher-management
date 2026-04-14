@@ -32,6 +32,8 @@ import {
 import { PdfJsLib, PdfPage, PdfViewport } from '../types/pdf-types';
 import { PdfImageExtractorService } from './pdf-image-extractor.service';
 import { QuestionParserService } from './question-parser.service';
+import { UploadService } from 'src/upload/upload.service';
+import { FileType } from 'src/upload/enum/file-visibility.enum';
 
 @Injectable()
 export class QuestionBankImportService {
@@ -48,6 +50,7 @@ export class QuestionBankImportService {
     private readonly answerService: AnswerService,
     private readonly pdfImageExtractor: PdfImageExtractorService,
     private readonly questionParser: QuestionParserService,
+    private readonly uploadService: UploadService,
   ) {}
 
   private async findQuestionBankById(id: string): Promise<QuestionBankEntity> {
@@ -125,16 +128,29 @@ export class QuestionBankImportService {
   private async createContentChain<
     T extends { id: string; nextContent?: string },
   >(
+    questionBankId: string,
     contentParts: Array<{ content: string; contentType: ContentTypes }>,
     baseEntity: any,
     createBulk: (entities: any[]) => Promise<T[]>,
     updateBulk: (entities: T[]) => Promise<T[]>,
   ): Promise<T[]> {
-    const entities = contentParts.map((part) => ({
-      ...baseEntity,
-      content: part.content,
-      contentType: part.contentType,
-    }));
+    const entities: any[] = [];
+    const isQuestionEntity = typeof baseEntity?.type !== 'undefined';
+
+    for (let index = 0; index < contentParts.length; index++) {
+      const part = contentParts[index];
+      const content =
+        part.contentType === ContentTypes.IMAGE
+          ? await this.persistImagePart(questionBankId, part.content, index + 1)
+          : part.content;
+
+      entities.push({
+        ...baseEntity,
+        content,
+        contentType: part.contentType,
+        ...(isQuestionEntity ? { isRoot: index === 0 } : {}),
+      });
+    }
 
     const savedEntities = await createBulk(entities);
 
@@ -149,6 +165,25 @@ export class QuestionBankImportService {
     return savedEntities;
   }
 
+  private async persistImagePart(
+    questionBankId: string,
+    base64Content: string,
+    index: number,
+  ): Promise<string> {
+    const imageBuffer = Buffer.from(base64Content, 'base64');
+    const uploaded = await this.uploadService.saveBufferAsFile(imageBuffer, {
+      originalName: `pdf-image-${Date.now()}-${index}.png`,
+      mimetype: 'image/png',
+      uploadedBy: 'pdf-import',
+      fileType: FileType.NORMAL,
+      description: 'Generated from PDF import',
+      folderPath: `question-banks/${questionBankId}`,
+      storedPathPrefix: '/uploads',
+    });
+
+    return uploaded.path;
+  }
+
   private async processPdfOnTheFly(
     pdfBuffer: Buffer,
     questionBankId: string,
@@ -158,14 +193,17 @@ export class QuestionBankImportService {
     detectedQuestions: number;
     answerKey: Record<number, 'A' | 'B' | 'C' | 'D'>;
   }> {
+    let pdfDocument: any = null;
+    let loadingTask: any = null;
+
     try {
       const pdfjsLib: any = await import('pdfjs-dist/legacy/build/pdf.mjs');
-      const loadingTask = pdfjsLib.getDocument({
+      loadingTask = pdfjsLib.getDocument({
         data: new Uint8Array(pdfBuffer),
         ...PDF_PARSER_CONFIG.PDF_WORKER_OPTIONS,
       });
 
-      const pdfDocument = await loadingTask.promise;
+      pdfDocument = await loadingTask.promise;
       const totalPages = pdfDocument.numPages ?? 0;
 
       this.logger.debug(`PDF loaded: ${totalPages} pages`);
@@ -176,8 +214,10 @@ export class QuestionBankImportService {
       let parserState: PdfParserState | null = null;
 
       for (let pageNumber = 1; pageNumber <= totalPages; pageNumber++) {
+        let page: any = null;
+
         try {
-          const page = await pdfDocument.getPage(pageNumber);
+          page = await pdfDocument.getPage(pageNumber);
           const pageContent = await this.extractPageContent(
             page,
             pageNumber,
@@ -192,12 +232,18 @@ export class QuestionBankImportService {
           detectedQuestions += result.completedQuestions.length;
 
           for (const completedQuestion of result.completedQuestions) {
+            this.logger.debug(
+              `Flushing parsed question ${completedQuestion.number} from page ${pageNumber}`,
+            );
             const flushResult = await this.flushQuestionBlock(
               completedQuestion,
               questionBankId,
               createdQuestions,
             );
             totalAnswers += flushResult.totalAnswers;
+            this.logger.debug(
+              `Question ${completedQuestion.number} flushed successfully`,
+            );
           }
 
           parserState = result.parserState;
@@ -209,20 +255,26 @@ export class QuestionBankImportService {
             `Failed to process page: ${error}`,
             pageNumber,
           );
+        } finally {
+          this.cleanupPage(page, pageNumber);
         }
       }
-
-      await pdfDocument.destroy();
 
       // Flush remaining question
       if (parserState?.currentQuestion) {
         detectedQuestions++;
+        this.logger.debug(
+          `Flushing final question ${parserState.currentQuestion.number} after page loop`,
+        );
         const result = await this.flushQuestionBlock(
           parserState.currentQuestion,
           questionBankId,
           createdQuestions,
         );
         totalAnswers += result.totalAnswers;
+        this.logger.debug(
+          `Final question ${parserState.currentQuestion.number} flushed successfully`,
+        );
       }
 
       return {
@@ -236,6 +288,58 @@ export class QuestionBankImportService {
         throw error;
       }
       throw new PdfParsingError(`PDF processing failed: ${error}`);
+    } finally {
+      await this.cleanupPdfResources(pdfDocument, loadingTask);
+    }
+  }
+
+  private cleanupPage(page: any, pageNumber: number): void {
+    if (!page || typeof page.cleanup !== 'function') {
+      return;
+    }
+
+    try {
+      page.cleanup();
+    } catch (error) {
+      this.logger.warn(`Failed to cleanup page ${pageNumber}: ${error}`);
+    }
+  }
+
+  private async cleanupPdfResources(
+    pdfDocument: any,
+    loadingTask: any,
+  ): Promise<void> {
+    if (pdfDocument && typeof pdfDocument.destroy === 'function') {
+      try {
+        this.logger.debug('Destroying PDF document');
+        const didDestroy = await Promise.race<boolean>([
+          Promise.resolve(pdfDocument.destroy()).then(() => true),
+          new Promise<boolean>((resolve) =>
+            setTimeout(
+              () => resolve(false),
+              PDF_PARSER_CONFIG.PDF_DOCUMENT_DESTROY_TIMEOUT_MS,
+            ),
+          ),
+        ]);
+
+        if (!didDestroy) {
+          this.logger.warn(
+            `Timed out destroying PDF document after ${PDF_PARSER_CONFIG.PDF_DOCUMENT_DESTROY_TIMEOUT_MS}ms`,
+          );
+        } else {
+          this.logger.debug('PDF document destroyed');
+        }
+      } catch (error) {
+        this.logger.warn(`Failed to destroy PDF document: ${error}`);
+      }
+    }
+
+    if (loadingTask && typeof loadingTask.destroy === 'function') {
+      try {
+        loadingTask.destroy();
+      } catch (error) {
+        this.logger.warn(`Failed to destroy PDF loading task: ${error}`);
+      }
     }
   }
 
@@ -356,16 +460,16 @@ export class QuestionBankImportService {
     createdQuestions: CreatedQuestionSummary[],
   ): Promise<{ totalAnswers: number }> {
     const questionParts =
-      state.questionParts.length > 0
-        ? state.questionParts
-        : state.answerPartsList.length > 0
-          ? [
+      state.answerPartsList.length > 0
+        ? state.questionParts.length > 0
+          ? state.questionParts
+          : [
               {
                 content: '',
                 contentType: ContentTypes.TEXT,
               },
             ]
-          : [];
+        : [...state.questionParts, ...state.pendingAnswerMedia];
 
     if (questionParts.length === 0) {
       return { totalAnswers: 0 };
@@ -375,7 +479,12 @@ export class QuestionBankImportService {
       state.answerPartsList.length,
     );
 
+    this.logger.debug(
+      `Persisting question ${state.number}: ${questionParts.length} question parts, ${state.answerPartsList.length} answers`,
+    );
+
     const savedParts = await this.createContentChain(
+      questionBankId,
       questionParts,
       { type: resolvedQuestionType },
       this.questionService.createBulk.bind(this.questionService),
@@ -388,7 +497,11 @@ export class QuestionBankImportService {
     let answerCount = 0;
 
     for (const answerParts of state.answerPartsList) {
+      this.logger.debug(
+        `Persisting answer for question ${state.number}: ${answerParts.length} parts`,
+      );
       const savedAnswerParts = await this.createContentChain(
+        questionBankId,
         answerParts,
         { question: rootQuestion, questionId: rootQuestion.id },
         this.answerService.createBulk.bind(this.answerService),
@@ -403,6 +516,10 @@ export class QuestionBankImportService {
       questionBankId,
       rootQuestion.id,
       state.number,
+    );
+
+    this.logger.debug(
+      `Linked question ${state.number} to question bank ${questionBankId}`,
     );
 
     createdQuestions.push({

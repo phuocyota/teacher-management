@@ -24,6 +24,49 @@ export class NextAnswerContentDto {
   contentType!: ContentTypes;
 }
 
+export class AnswerChainNodeDto {
+  @ApiProperty({
+    description: 'ID cua phan noi dung',
+    example: '550e8400-e29b-41d4-a716-446655440000',
+  })
+  id!: string;
+
+  @ApiProperty({
+    description: 'Noi dung',
+    example: 'anh1.png',
+  })
+  content!: string;
+
+  @ApiProperty({
+    description: 'Loai noi dung',
+    enum: ContentTypes,
+    example: ContentTypes.IMAGE,
+  })
+  contentType!: ContentTypes;
+
+  @ApiProperty({
+    description: 'ID cua noi dung tiep theo',
+    required: false,
+    nullable: true,
+  })
+  nextContent?: string | null;
+}
+
+export class AnswerChainResponseDto extends NextAnswerContentDto {
+  @ApiProperty({
+    description: 'ID cua noi dung tiep theo cua phan dau chain',
+    required: false,
+    nullable: true,
+  })
+  nextContent?: string | null;
+
+  @ApiProperty({
+    description: 'Danh sach cac phan noi dung da gop theo nextContent',
+    type: [AnswerChainNodeDto],
+  })
+  chain!: AnswerChainNodeDto[];
+}
+
 export class AnswerResponseDto extends BaseDto {
   @ApiProperty({
     description: 'Thu tu cua dap an trong cau hoi',

@@ -37,6 +37,7 @@ export interface QuestionBlockState {
   number: number;
   questionParts: Array<{ content: string; contentType: ContentTypes }>;
   answerPartsList: Array<Array<{ content: string; contentType: ContentTypes }>>;
+  pendingAnswerMedia: Array<{ content: string; contentType: ContentTypes }>;
   currentAnswerParts: Array<{
     content: string;
     contentType: ContentTypes;

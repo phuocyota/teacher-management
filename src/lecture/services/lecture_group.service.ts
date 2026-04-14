@@ -1,9 +1,12 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { In, Repository } from 'typeorm';
 import { LectureGroupEntity } from '../entity/lecture_group.entity';
 import { runInTransaction } from 'src/common/database/transaction.utils';
-import { BulkCreateLectureGroupDto } from '../dto/lecture_group.dto';
+import {
+  BulkCreateLectureGroupDto,
+  BulkExcludeLectureGroupDto,
+} from '../dto/lecture_group.dto';
 import { JwtPayload } from 'src/common/interface/jwt-payload.interface';
 
 @Injectable()
@@ -37,6 +40,30 @@ export class LectureGroupService {
 
         // Lưu tất cả entities
         await repo.save(entities);
+      },
+    );
+  }
+
+  async bulkExclude(
+    dto: BulkExcludeLectureGroupDto,
+    _user: JwtPayload,
+  ): Promise<{ deletedCount: number }> {
+    return runInTransaction(
+      this.LectureGroupRepository.manager,
+      async (manager) => {
+        const repo = manager.getRepository(LectureGroupEntity);
+
+        if (!dto.excludeLectureIds.length) {
+          return { deletedCount: 0 };
+        }
+
+        const result = await repo.delete({
+          lectureId: In(dto.excludeLectureIds),
+        });
+
+        return {
+          deletedCount: result.affected ?? 0,
+        };
       },
     );
   }

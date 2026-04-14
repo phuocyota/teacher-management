@@ -152,11 +152,11 @@ export class PdfImageExtractorService {
     }
 
     if (Buffer.isBuffer(imageObject)) {
-      return imageObject;
+      return this.toPngBuffer(imageObject);
     }
 
     if (Buffer.isBuffer(imageObject.data)) {
-      return imageObject.data;
+      return this.toPngBuffer(imageObject.data);
     }
 
     const rawData = imageObject.data;
@@ -196,6 +196,18 @@ export class PdfImageExtractorService {
         `Failed to encode image with sharp: ${error}, returning raw data`,
       );
       return Buffer.from(rawData);
+    }
+  }
+
+  private async toPngBuffer(buffer: Buffer): Promise<Buffer> {
+    try {
+      const sharp = require('sharp');
+      return await sharp(buffer).png().toBuffer();
+    } catch (error) {
+      this.logger.warn(
+        `Failed to normalize image buffer to PNG: ${error}, keeping original bytes`,
+      );
+      return buffer;
     }
   }
 

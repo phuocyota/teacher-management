@@ -3,6 +3,15 @@ import { ContentTypes } from 'src/common/enum/content-type.enum';
 import { QuestionType } from 'src/question/enum/question-type.enum';
 import { PDF_PARSER_CONFIG } from '../constants/pdf-parser.constant';
 import {
+  ANSWER_KEY_ENTRY_PATTERNS,
+  ANSWER_KEY_START_PATTERNS,
+  ANSWER_LINE_PATTERNS,
+  ANSWER_SEGMENT_PATTERNS,
+  FIGURE_LABEL_PATTERNS,
+  NOISE_LINE_PATTERNS,
+  QUESTION_START_PATTERNS,
+} from '../constants/question-bank-import-patterns.constant';
+import {
   AnswerKeyOption,
   PageContent,
   PdfParserState,
@@ -138,6 +147,7 @@ export class QuestionParserService {
         number: questionStart.number,
         questionParts: [],
         answerPartsList: [],
+        pendingAnswerMedia: [],
         currentAnswerParts: null,
       };
 
@@ -164,15 +174,39 @@ export class QuestionParserService {
     const answerSegments = this.extractAnswerSegments(normalizedLine);
 
     if (answerSegments.length > 0) {
-      for (const answerSegment of answerSegments) {
+      const pendingAnswerMedia = [
+        ...parserState.currentQuestion.pendingAnswerMedia,
+      ];
+      parserState.currentQuestion.pendingAnswerMedia = [];
+
+      for (const [index, answerSegment] of answerSegments.entries()) {
         const answerParts: Array<{
           content: string;
           contentType: ContentTypes;
         }> = [];
 
+        if (pendingAnswerMedia[index]) {
+          answerParts.push(pendingAnswerMedia[index]);
+        }
+
         parserState.currentQuestion.answerPartsList.push(answerParts);
         parserState.currentQuestion.currentAnswerParts = answerParts;
         this.appendLineToParts(answerParts, answerSegment);
+      }
+
+      if (pendingAnswerMedia.length > answerSegments.length) {
+        const fallbackAnswer =
+          parserState.currentQuestion.answerPartsList[
+            parserState.currentQuestion.answerPartsList.length - 1
+          ];
+
+        for (
+          let index = answerSegments.length;
+          index < pendingAnswerMedia.length;
+          index++
+        ) {
+          fallbackAnswer.push(pendingAnswerMedia[index]);
+        }
       }
     } else if (parserState.currentQuestion.currentAnswerParts) {
       this.appendLineToParts(
@@ -206,11 +240,15 @@ export class QuestionParserService {
   }
 
   private isAnswerLine(line: string): boolean {
-    return PDF_PARSER_CONFIG.ANSWER_LINE_PATTERN.test(line.trim());
+    const normalized = line.trim();
+
+    return this.matchesAnyPattern(normalized, ANSWER_LINE_PATTERNS);
   }
 
   private isAnswerKeyStart(line: string): boolean {
-    return PDF_PARSER_CONFIG.ANSWER_KEY_START_PATTERN.test(line.trim());
+    const normalized = line.trim();
+
+    return this.matchesAnyPattern(normalized, ANSWER_KEY_START_PATTERNS);
   }
 
   private isNoiseLine(line: string): boolean {
@@ -218,9 +256,10 @@ export class QuestionParserService {
     const normalizedLine = this.normalizeLineForNoiseMatch(line);
 
     return (
-      PDF_PARSER_CONFIG.FIGURE_LABEL_PATTERN.test(compactLine) ||
-      PDF_PARSER_CONFIG.FIGURE_LABEL_PATTERN.test(normalizedLine) ||
-      PDF_PARSER_CONFIG.NOISE_LINE_PATTERNS.some(
+      FIGURE_LABEL_PATTERNS.some(
+        (pattern) => pattern.test(compactLine) || pattern.test(normalizedLine),
+      ) ||
+      NOISE_LINE_PATTERNS.some(
         (pattern) => pattern.test(compactLine) || pattern.test(normalizedLine),
       )
     );
@@ -232,12 +271,18 @@ export class QuestionParserService {
     }
 
     const normalizedLine = line.trim();
+    const pattern = ANSWER_SEGMENT_PATTERNS.find((candidate) =>
+      this.matchesPattern(normalizedLine, candidate),
+    );
+
+    if (!pattern) {
+      return [];
+    }
+
+    pattern.lastIndex = 0;
     const matches = [
       ...normalizedLine.matchAll(
-        new RegExp(
-          PDF_PARSER_CONFIG.ANSWER_SEGMENT_PATTERN.source,
-          PDF_PARSER_CONFIG.ANSWER_SEGMENT_PATTERN.flags,
-        ),
+        new RegExp(pattern.source, pattern.flags),
       ),
     ].filter((match) => typeof match.index === 'number');
 
@@ -262,14 +307,9 @@ export class QuestionParserService {
     line: string,
   ): Record<number, AnswerKeyOption> {
     const answerKeyEntries: Record<number, AnswerKeyOption> = {};
-    const matches = [
-      ...line.matchAll(
-        new RegExp(
-          PDF_PARSER_CONFIG.ANSWER_KEY_ENTRY_PATTERN.source,
-          PDF_PARSER_CONFIG.ANSWER_KEY_ENTRY_PATTERN.flags,
-        ),
-      ),
-    ];
+    const matches = ANSWER_KEY_ENTRY_PATTERNS.flatMap((pattern) => [
+      ...line.matchAll(new RegExp(pattern.source, pattern.flags)),
+    ]);
 
     for (const match of matches) {
       const questionNumber = Number.parseInt(match[1], 10);
@@ -292,24 +332,30 @@ export class QuestionParserService {
   private extractQuestionStart(
     line: string,
   ): { number: number; content: string } | null {
-    const match = line.match(PDF_PARSER_CONFIG.QUESTION_START_PATTERN);
+    for (const pattern of QUESTION_START_PATTERNS) {
+      const match = line.match(pattern.pattern);
 
-    if (!match) {
-      return null;
+      if (!match) {
+        continue;
+      }
+
+      const questionNumber = match[1] ?? match[3];
+      const questionContent = this.normalizeQuestionContent(
+        match[2] ?? match[4] ?? '',
+      );
+      const parsedNumber = Number.parseInt(questionNumber, 10);
+
+      if (Number.isNaN(parsedNumber)) {
+        continue;
+      }
+
+      return {
+        number: parsedNumber,
+        content: questionContent,
+      };
     }
 
-    const questionNumber = match[1] ?? match[3];
-    const questionContent = match[2] ?? match[4] ?? '';
-    const parsedNumber = Number.parseInt(questionNumber, 10);
-
-    if (Number.isNaN(parsedNumber)) {
-      return null;
-    }
-
-    return {
-      number: parsedNumber,
-      content: questionContent,
-    };
+    return null;
   }
 
   private hasImportableContent(
@@ -320,6 +366,10 @@ export class QuestionParserService {
     }
 
     if (currentState.questionParts.length > 0) {
+      return true;
+    }
+
+    if (currentState.pendingAnswerMedia.length > 0) {
       return true;
     }
 
@@ -342,6 +392,10 @@ export class QuestionParserService {
       content: normalized,
       contentType: ContentTypes.TEXT,
     });
+  }
+
+  private normalizeQuestionContent(content: string): string {
+    return content.trim().replace(/^[\s:.\-–—]+/, '').trim();
   }
 
   private mergeLineText(currentLine: string, fragment: string): string {
@@ -377,10 +431,16 @@ export class QuestionParserService {
       return null;
     }
 
-    const targetParts =
-      currentState.currentAnswerParts ?? currentState.questionParts;
+    if (currentState.currentAnswerParts) {
+      currentState.currentAnswerParts.push({
+        content: imageContent,
+        contentType: ContentTypes.IMAGE,
+      });
 
-    targetParts.push({
+      return currentState;
+    }
+
+    currentState.pendingAnswerMedia.push({
       content: imageContent,
       contentType: ContentTypes.IMAGE,
     });
@@ -392,5 +452,14 @@ export class QuestionParserService {
     return answerCount > 0
       ? QuestionType.SINGLE_CHOICE
       : QuestionType.TEXT_INPUT;
+  }
+
+  private matchesAnyPattern(line: string, patterns: RegExp[]): boolean {
+    return patterns.some((pattern) => this.matchesPattern(line, pattern));
+  }
+
+  private matchesPattern(line: string, pattern: RegExp): boolean {
+    const cloned = new RegExp(pattern.source, pattern.flags.replace('g', ''));
+    return cloned.test(line);
   }
 }

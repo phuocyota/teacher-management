@@ -209,6 +209,63 @@ export class UploadService {
   }
 
   /**
+   * Save an in-memory buffer as a file on disk and persist file metadata.
+   * Useful for generated assets such as extracted PDF images.
+   */
+  async saveBufferAsFile(
+    buffer: Buffer,
+    options: {
+      originalName: string;
+      mimetype: string;
+      uploadedBy: string;
+      fileType?: FileType;
+      description?: string;
+      folderPath?: string;
+      storedPathPrefix?: string;
+    },
+  ): Promise<UploadFileResponseDto> {
+    if (!buffer || buffer.length === 0) {
+      throw new BadRequestException('Buffer is empty');
+    }
+
+    const originalName = this.normalizeOriginalName(options.originalName);
+    const safeBaseName = basename(originalName);
+    const uniqueSuffix = `${Date.now()}-${Math.round(Math.random() * 1e9)}`;
+    const storedFilename = `${uniqueSuffix}-${safeBaseName}`;
+    const relativePath = options.folderPath
+      ? join(options.folderPath, storedFilename)
+      : storedFilename;
+    const diskPath = join(process.cwd(), this.uploadDir, relativePath);
+
+    mkdirSync(dirname(diskPath), { recursive: true });
+    writeFileSync(diskPath, buffer);
+
+    const normalizedRelativePath = relativePath.replace(/\\/g, '/');
+    const prefix =
+      options.storedPathPrefix ??
+      (this.publicBaseUrl ? this.publicBaseUrl.replace(/\/$/, '') : '');
+    const storedPath = prefix
+      ? `${prefix}/${normalizedRelativePath}`
+      : `${this.uploadDir.replace(/\\/g, '/')}/${normalizedRelativePath}`;
+
+    const saved = await this.fileRepo.save(
+      this.fileRepo.create({
+        originalName,
+        filename: storedFilename,
+        path: storedPath,
+        mimetype: options.mimetype,
+        size: buffer.length,
+        fileType: options.fileType ?? FileType.NORMAL,
+        description: options.description,
+        createdBy: options.uploadedBy,
+        uploadedBy: options.uploadedBy,
+      }),
+    );
+
+    return UploadFileResponseDto.fromEntity(saved);
+  }
+
+  /**
    * Xử lý upload nhiều file
    */
   async handleMultipleFilesUpload(

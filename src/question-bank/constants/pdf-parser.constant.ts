@@ -80,6 +80,12 @@ export const PDF_PARSER_CONFIG = {
   IMAGE_OBJECT_TIMEOUT_MS: 2000,
 
   /**
+   * Maximum time to wait for pdf.js document destroy to complete before
+   * continuing the request lifecycle. Some PDFs can leave destroy pending.
+   */
+  PDF_DOCUMENT_DESTROY_TIMEOUT_MS: 3000,
+
+  /**
    * PDF.js library worker and security options
    */
   PDF_WORKER_OPTIONS: {

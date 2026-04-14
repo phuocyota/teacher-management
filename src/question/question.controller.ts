@@ -25,6 +25,7 @@ import {
 import {
   QuestionListResponseDto,
   QuestionResponseDto,
+  QuestionChainResponseDto,
 } from './dto/question.dto';
 import { PaginationResponseDto } from 'src/common/dto/pagination.dto';
 import { QuestionType } from './enum/question-type.enum';
@@ -95,7 +96,7 @@ export class QuestionController {
     description:
       'Trả về mảng các phần nội dung của câu hỏi theo thứ tự nextContent',
   })
-  @ApiOkResponse({ type: [QuestionResponseDto] })
+  @ApiOkResponse({ type: QuestionChainResponseDto })
   getQuestionChain(@Param('id', ParseUUIDPipe) id: string) {
     return this.questionService.getQuestionWithChain(id);
   }

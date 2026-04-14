@@ -81,7 +81,7 @@ describe('QuestionParserService', () => {
     ]);
   });
 
-  it('attaches images to the current question state', async () => {
+  it('buffers images before answer labels so they can be attached to choices', async () => {
     const pageContent: PageContent = {
       pageNumber: 1,
       lines: [
@@ -124,8 +124,107 @@ describe('QuestionParserService', () => {
 
     expect(result.completedQuestions).toHaveLength(0);
     expect(result.parserState.currentQuestion?.number).toBe(11);
-    expect(result.parserState.currentQuestion?.questionParts).toEqual([
+    expect(result.parserState.currentQuestion?.questionParts).toEqual([]);
+    expect(result.parserState.currentQuestion?.pendingAnswerMedia).toEqual([
       { content: 'base64-image', contentType: ContentTypes.IMAGE },
+    ]);
+  });
+
+  it('attaches buffered images to each answer when answer labels appear', async () => {
+    const pageContent: PageContent = {
+      pageNumber: 1,
+      lines: [
+        {
+          y: 10,
+          x: 10,
+          fragments: [
+            {
+              kind: 'text',
+              content: 'C\u00e2u 12. Chon dap an dung',
+              x: 10,
+              y: 10,
+              width: 80,
+              height: 10,
+              pageNumber: 1,
+              order: 0,
+            },
+          ],
+        },
+        {
+          y: 20,
+          x: 10,
+          fragments: [
+            {
+              kind: 'image',
+              content: 'image-a',
+              x: 10,
+              y: 20,
+              width: 20,
+              height: 20,
+              pageNumber: 1,
+              order: 1,
+            },
+            {
+              kind: 'image',
+              content: 'image-b',
+              x: 40,
+              y: 20,
+              width: 20,
+              height: 20,
+              pageNumber: 1,
+              order: 2,
+            },
+            {
+              kind: 'image',
+              content: 'image-c',
+              x: 70,
+              y: 20,
+              width: 20,
+              height: 20,
+              pageNumber: 1,
+              order: 3,
+            },
+          ],
+        },
+        {
+          y: 30,
+          x: 10,
+          fragments: [
+            {
+              kind: 'text',
+              content: 'A. Lua chon A B. Lua chon B C. Lua chon C',
+              x: 10,
+              y: 30,
+              width: 120,
+              height: 10,
+              pageNumber: 1,
+              order: 4,
+            },
+          ],
+        },
+      ],
+    };
+
+    const result = await service.processPageContent(pageContent, null);
+
+    expect(result.parserState.currentQuestion?.answerPartsList).toHaveLength(3);
+    expect(
+      result.parserState.currentQuestion?.answerPartsList.map((parts) =>
+        parts.map((part) => part.contentType),
+      ),
+    ).toEqual([
+      [ContentTypes.IMAGE, ContentTypes.TEXT],
+      [ContentTypes.IMAGE, ContentTypes.TEXT],
+      [ContentTypes.IMAGE, ContentTypes.TEXT],
+    ]);
+    expect(
+      result.parserState.currentQuestion?.answerPartsList.map((parts) =>
+        parts.map((part) => part.content),
+      ),
+    ).toEqual([
+      ['image-a', 'Lua chon A'],
+      ['image-b', 'Lua chon B'],
+      ['image-c', 'Lua chon C'],
     ]);
   });
 
@@ -292,6 +391,59 @@ describe('QuestionParserService', () => {
         (parts) => parts[0].content,
       ),
     ).toEqual(['Khoc to', 'Noi ro rang', 'Danh nhau']);
+  });
+
+  it('recognizes common English question prefixes and lowercase answer labels', async () => {
+    const pageContent: PageContent = {
+      pageNumber: 1,
+      lines: [
+        {
+          y: 10,
+          x: 10,
+          fragments: [
+            {
+              kind: 'text',
+              content: 'Question 7 - Choose the correct answer',
+              x: 10,
+              y: 10,
+              width: 120,
+              height: 10,
+              pageNumber: 1,
+              order: 0,
+            },
+          ],
+        },
+        {
+          y: 20,
+          x: 10,
+          fragments: [
+            {
+              kind: 'text',
+              content: 'a) First option b: Second option',
+              x: 10,
+              y: 20,
+              width: 120,
+              height: 10,
+              pageNumber: 1,
+              order: 1,
+            },
+          ],
+        },
+      ],
+    };
+
+    const result = await service.processPageContent(pageContent, null);
+
+    expect(result.parserState.currentQuestion?.number).toBe(7);
+    expect(result.parserState.currentQuestion?.questionParts).toEqual([
+      { content: 'Choose the correct answer', contentType: ContentTypes.TEXT },
+    ]);
+    expect(result.parserState.currentQuestion?.answerPartsList).toHaveLength(2);
+    expect(
+      result.parserState.currentQuestion?.answerPartsList.map(
+        (parts) => parts[0].content,
+      ),
+    ).toEqual(['First option', 'Second option']);
   });
 
   it('ignores repeated headers and footers while parsing question content', async () => {

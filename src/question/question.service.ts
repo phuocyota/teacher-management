@@ -18,6 +18,10 @@ import {
 } from 'src/common/constant/error-messages.constant';
 import { PaginationResponseDto } from 'src/common/dto/pagination.dto';
 import { QuestionResponseDto } from './dto/question.dto';
+import {
+  QuestionChainResponseDto,
+  QuestionChainNodeDto,
+} from './dto/question.dto';
 import { autoMapListToDto } from 'src/common/utils/auto-map.util';
 import { QuestionBankQuestionEntity } from 'src/question-bank-question/question-bank-question.entity';
 import { QuestionBankQuestionService } from 'src/question-bank-question/question-bank-question.service';
@@ -248,7 +252,7 @@ export class QuestionService {
    * Get question with full content chain (following nextContent links)
    * Returns array of question parts in order
    */
-  async getQuestionWithChain(id: string): Promise<QuestionEntity[]> {
+  async getQuestionWithChain(id: string): Promise<QuestionChainResponseDto> {
     const chain: QuestionEntity[] = [];
     let currentId: string | undefined = id;
 
@@ -280,6 +284,31 @@ export class QuestionService {
       );
     }
 
-    return chain;
+    return this.buildChainResponse(chain);
+  }
+
+  private buildChainResponse(chain: QuestionEntity[]): QuestionChainResponseDto {
+    const root = chain[0];
+
+    return {
+      id: root.id,
+      type: root.type,
+      contentType: root.contentType,
+      content: root.content,
+      nextContent: root.nextContent ?? chain[1]?.id ?? null,
+      chain: chain.map((question, index) => this.toChainNode(question, chain[index + 1])),
+    };
+  }
+
+  private toChainNode(
+    question: QuestionEntity,
+    nextQuestion?: QuestionEntity,
+  ): QuestionChainNodeDto {
+    return {
+      id: question.id,
+      content: question.content,
+      contentType: question.contentType,
+      nextContent: nextQuestion?.id ?? question.nextContent ?? null,
+    };
   }
 }

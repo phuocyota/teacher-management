@@ -40,6 +40,7 @@ export interface PdfPage {
     disableCombineTextItems?: boolean;
   }): Promise<PdfTextContent>;
   getOperatorList(): Promise<PdfOperatorList>;
+  cleanup?(): boolean;
   objs: {
     get(name: string, callback: (obj: any) => void): void;
   };

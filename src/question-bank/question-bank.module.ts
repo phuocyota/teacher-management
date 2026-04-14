@@ -11,6 +11,7 @@ import { QuestionBankImportService } from './services/question-bank-import.servi
 import { PdfImageExtractorService } from './services/pdf-image-extractor.service';
 import { QuestionParserService } from './services/question-parser.service';
 import { ExamSetEntity } from 'src/exam-set/exam-set.entity';
+import { UploadModule } from 'src/upload/upload.module';
 
 @Module({
   imports: [
@@ -22,6 +23,7 @@ import { ExamSetEntity } from 'src/exam-set/exam-set.entity';
     ClassModule,
     forwardRef(() => QuestionModule),
     forwardRef(() => AnswerModule),
+    UploadModule,
   ],
   providers: [
     QuestionBankService,

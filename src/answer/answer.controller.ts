@@ -19,7 +19,11 @@ import {
 } from '@nestjs/swagger';
 import { AnswerService } from './answer.service';
 import { CreateAnswerDto, UpdateAnswerDto } from './dto/create-answer.dto';
-import { AnswerListResponseDto, AnswerResponseDto } from './dto/answer.dto';
+import {
+  AnswerListResponseDto,
+  AnswerResponseDto,
+  AnswerChainResponseDto,
+} from './dto/answer.dto';
 import { PaginationResponseDto } from 'src/common/dto/pagination.dto';
 
 @ApiTags('Answer')
@@ -74,7 +78,7 @@ export class AnswerController {
     description:
       'Trả về mảng các phần nội dung của câu trả lời theo thứ tự nextContent',
   })
-  @ApiOkResponse({ type: [AnswerResponseDto] })
+  @ApiOkResponse({ type: AnswerChainResponseDto })
   getAnswerChain(@Param('id', ParseUUIDPipe) id: string) {
     return this.answerService.getAnswerWithChain(id);
   }

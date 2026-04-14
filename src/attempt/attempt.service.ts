@@ -390,19 +390,9 @@ export class AttemptService {
       : [];
     const questionMap = new Map(rootQuestions.map((item) => [item.id, item]));
 
-    const allAnswers = questionIds.length
-      ? await this.answerRepo.find({
-          where: { questionId: In(questionIds) },
-          order: { orderNo: 'ASC' },
-        })
-      : [];
-    const answersByQuestionId = new Map<string, AnswerEntity[]>();
-
-    for (const answer of allAnswers) {
-      const items = answersByQuestionId.get(answer.questionId) ?? [];
-      items.push(answer);
-      answersByQuestionId.set(answer.questionId, items);
-    }
+    const answersByQuestionId = await this.loadRootAnswersByQuestionIds(
+      questionIds,
+    );
 
     const questions: AttemptReviewQuestionItemDto[] = [];
 
@@ -741,19 +731,9 @@ export class AttemptService {
       : [];
     const questionMap = new Map(rootQuestions.map((item) => [item.id, item]));
 
-    const allAnswers = rootQuestionIds.length
-      ? await this.answerRepo.find({
-          where: { questionId: In(rootQuestionIds) },
-          order: { orderNo: 'ASC' },
-        })
-      : [];
-    const answersByQuestionId = new Map<string, AnswerEntity[]>();
-
-    for (const answer of allAnswers) {
-      const items = answersByQuestionId.get(answer.questionId) ?? [];
-      items.push(answer);
-      answersByQuestionId.set(answer.questionId, items);
-    }
+    const answersByQuestionId = await this.loadRootAnswersByQuestionIds(
+      rootQuestionIds,
+    );
 
     const result: AttemptQuestionItemDto[] = [];
 
@@ -826,6 +806,37 @@ export class AttemptService {
     return chain;
   }
 
+  private async loadRootAnswersByQuestionIds(
+    questionIds: string[],
+  ): Promise<Map<string, AnswerEntity[]>> {
+    const answersByQuestionId = new Map<string, AnswerEntity[]>();
+
+    if (questionIds.length === 0) {
+      return answersByQuestionId;
+    }
+
+    const allAnswers = await this.answerRepo.find({
+      where: { questionId: In(questionIds) },
+      order: { createdAt: 'ASC' },
+    });
+
+    const referencedAnswerIds = new Set(
+      allAnswers.map((answer) => answer.nextContent).filter(Boolean),
+    );
+
+    for (const answer of allAnswers) {
+      if (referencedAnswerIds.has(answer.id)) {
+        continue;
+      }
+
+      const items = answersByQuestionId.get(answer.questionId) ?? [];
+      items.push(answer);
+      answersByQuestionId.set(answer.questionId, items);
+    }
+
+    return answersByQuestionId;
+  }
+
   private async normalizeSubmittedAnswers(
     answers: Array<EndAttemptAnswerDto | string>,
     questionLinks: QuestionBankQuestionEntity[],
@@ -843,19 +854,9 @@ export class AttemptService {
     );
     const questionIdByPosition = questionLinks.map((item) => item.questionId);
     const questionIds = questionLinks.map((item) => item.questionId);
-    const answerOptions = questionIds.length
-      ? await this.answerRepo.find({
-          where: { questionId: In(questionIds) },
-          order: { orderNo: 'ASC' },
-        })
-      : [];
-    const answersByQuestionId = new Map<string, AnswerEntity[]>();
-
-    for (const answer of answerOptions) {
-      const items = answersByQuestionId.get(answer.questionId) ?? [];
-      items.push(answer);
-      answersByQuestionId.set(answer.questionId, items);
-    }
+    const answersByQuestionId = await this.loadRootAnswersByQuestionIds(
+      questionIds,
+    );
 
     return answers.map((item) => {
       if (typeof item !== 'string') {
@@ -949,7 +950,7 @@ export class AttemptService {
 
   private mapAnswerChain(chain: AnswerEntity[]): AttemptAnswerOptionDto {
     const root = chain[0];
-    const mappedChain: AttemptAnswerChainItemDto[] = chain.map((item) => ({
+    const mappedParts: AttemptAnswerChainItemDto[] = chain.map((item) => ({
       id: item.id,
       contentType: item.contentType,
       content: item.content,
@@ -961,7 +962,7 @@ export class AttemptService {
       contentType: root.contentType,
       content: root.content,
       nextContent: root.nextContent ?? null,
-      chain: mappedChain,
+      chain: mappedParts,
     };
   }
 }
