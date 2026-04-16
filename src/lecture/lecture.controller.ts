@@ -111,8 +111,11 @@ export class LectureController {
   }
 
   @Delete(':id')
-  @ApiOperation({ summary: 'Delete lecture' })
-  @ApiResponse({ status: 200, description: 'Lecture deleted successfully' })
+  @ApiOperation({ summary: 'Delete lecture and its resources' })
+  @ApiResponse({
+    status: 200,
+    description: 'Lecture and lecture_resource records deleted successfully',
+  })
   @ApiResponse({ status: 404, description: 'Lecture not found' })
   @ApiResponse({ status: 403, description: 'Forbidden' })
   remove(
@@ -120,5 +123,20 @@ export class LectureController {
     @User() user: JwtPayload,
   ): Promise<void> {
     return this.lectureService.remove(id, user);
+  }
+
+  @Delete(':id/resources')
+  @ApiOperation({ summary: 'Delete lecture resources only' })
+  @ApiResponse({
+    status: 200,
+    description: 'Lecture resource records deleted successfully',
+  })
+  @ApiResponse({ status: 404, description: 'Lecture not found' })
+  @ApiResponse({ status: 403, description: 'Forbidden' })
+  removeResources(
+    @Param('id', ParseUUIDPipe) id: string,
+    @User() user: JwtPayload,
+  ): Promise<{ deletedCount: number }> {
+    return this.lectureService.removeResources(id, user);
   }
 }

@@ -391,6 +391,7 @@ export class LectureService {
         throw new ForbiddenException('Bạn không có quyền xoá bài giảng này');
       }
 
+      // Xóa file vật lý trước, sau đó dọn dữ liệu lecture_resource tương ứng
       if (lecture.resources && lecture.resources.length > 0) {
         for (const resource of lecture.resources) {
           if (resource.source === Source.OFFLINE && resource.url) {
@@ -399,11 +400,62 @@ export class LectureService {
         }
       }
 
+      await manager
+        .createQueryBuilder()
+        .delete()
+        .from(LectureResourceEntity)
+        .where('lecture_id = :id', { id })
+        .execute();
+
       if (lecture.avatar) {
         await this.uploadService.deleteFileByPath(lecture.avatar);
       }
 
       await manager.delete(LectureEntity, { id });
+    });
+  }
+
+  async removeResources(
+    id: string,
+    user: JwtPayload,
+  ): Promise<{ deletedCount: number }> {
+    return runInTransaction(this.entityManager, async (manager) => {
+      const lecture = await manager.findOne(LectureEntity, {
+        where: { id },
+        relations: ['resources'],
+      });
+
+      if (!lecture) {
+        throw new NotFoundException(
+          ERROR_MESSAGES.NOT_FOUND_WITH_ID('Lecture', id),
+        );
+      }
+
+      if (
+        lecture.createdBy !== user.userId &&
+        user.userType !== UserType.ADMIN
+      ) {
+        throw new ForbiddenException(
+          'Bạn không có quyền xoá tài nguyên của bài giảng này',
+        );
+      }
+
+      for (const resource of lecture.resources ?? []) {
+        if (resource.source === Source.OFFLINE && resource.url) {
+          await this.uploadService.deleteFileByPath(resource.url);
+        }
+      }
+
+      const result = await manager
+        .createQueryBuilder()
+        .delete()
+        .from(LectureResourceEntity)
+        .where('lecture_id = :id', { id })
+        .execute();
+
+      return {
+        deletedCount: result.affected ?? 0,
+      };
     });
   }
 
