@@ -8,6 +8,7 @@ import {
   Param,
   Query,
   ParseUUIDPipe,
+  UseGuards,
 } from '@nestjs/common';
 import {
   ApiTags,
@@ -29,6 +30,9 @@ import { User } from 'src/common/decorator/user.decorator';
 import type { JwtPayload } from 'src/common/interface/jwt-payload.interface';
 import { PaginationResponseDto } from 'src/common/dto/pagination.dto';
 import { MaxCodeResponseDto } from 'src/common/dto/base.dto';
+import { RolesGuard } from 'src/common/guard/roles.guard';
+import { Roles } from 'src/common/decorator/roles.decorator';
+import { UserType } from 'src/common/enum/user-type.enum';
 
 @ApiTags('Lecture')
 @ApiBearerAuth('access-token')
@@ -126,6 +130,8 @@ export class LectureController {
   }
 
   @Delete(':id/resources')
+  @UseGuards(RolesGuard)
+  @Roles(UserType.ADMIN)
   @ApiOperation({ summary: 'Delete lecture resources only' })
   @ApiResponse({
     status: 200,
@@ -135,8 +141,7 @@ export class LectureController {
   @ApiResponse({ status: 403, description: 'Forbidden' })
   removeResources(
     @Param('id', ParseUUIDPipe) id: string,
-    @User() user: JwtPayload,
   ): Promise<{ deletedCount: number }> {
-    return this.lectureService.removeResources(id, user);
+    return this.lectureService.removeResources(id);
   }
 }

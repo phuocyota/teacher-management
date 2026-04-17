@@ -409,7 +409,6 @@ export class LectureService {
 
   async removeResources(
     id: string,
-    user: JwtPayload,
   ): Promise<{ deletedCount: number }> {
     return runInTransaction(this.entityManager, async (manager) => {
       const lecture = await manager.findOne(LectureEntity, {
@@ -423,15 +422,6 @@ export class LectureService {
         );
       }
 
-      if (
-        lecture.createdBy !== user.userId &&
-        user.userType !== UserType.ADMIN
-      ) {
-        throw new ForbiddenException(
-          'Bạn không có quyền xoá tài nguyên của bài giảng này',
-        );
-      }
-
       for (const resource of lecture.resources ?? []) {
         if (resource.source === Source.OFFLINE && resource.url) {
           await this.uploadService.deleteFileByPath(resource.url);
@@ -442,7 +432,7 @@ export class LectureService {
         .createQueryBuilder()
         .delete()
         .from(LectureResourceEntity)
-        .where('lecture_id = :id', { id })
+        .where('lectureId = :id', { id })
         .execute();
 
       return {
