@@ -111,6 +111,9 @@ export class AttemptAnswerChainItemDto {
   @ApiProperty()
   content!: string;
 
+  @ApiProperty({ required: false, nullable: true, type: Object })
+  meta?: Record<string, unknown> | null;
+
   @ApiProperty({ required: false, nullable: true })
   nextContent?: string | null;
 }

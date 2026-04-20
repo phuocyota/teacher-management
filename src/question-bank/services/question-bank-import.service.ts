@@ -23,6 +23,7 @@ import { PdfParsingError } from '../exceptions/pdf-parsing.exception';
 import { PDF_PARSER_CONFIG } from '../constants/pdf-parser.constant';
 import {
   CreatedQuestionSummary,
+  ImportedContentPart,
   LayoutFragment,
   PageContent,
   PdfParserState,
@@ -129,13 +130,13 @@ export class QuestionBankImportService {
     T extends { id: string; nextContent?: string },
   >(
     questionBankId: string,
-    contentParts: Array<{ content: string; contentType: ContentTypes }>,
-    baseEntity: any,
+    contentParts: ImportedContentPart[],
+    baseEntity: Record<string, unknown>,
     createBulk: (entities: any[]) => Promise<T[]>,
     updateBulk: (entities: T[]) => Promise<T[]>,
   ): Promise<T[]> {
     const entities: any[] = [];
-    const isQuestionEntity = typeof baseEntity?.type !== 'undefined';
+    const isQuestionEntity = typeof (baseEntity as any)?.type !== 'undefined';
 
     for (let index = 0; index < contentParts.length; index++) {
       const part = contentParts[index];
@@ -148,6 +149,7 @@ export class QuestionBankImportService {
         ...baseEntity,
         content,
         contentType: part.contentType,
+        ...(part.meta ? { meta: part.meta } : {}),
         ...(isQuestionEntity ? { isRoot: index === 0 } : {}),
       });
     }
@@ -163,6 +165,184 @@ export class QuestionBankImportService {
     }
 
     return savedEntities;
+  }
+
+  private resolveStructuredQuestionBlock(
+    state: QuestionBlockState,
+  ): {
+    type: QuestionType;
+    questionParts: ImportedContentPart[];
+    answerPartsList: ImportedContentPart[][];
+  } | null {
+    const questionText = this.composePlainText(state.questionParts);
+    const matchingBlock = this.parseMatchingBlock(questionText);
+
+    if (matchingBlock) {
+      return matchingBlock;
+    }
+
+    const orderingBlock = this.parseOrderingBlock(state, questionText);
+    if (orderingBlock) {
+      return orderingBlock;
+    }
+
+    return null;
+  }
+
+  private parseMatchingBlock(
+    questionText: string,
+  ):
+    | {
+        type: QuestionType.MATCHING;
+        questionParts: ImportedContentPart[];
+        answerPartsList: ImportedContentPart[][];
+      }
+    | null {
+    const normalized = this.normalizeText(questionText);
+
+    if (
+      !/(\bnối\b|\bghép\b|\bmatch\b)/i.test(normalized) ||
+      !/\bcột\s*a\b/i.test(normalized) ||
+      !/\bcột\s*b\b/i.test(normalized)
+    ) {
+      return null;
+    }
+
+    const leftStart = normalized.search(/\b1\.\s+/);
+    const rightStart = normalized.search(/\ba\.\s+/i);
+
+    if (leftStart < 0 || rightStart < 0 || rightStart <= leftStart) {
+      return null;
+    }
+
+    const prompt = this.normalizeText(normalized.slice(0, leftStart));
+    const leftSection = normalized.slice(leftStart, rightStart);
+    const rightSection = normalized.slice(rightStart);
+
+    const leftItems = [...leftSection.matchAll(/(\d+)\.\s*([\s\S]*?)(?=(?:\s+\d+\.\s)|$)/gi)]
+      .map((match) => ({
+        key: match[1],
+        text: this.normalizeText(match[2] ?? ''),
+      }))
+      .filter((item) => item.text.length > 0);
+
+    const rightItems = [...rightSection.matchAll(/([a-z])\.\s*([\s\S]*?)(?=(?:\s+[a-z]\.\s)|$)/gi)]
+      .map((match) => ({
+        key: match[1].toLowerCase(),
+        text: this.normalizeText(match[2] ?? ''),
+      }))
+      .filter((item) => item.text.length > 0);
+
+    if (leftItems.length === 0 || rightItems.length === 0) {
+      return null;
+    }
+
+    const pairCount = Math.min(leftItems.length, rightItems.length);
+    const answerPartsList = Array.from({ length: pairCount }, (_, index) => [
+      {
+        content: leftItems[index].text,
+        contentType: ContentTypes.TEXT,
+        meta: {
+          kind: 'matching',
+          leftKey: leftItems[index].key,
+          leftText: leftItems[index].text,
+          rightKey: rightItems[index].key,
+          rightText: rightItems[index].text,
+        },
+      },
+    ]);
+
+    return {
+      type: QuestionType.MATCHING,
+      questionParts: prompt
+        ? [
+            {
+              content: prompt,
+              contentType: ContentTypes.TEXT,
+            },
+          ]
+        : [],
+      answerPartsList,
+    };
+  }
+
+  private parseOrderingBlock(
+    state: QuestionBlockState,
+    questionText: string,
+  ):
+    | {
+        type: QuestionType.ORDERING;
+        questionParts: ImportedContentPart[];
+        answerPartsList: ImportedContentPart[][];
+      }
+    | null {
+    const normalized = this.normalizeText(questionText);
+
+    if (
+      !/(\bsắp\s*xếp\b|\bthứ\s*tự\b|\bđúng\s*thứ\s*tự\b|\bđiền\s*số\b|\bđánh\s*số\b)/i.test(
+        normalized,
+      )
+    ) {
+      return null;
+    }
+
+    const itemMatches = [
+      ...normalized.matchAll(/Hình\s*số\.?\s*(?:☐|□)?\s*([\s\S]*?)(?=(?:Hình\s*số\.?|\s*$))/gi),
+    ];
+
+    const orderingItems = itemMatches
+      .map((match) => this.normalizeText(match[1] ?? ''))
+      .filter((item) => item.length > 0);
+
+    if (orderingItems.length === 0) {
+      return null;
+    }
+
+    const promptCutoff = normalized.search(/Hình\s*số\.?/i);
+    const prompt = promptCutoff > 0 ? this.normalizeText(normalized.slice(0, promptCutoff)) : normalized;
+    const mediaParts = state.pendingAnswerMedia.filter(
+      (part) => part.contentType === ContentTypes.IMAGE,
+    );
+
+    const answerPartsList = orderingItems.map((item, index) => {
+      const media = mediaParts[index];
+      const content = media ? media.content : item;
+      return [
+        {
+          content,
+          contentType: media ? media.contentType : ContentTypes.TEXT,
+          meta: {
+            kind: 'ordering',
+            position: index + 1,
+            label: item,
+          },
+        },
+      ];
+    });
+
+    return {
+      type: QuestionType.ORDERING,
+      questionParts: prompt
+        ? [
+            {
+              content: prompt,
+              contentType: ContentTypes.TEXT,
+            },
+          ]
+        : [],
+      answerPartsList,
+    };
+  }
+
+  private composePlainText(parts: ImportedContentPart[]): string {
+    return parts
+      .filter((part) => part.contentType === ContentTypes.TEXT)
+      .map((part) => part.content)
+      .join(' ');
+  }
+
+  private normalizeText(value: string): string {
+    return value.replace(/\s+/g, ' ').replace(/\u00a0/g, ' ').trim();
   }
 
   private async persistImagePart(
@@ -459,8 +639,12 @@ export class QuestionBankImportService {
     questionBankId: string,
     createdQuestions: CreatedQuestionSummary[],
   ): Promise<{ totalAnswers: number }> {
+    const structuredBlock = this.resolveStructuredQuestionBlock(state);
+    const answerPartsList =
+      structuredBlock?.answerPartsList ?? state.answerPartsList;
     const questionParts =
-      state.answerPartsList.length > 0
+      structuredBlock?.questionParts ??
+      (answerPartsList.length > 0
         ? state.questionParts.length > 0
           ? state.questionParts
           : [
@@ -469,18 +653,18 @@ export class QuestionBankImportService {
                 contentType: ContentTypes.TEXT,
               },
             ]
-        : [...state.questionParts, ...state.pendingAnswerMedia];
+        : [...state.questionParts, ...state.pendingAnswerMedia]);
 
     if (questionParts.length === 0) {
       return { totalAnswers: 0 };
     }
 
-    const resolvedQuestionType = this.questionParser.getQuestionType(
-      state.answerPartsList.length,
-    );
+    const resolvedQuestionType =
+      structuredBlock?.type ??
+      this.questionParser.getQuestionType(answerPartsList.length);
 
     this.logger.debug(
-      `Persisting question ${state.number}: ${questionParts.length} question parts, ${state.answerPartsList.length} answers`,
+      `Persisting question ${state.number}: ${questionParts.length} question parts, ${answerPartsList.length} answers`,
     );
 
     const savedParts = await this.createContentChain(
@@ -496,7 +680,7 @@ export class QuestionBankImportService {
     let totalAnswers = 0;
     let answerCount = 0;
 
-    for (const answerParts of state.answerPartsList) {
+    for (const answerParts of answerPartsList) {
       this.logger.debug(
         `Persisting answer for question ${state.number}: ${answerParts.length} parts`,
       );

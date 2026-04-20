@@ -9,6 +9,12 @@ export interface CreatedQuestionSummary {
   answerCount: number;
 }
 
+export interface ImportedContentPart {
+  content: string;
+  contentType: ContentTypes;
+  meta?: Record<string, unknown> | null;
+}
+
 export interface LayoutFragment {
   kind: 'text' | 'image';
   content: string;
@@ -35,13 +41,10 @@ export type AnswerKeyOption = 'A' | 'B' | 'C' | 'D';
 
 export interface QuestionBlockState {
   number: number;
-  questionParts: Array<{ content: string; contentType: ContentTypes }>;
-  answerPartsList: Array<Array<{ content: string; contentType: ContentTypes }>>;
-  pendingAnswerMedia: Array<{ content: string; contentType: ContentTypes }>;
-  currentAnswerParts: Array<{
-    content: string;
-    contentType: ContentTypes;
-  }> | null;
+  questionParts: ImportedContentPart[];
+  answerPartsList: ImportedContentPart[][];
+  pendingAnswerMedia: ImportedContentPart[];
+  currentAnswerParts: ImportedContentPart[] | null;
 }
 
 export interface PdfParserState {

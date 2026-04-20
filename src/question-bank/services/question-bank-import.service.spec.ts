@@ -274,4 +274,98 @@ describe('QuestionBankImportService', () => {
       },
     ]);
   });
+
+  it('detects matching questions and stores pair metadata on answers', async () => {
+    const questionBankRepo = {
+      findOne: jest.fn(),
+      save: jest.fn(),
+    };
+    const questionBankQuestionRepo = {
+      create: jest.fn((value) => value),
+      save: jest.fn(),
+      count: jest.fn(),
+    };
+    const questionService = {
+      createBulk: jest.fn().mockResolvedValue([
+        {
+          id: 'question-1',
+          content: 'Em hãy nối hành vi ở cột A với kết quả đúng ở cột B',
+          contentType: ContentTypes.TEXT,
+          type: QuestionType.MATCHING,
+          isRoot: true,
+        },
+      ]),
+      updateBulk: jest.fn().mockResolvedValue([]),
+    };
+    const answerService = {
+      createBulk: jest
+        .fn()
+        .mockImplementation(async (answers) =>
+          answers.map((answer: any, index: number) => ({
+            id: `answer-${index + 1}`,
+            ...answer,
+          })),
+        ),
+      updateBulk: jest.fn().mockResolvedValue([]),
+    };
+    const questionParser = {
+      getQuestionType: jest.fn().mockReturnValue(QuestionType.TEXT_INPUT),
+    };
+    const uploadService = {
+      saveBufferAsFile: jest.fn(),
+    };
+
+    const service = new QuestionBankImportService(
+      questionBankRepo as any,
+      questionBankQuestionRepo as any,
+      questionService as any,
+      answerService as any,
+      {} as any,
+      questionParser as any,
+      uploadService as any,
+    );
+
+    const createdQuestions: Array<{
+      id: string;
+      content: string;
+      type: QuestionType;
+      contentType: ContentTypes;
+      answerCount: number;
+    }> = [];
+
+    await (service as any).flushQuestionBlock(
+      {
+        number: 5,
+        questionParts: [
+          {
+            content:
+              'Em hãy nối hành vi ở cột A với kết quả đúng ở cột B 1. Giữ gìn đồ dùng cá nhân 2. Giúp đỡ bạn bè 3. Lễ phép với người lớn a. Được mọi người yêu quý b. Đồ dùng bền và gọn gàng c. Có thêm bạn tốt',
+            contentType: ContentTypes.TEXT,
+          },
+        ],
+        answerPartsList: [],
+        pendingAnswerMedia: [],
+        currentAnswerParts: null,
+      },
+      'question-bank-1',
+      createdQuestions,
+    );
+
+    expect(questionService.createBulk).toHaveBeenCalledWith([
+      expect.objectContaining({
+        type: QuestionType.MATCHING,
+        isRoot: true,
+      }),
+    ]);
+    expect(answerService.createBulk).toHaveBeenCalledWith([
+      expect.objectContaining({
+        content: 'Giữ gìn đồ dùng cá nhân',
+        meta: expect.objectContaining({
+          kind: 'matching',
+          leftKey: '1',
+          rightKey: 'a',
+        }),
+      }),
+    ]);
+  });
 });

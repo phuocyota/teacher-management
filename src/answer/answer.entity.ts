@@ -5,32 +5,42 @@ import { ContentTypes } from 'src/common/enum/content-type.enum';
 
 @Entity('answer')
 export class AnswerEntity extends BaseEntity {
+  // Đánh dấu đáp án đúng
   @Column({ name: 'is_correct', type: 'boolean', nullable: true, default: false })
   isCorrect?: boolean;
 
+  // Thứ tự của đáp án trong câu hỏi
   @Column({ name: 'order_no', type: 'int', nullable: true, default: 0 })
   orderNo?: number;
 
+  // Loại dữ liệu của câu trả lời
   @Column({
     type: 'enum',
     enum: ContentTypes,
     name: 'content_type',
   })
-  contentType!: ContentTypes; // Loại dữ liệu của câu trả lời
+  contentType!: ContentTypes;
 
+  // Nội dung của câu trả lời
   @Column({ type: 'text' })
-  content!: string; // Nội dung của câu trả lời
+  content!: string;
 
-  //next_content
+  // Metadata mở rộng cho các kiểu câu hỏi đặc biệt
+  @Column({ name: 'meta', type: 'jsonb', nullable: true })
+  meta?: Record<string, unknown> | null;
+
+  // ID của nội dung tiếp theo nếu có
   @Column({ type: 'uuid', nullable: true })
-  nextContent?: string; // ID của nội dung tiếp theo (nếu có)
+  nextContent?: string;
 
+  // Mối quan hệ với câu hỏi
   @ManyToOne(() => QuestionEntity, (question) => question.answers, {
     onDelete: 'CASCADE',
   })
   @JoinColumn({ name: 'questionId' })
-  question!: QuestionEntity; // Mối quan hệ với câu hỏi
+  question!: QuestionEntity;
 
+  // ID của câu hỏi mà câu trả lời thuộc về
   @Column({ type: 'uuid' })
-  questionId!: string; // ID của câu hỏi mà câu trả lời thuộc về
+  questionId!: string;
 }

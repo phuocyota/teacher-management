@@ -22,6 +22,14 @@ export class NextAnswerContentDto {
     example: ContentTypes.IMAGE,
   })
   contentType!: ContentTypes;
+
+  @ApiProperty({
+    description: 'Metadata mo rong cho cac kieu cau hoi dac biet',
+    required: false,
+    nullable: true,
+    type: Object,
+  })
+  meta?: Record<string, unknown> | null;
 }
 
 export class AnswerChainNodeDto {
@@ -43,6 +51,14 @@ export class AnswerChainNodeDto {
     example: ContentTypes.IMAGE,
   })
   contentType!: ContentTypes;
+
+  @ApiProperty({
+    description: 'Metadata mo rong cho cac kieu cau hoi dac biet',
+    required: false,
+    nullable: true,
+    type: Object,
+  })
+  meta?: Record<string, unknown> | null;
 
   @ApiProperty({
     description: 'ID cua noi dung tiep theo',
@@ -94,6 +110,14 @@ export class AnswerResponseDto extends BaseDto {
     example: 'Paris',
   })
   content!: string;
+
+  @ApiProperty({
+    description: 'Metadata mo rong cho cac kieu cau hoi dac biet',
+    required: false,
+    type: Object,
+    additionalProperties: true,
+  })
+  meta?: Record<string, unknown> | null;
 
   @ApiProperty({
     description: 'ID cau hoi ma cau tra loi thuoc ve',

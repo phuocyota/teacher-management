@@ -7,6 +7,7 @@ import {
   IsBoolean,
   IsInt,
   Min,
+  IsObject,
 } from 'class-validator';
 import { ApiProperty, PartialType } from '@nestjs/swagger';
 import { ContentTypes } from 'src/common/enum/content-type.enum';
@@ -47,6 +48,17 @@ export class CreateAnswerDto {
     example: 'Paris',
   })
   content!: string;
+
+  @IsObject()
+  @IsOptional()
+  @ApiProperty({
+    description: 'Metadata mo rong cho cac kieu cau hoi dac biet',
+    required: false,
+    type: Object,
+    additionalProperties: true,
+    example: { kind: 'matching', pairId: '1-a' },
+  })
+  meta?: Record<string, unknown>;
 
   @IsUUID()
   @IsNotEmpty()

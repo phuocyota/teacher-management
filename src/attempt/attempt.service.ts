@@ -244,7 +244,9 @@ export class AttemptService {
           ...(correctAnswerIdsByQuestionId.get(submitted.questionId) ?? []),
         ].sort();
         const isCorrect =
-          questionType === QuestionType.TEXT_INPUT
+          questionType === QuestionType.TEXT_INPUT ||
+          questionType === QuestionType.MATCHING ||
+          questionType === QuestionType.ORDERING
             ? undefined
             : correctIds.length > 0 &&
               normalizedSelectedIds.length === correctIds.length &&
@@ -941,6 +943,13 @@ export class AttemptService {
       return;
     }
 
+    if (
+      questionType === QuestionType.MATCHING ||
+      questionType === QuestionType.ORDERING
+    ) {
+      return;
+    }
+
     if (!hasTextValue || hasAnswerId || selectedCount > 0) {
       throw new BadRequestException(
         'TEXT_INPUT question must submit textValue only',
@@ -954,6 +963,7 @@ export class AttemptService {
       id: item.id,
       contentType: item.contentType,
       content: item.content,
+      meta: item.meta ?? null,
       nextContent: item.nextContent ?? null,
     }));
 
@@ -961,6 +971,7 @@ export class AttemptService {
       id: root.id,
       contentType: root.contentType,
       content: root.content,
+      meta: root.meta ?? null,
       nextContent: root.nextContent ?? null,
       chain: mappedParts,
     };
