@@ -30,7 +30,7 @@ export const ANSWER_SEGMENT_PATTERNS: RegExp[] = [
 ];
 
 export const ANSWER_KEY_START_PATTERNS: RegExp[] = [
-  /^(?:Đáp\s*án|Answer\s*Key|ĐA)\s*:?\s*$/i,
+  /^(?:[\*\u2022]\s*)?(?:Đáp\s*án|Answer\s*Key|ĐA)\s*:?\s*$/i,
 ];
 
 export const ANSWER_KEY_ENTRY_PATTERNS: RegExp[] = [

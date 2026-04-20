@@ -270,7 +270,7 @@ describe('QuestionParserService', () => {
           fragments: [
             {
               kind: 'text',
-              content: '\u0110\u00e1p \u00e1n',
+              content: '* \u0110\u00e1p \u00e1n',
               x: 10,
               y: 30,
               width: 40,
@@ -467,6 +467,22 @@ describe('QuestionParserService', () => {
           ],
         },
         {
+          y: 15,
+          x: 10,
+          fragments: [
+            {
+              kind: 'text',
+              content: '2',
+              x: 10,
+              y: 15,
+              width: 20,
+              height: 10,
+              pageNumber: 2,
+              order: 1,
+            },
+          ],
+        },
+        {
           y: 20,
           x: 10,
           fragments: [
@@ -478,7 +494,7 @@ describe('QuestionParserService', () => {
               width: 90,
               height: 10,
               pageNumber: 2,
-              order: 1,
+              order: 2,
             },
           ],
         },
@@ -495,7 +511,7 @@ describe('QuestionParserService', () => {
               width: 140,
               height: 10,
               pageNumber: 2,
-              order: 2,
+              order: 3,
             },
           ],
         },
@@ -511,7 +527,7 @@ describe('QuestionParserService', () => {
               width: 100,
               height: 10,
               pageNumber: 2,
-              order: 3,
+              order: 4,
             },
           ],
         },

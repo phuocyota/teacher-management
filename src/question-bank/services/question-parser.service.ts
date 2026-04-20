@@ -40,7 +40,11 @@ export class QuestionParserService {
       for (const fragment of line.fragments) {
         if (fragment.kind === 'image') {
           if (lineBuffer.trim().length > 0) {
-            const processed = this.processTextLine(lineBuffer, currentState);
+            const processed = this.processTextLine(
+              lineBuffer,
+              currentState,
+              pageContent.pageNumber,
+            );
             currentState = processed.parserState;
 
             if (processed.completedQuestion) {
@@ -64,7 +68,11 @@ export class QuestionParserService {
       }
 
       if (lineBuffer.trim().length > 0) {
-        const processed = this.processTextLine(lineBuffer, currentState);
+        const processed = this.processTextLine(
+          lineBuffer,
+          currentState,
+          pageContent.pageNumber,
+        );
         currentState = processed.parserState;
 
         if (processed.completedQuestion) {
@@ -79,22 +87,15 @@ export class QuestionParserService {
   private processTextLine(
     line: string,
     parserState: PdfParserState,
+    pageNumber: number,
   ): {
     parserState: PdfParserState;
     completedQuestion: QuestionBlockState | null;
     totalAnswers: number;
   } {
-    const normalizedLine = line.trim();
+    const normalizedLine = this.sanitizeCommonPdfLine(line, pageNumber);
 
     if (!normalizedLine) {
-      return {
-        parserState,
-        completedQuestion: null,
-        totalAnswers: 0,
-      };
-    }
-
-    if (this.isNoiseLine(normalizedLine)) {
       return {
         parserState,
         completedQuestion: null,
@@ -263,6 +264,74 @@ export class QuestionParserService {
         (pattern) => pattern.test(compactLine) || pattern.test(normalizedLine),
       )
     );
+  }
+
+  private sanitizeCommonPdfLine(
+    line: string,
+    pageNumber: number,
+  ): string | null {
+    const compactLine = line.replace(/\s+/g, ' ').trim();
+
+    if (!compactLine) {
+      return null;
+    }
+
+    if (this.isStandalonePageNumber(compactLine, pageNumber)) {
+      return null;
+    }
+
+    if (this.isNoiseLine(compactLine)) {
+      return null;
+    }
+
+    const withoutTrailingPageNumber = this.stripTrailingPageNumber(
+      compactLine,
+      pageNumber,
+    );
+
+    if (!withoutTrailingPageNumber || this.isNoiseLine(withoutTrailingPageNumber)) {
+      return null;
+    }
+
+    return withoutTrailingPageNumber;
+  }
+
+  private isStandalonePageNumber(line: string, pageNumber: number): boolean {
+    if (!/^\d+$/.test(line)) {
+      return false;
+    }
+
+    return Number.parseInt(line, 10) === pageNumber;
+  }
+
+  private stripTrailingPageNumber(line: string, pageNumber: number): string {
+    if (pageNumber <= 0) {
+      return line;
+    }
+
+    if (
+      this.isAnswerLine(line) ||
+      this.isAnswerKeyStart(line) ||
+      this.extractQuestionStart(line) ||
+      Object.keys(this.extractAnswerKeyEntries(line)).length > 0
+    ) {
+      return line;
+    }
+
+    const trailingPageNumberPattern = new RegExp(`^(.*\\S)\\s+${pageNumber}$`, 'u');
+    const match = line.match(trailingPageNumberPattern);
+
+    if (!match) {
+      return line;
+    }
+
+    const candidate = match[1].trim();
+
+    if (candidate.split(/\s+/).length < 4) {
+      return line;
+    }
+
+    return candidate;
   }
 
   private extractAnswerSegments(line: string): string[] {
