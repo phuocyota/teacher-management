@@ -206,17 +206,38 @@ Các module đã được import vào runtime:
   - Route: `question-bank`
   - CRUD đề/ngân hàng đề
   - Có route import PDF: `POST question-bank/:id/import-pdf`
+  - Khi import PDF, câu hỏi dạng `MATCHING` và `ORDERING` không tách thành nhiều `question` độc lập; hệ thống lưu một `question` gốc, sau đó dùng `meta` để mô tả cấu trúc hiển thị và ánh xạ đáp án.
 
 - `question/`
   - Route: `question`
   - CRUD câu hỏi
   - Có route `:id/chain` để đọc chuỗi nội dung kế tiếp
+  - `question.meta` dùng để lưu metadata nghiệp vụ cho các kiểu câu đặc biệt như `MATCHING` và `ORDERING`
+  - Khi `type = MATCHING`, FE phải render theo format:
+
+```json
+{
+  "leftItems": [
+    { "key": "1", "text": "Giữ gìn đồ dùng cá nhân" },
+    { "key": "2", "text": "Giúp đỡ bạn bè" },
+    { "key": "3", "text": "Lễ phép với người lớn" }
+  ],
+  "rightItems": [
+    { "key": "a", "text": "Được mọi người yêu quý" },
+    { "key": "b", "text": "Đồ dùng bền và gọn gàng" },
+    { "key": "c", "text": "Có thêm bạn tốt" }
+  ]
+}
+```
 
 - `answer/`
   - Route: `answer`
   - CRUD đáp án
   - Có route `:id/chain`
   - Entity hiện có `isCorrect`, `orderNo`, `nextContent`
+  - Với `MATCHING` và `ORDERING`, `answer.meta` dùng để lưu dữ liệu nghiệp vụ mở rộng, ví dụ:
+    - `MATCHING`: `leftKey`, `leftText`, `rightKey`, `rightText`
+    - `ORDERING`: `position`, `label`
 
 - `question-bank-question/`
   - Route: `question-bank-question`
@@ -318,6 +339,11 @@ Các module đã được import vào runtime:
   - khi deploy cần kiểm tra lại đường dẫn đang dùng thật
 - `UploadService` xử lý khá nhiều logic filesystem trực tiếp; cần cẩn thận với path, rename, delete
 - Phần import PDF, unzip, và chain content có tính domain-specific cao; không nên refactor cơ học nếu chưa đọc flow
+- Khi thêm kiểu câu hỏi mới:
+  - `QuestionType` phải được mở rộng tương ứng
+  - `question.meta` dùng cho dữ liệu hiển thị/render
+  - `answer.meta` dùng cho mapping/chấm điểm nghiệp vụ
+  - FE không nên suy luận `MATCHING` hoặc `ORDERING` như câu trắc nghiệm thường
 
 ## 9. Route Prefix Tổng Hợp
 
@@ -454,3 +480,36 @@ Nếu cần onboard nhanh, nên đọc theo thứ tự:
 - `src/upload/upload.service.ts`
 - `src/question-bank/question-bank.service.ts`
 - `src/lecture/services/lecture.service.ts`
+
+## 13. Quy Tac Render Matching Va Ordering
+
+- `MATCHING` la mot cau hoi goc, khong tach thanh nhieu cau hoi con khi import.
+- `question.meta` la nguon du lieu chinh cho FE render cau `MATCHING`.
+- Dinh dang `question.meta` cho `MATCHING` phai theo mau:
+
+```json
+{
+  "leftItems": [
+    { "key": "1", "text": "Giữ gìn đồ dùng cá nhân" },
+    { "key": "2", "text": "Giúp đỡ bạn bè" },
+    { "key": "3", "text": "Lễ phép với người lớn" }
+  ],
+  "rightItems": [
+    { "key": "a", "text": "Được mọi người yêu quý" },
+    { "key": "b", "text": "Đồ dùng bền và gọn gàng" },
+    { "key": "c", "text": "Có thêm bạn tốt" }
+  ]
+}
+```
+
+- Khi tra ve `chain` hoac `nextContentDetails`, neu `type = MATCHING` thi phai giu `meta` o moi node de FE co the render dung.
+- `answer.meta` la mapping nghiep vu cho cap ghep, vi du `leftKey`, `leftText`, `rightKey`, `rightText`.
+- `ORDERING` hien tai duoc import ve cung dang `MATCHING`, nhung `answer` de trong; du lieu hinh anh va danh sach buoc nam trong `question.meta`.
+## Cập Nhật Gần Đây
+
+- Luồng import PDF ở `question-bank` đã hỗ trợ tách inline `Đáp án: 1.C, 2.D...` ngay khi nó nằm chung một dòng với nội dung câu hỏi.
+- Parser giờ nhận được cả hai kiểu:
+  - `Đáp án:` đứng riêng một dòng
+  - `Đáp án:` dính chung với câu hỏi trong cùng một dòng
+- Dữ liệu đáp án dạng `1.C, 2.D, 3.A...` cũng được parse trực tiếp vào `answerKey`.
+- Test đã được thêm để khóa hành vi này trong `src/question-bank/services/question-parser.service.spec.ts`.

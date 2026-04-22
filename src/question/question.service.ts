@@ -43,6 +43,7 @@ export class QuestionService {
       type: dto.type ?? QuestionType.SINGLE_CHOICE,
       contentType: dto.contentType,
       content: dto.content,
+      meta: dto.meta,
       nextContent: dto.nextContent,
       isRoot: !dto.previousId,
     });
@@ -131,7 +132,7 @@ export class QuestionService {
         if (question.nextContent) {
           const nextContentEntity = await this.questionRepo.findOne({
             where: { id: question.nextContent },
-            select: ['id', 'type', 'content', 'contentType'],
+            select: ['id', 'type', 'content', 'contentType', 'meta'],
           });
 
           if (nextContentEntity) {
@@ -140,6 +141,7 @@ export class QuestionService {
               type: nextContentEntity.type,
               content: nextContentEntity.content,
               contentType: nextContentEntity.contentType,
+              meta: nextContentEntity.meta,
             };
           }
         }
@@ -172,7 +174,7 @@ export class QuestionService {
     if (record.nextContent) {
       const nextContentEntity = await this.questionRepo.findOne({
         where: { id: record.nextContent },
-        select: ['id', 'type', 'content', 'contentType'],
+        select: ['id', 'type', 'content', 'contentType', 'meta'],
       });
 
       if (nextContentEntity) {
@@ -181,6 +183,7 @@ export class QuestionService {
           type: nextContentEntity.type,
           content: nextContentEntity.content,
           contentType: nextContentEntity.contentType,
+          meta: nextContentEntity.meta,
         };
       }
     }
@@ -216,6 +219,10 @@ export class QuestionService {
 
     if (dto.content !== undefined) {
       record.content = dto.content;
+    }
+
+    if (dto.meta !== undefined) {
+      record.meta = dto.meta;
     }
 
     if (dto.nextContent !== undefined) {
@@ -263,7 +270,6 @@ export class QuestionService {
     while (currentId && depth < maxDepth) {
       const question = await this.questionRepo.findOne({
         where: { id: currentId },
-        relations: ['answers'],
       });
 
       if (!question) {
@@ -295,6 +301,7 @@ export class QuestionService {
       type: root.type,
       contentType: root.contentType,
       content: root.content,
+      meta: root.meta,
       nextContent: root.nextContent ?? chain[1]?.id ?? null,
       chain: chain.map((question, index) => this.toChainNode(question, chain[index + 1])),
     };
@@ -308,6 +315,7 @@ export class QuestionService {
       id: question.id,
       content: question.content,
       contentType: question.contentType,
+      meta: question.meta,
       nextContent: nextQuestion?.id ?? question.nextContent ?? null,
     };
   }

@@ -38,17 +38,57 @@ export interface PageContent {
 }
 
 export type AnswerKeyOption = 'A' | 'B' | 'C' | 'D';
+export type AnswerOptionLabel = AnswerKeyOption;
 
-export interface QuestionBlockState {
-  number: number;
-  questionParts: ImportedContentPart[];
-  answerPartsList: ImportedContentPart[][];
-  pendingAnswerMedia: ImportedContentPart[];
-  currentAnswerParts: ImportedContentPart[] | null;
+export type ImportedQuestionKind =
+  | 'single_choice'
+  | 'multiple_choice'
+  | 'text_input'
+  | 'matching'
+  | 'ordering'
+  | 'matching_choice'
+  | 'unknown';
+
+export type ContentLayoutShape =
+  | 'text_only'
+  | 'image_only'
+  | 'text_with_image'
+  | 'mixed';
+
+export type MultipleChoiceLayoutKey =
+  | 'text_only_stem_text_only_answers'
+  | 'text_only_stem_image_only_answers'
+  | 'text_only_stem_mixed_answers'
+  | 'image_only_stem_text_only_answers'
+  | 'image_only_stem_image_only_answers'
+  | 'image_only_stem_mixed_answers'
+  | 'text_with_image_stem_text_only_answers'
+  | 'text_with_image_stem_image_only_answers'
+  | 'text_with_image_stem_mixed_answers'
+  | 'mixed_stem_mixed_answers';
+
+export interface ParsedAnswerOption {
+  label: AnswerOptionLabel;
+  parts: ImportedContentPart[];
 }
 
-export interface PdfParserState {
-  mode: 'questions' | 'answer_key';
-  currentQuestion: QuestionBlockState | null;
+export interface ParsedQuestionBlock {
+  number: number;
+  pageNumber: number;
+  stemParts: ImportedContentPart[];
+  answers: ParsedAnswerOption[];
+  kind: ImportedQuestionKind;
+  questionType: QuestionType;
+  layoutKey?: MultipleChoiceLayoutKey | null;
+  answerKey?: AnswerKeyOption;
+}
+
+export interface ParsedDocumentResult {
+  questions: ParsedQuestionBlock[];
   answerKey: Record<number, AnswerKeyOption>;
+}
+
+export interface PdfArtifactRule {
+  signature: string;
+  zone: 'header' | 'footer';
 }

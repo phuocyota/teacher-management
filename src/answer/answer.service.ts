@@ -69,7 +69,7 @@ export class AnswerService {
         if (answer.nextContent) {
           const nextContentEntity = await this.answerRepo.findOne({
             where: { id: answer.nextContent },
-            select: ['id', 'content', 'contentType'],
+            select: ['id', 'content', 'contentType', 'meta'],
           });
 
           if (nextContentEntity) {
@@ -77,6 +77,7 @@ export class AnswerService {
               id: nextContentEntity.id,
               content: nextContentEntity.content,
               contentType: nextContentEntity.contentType,
+              meta: nextContentEntity.meta,
             };
           }
         }
@@ -107,7 +108,7 @@ export class AnswerService {
     if (record.nextContent) {
       const nextContentEntity = await this.answerRepo.findOne({
         where: { id: record.nextContent },
-        select: ['id', 'content', 'contentType'],
+        select: ['id', 'content', 'contentType', 'meta'],
       });
 
       if (nextContentEntity) {
@@ -115,6 +116,7 @@ export class AnswerService {
           id: nextContentEntity.id,
           content: nextContentEntity.content,
           contentType: nextContentEntity.contentType,
+          meta: nextContentEntity.meta,
         };
       }
     }
@@ -190,6 +192,7 @@ export class AnswerService {
       id: root.id,
       contentType: root.contentType,
       content: root.content,
+      meta: root.meta,
       nextContent: root.nextContent ?? chain[1]?.id ?? null,
       chain: chain.map((answer, index) => this.toChainNode(answer, chain[index + 1])),
     };
@@ -203,6 +206,7 @@ export class AnswerService {
       id: answer.id,
       content: answer.content,
       contentType: answer.contentType,
+      meta: answer.meta,
       nextContent: nextAnswer?.id ?? answer.nextContent ?? null,
     };
   }

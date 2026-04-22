@@ -22,19 +22,42 @@ import {
 import { PdfParsingError } from '../exceptions/pdf-parsing.exception';
 import { PDF_PARSER_CONFIG } from '../constants/pdf-parser.constant';
 import {
+  AnswerKeyOption,
   CreatedQuestionSummary,
   ImportedContentPart,
   LayoutFragment,
-  PageContent,
-  PdfParserState,
-  QuestionBlockState,
   LayoutLine,
+  PageContent,
+  ParsedDocumentResult,
+  ParsedQuestionBlock,
+  PdfArtifactRule,
 } from '../types/question-bank-import.types';
-import { PdfJsLib, PdfPage, PdfViewport } from '../types/pdf-types';
 import { PdfImageExtractorService } from './pdf-image-extractor.service';
 import { QuestionParserService } from './question-parser.service';
 import { UploadService } from 'src/upload/upload.service';
 import { FileType } from 'src/upload/enum/file-visibility.enum';
+import { ANSWER_OPTION_LABELS } from '../constants/question-bank-import-patterns.constant';
+import {
+  normalizeImportSignature,
+  normalizeImportText,
+} from '../utils/question-import-text.utils';
+
+interface ContentChainEntity {
+  id: string;
+  nextContent?: string;
+}
+
+interface PdfImportProcessingResult {
+  createdQuestions: CreatedQuestionSummary[];
+  totalAnswers: number;
+  detectedQuestions: number;
+  answerKey: Record<number, AnswerKeyOption>;
+}
+
+interface PersistedAnswerResult {
+  totalAnswers: number;
+  answerCount: number;
+}
 
 @Injectable()
 export class QuestionBankImportService {
@@ -78,9 +101,14 @@ export class QuestionBankImportService {
     const questionBank = await this.findQuestionBankById(questionBankId);
 
     try {
-      const { createdQuestions, totalAnswers, detectedQuestions, answerKey } =
-        await this.processPdfOnTheFly(pdfBuffer, questionBank.id);
-
+      const pages = await this.readPdfPages(pdfBuffer);
+      const filteredPages = this.filterPageArtifacts(pages);
+      const parsedDocument =
+        await this.parseStrictMultipleChoicePages(filteredPages);
+      const importResult = await this.persistParsedQuestions(
+        questionBank.id,
+        parsedDocument,
+      );
       const totalQuestions = await this.questionBankQuestionRepo.count({
         where: { questionBankId: questionBank.id },
       });
@@ -91,18 +119,18 @@ export class QuestionBankImportService {
       const duration = Date.now() - startTime;
       this.logger.log(
         `PDF import summary for question bank ${questionBankId}: ` +
-          `imported ${createdQuestions.length}/${detectedQuestions} questions successfully`,
+          `imported ${importResult.createdQuestions.length}/${importResult.detectedQuestions} questions successfully`,
       );
       this.logger.log(
         `PDF import completed in ${duration}ms: ` +
-          `${createdQuestions.length} questions, ${totalAnswers} answers`,
+          `${importResult.createdQuestions.length} questions, ${importResult.totalAnswers} answers`,
       );
 
       return {
         totalQuestions,
-        totalAnswers,
-        questions: createdQuestions,
-        answerKey: this.serializeAnswerKey(answerKey),
+        totalAnswers: importResult.totalAnswers,
+        questions: importResult.createdQuestions,
+        answerKey: this.serializeAnswerKey(importResult.answerKey),
       };
     } catch (error) {
       const duration = Date.now() - startTime;
@@ -117,26 +145,338 @@ export class QuestionBankImportService {
         `PDF import failed after ${duration}ms: ${errorMessage}`,
         error instanceof Error ? error.stack : undefined,
       );
-
-      if (error instanceof PdfParsingError) {
-        throw new BadRequestException(errorMessage);
-      }
-
-      throw new BadRequestException(`Lỗi khi parse PDF: ${errorMessage}`);
+      throw error;
     }
   }
 
-  private async createContentChain<
-    T extends { id: string; nextContent?: string },
-  >(
+  private async readPdfPages(pdfBuffer: Buffer): Promise<PageContent[]> {
+    let pdfDocument: any = null;
+    let loadingTask: any = null;
+
+    try {
+      const pdfjsLib = await import('pdfjs-dist/legacy/build/pdf.mjs');
+      loadingTask = pdfjsLib.getDocument({
+        data: new Uint8Array(pdfBuffer),
+        ...PDF_PARSER_CONFIG.PDF_WORKER_OPTIONS,
+      });
+
+      pdfDocument = await loadingTask.promise;
+      const totalPages = pdfDocument.numPages ?? 0;
+      const pages: PageContent[] = [];
+
+      this.logger.debug(`PDF loaded: ${totalPages} pages`);
+
+      for (let pageNumber = 1; pageNumber <= totalPages; pageNumber++) {
+        let page: any = null;
+
+        try {
+          page = await pdfDocument.getPage(pageNumber);
+          pages.push(await this.extractPageContent(page, pageNumber, pdfjsLib));
+        } catch (error) {
+          throw new PdfParsingError(
+            `Failed to read PDF page: ${error}`,
+            pageNumber,
+          );
+        } finally {
+          this.cleanupPage(page, pageNumber);
+        }
+      }
+
+      return pages;
+    } catch (error) {
+      if (error instanceof PdfParsingError) {
+        throw error;
+      }
+
+      throw new PdfParsingError(`PDF processing failed: ${error}`);
+    } finally {
+      await this.cleanupPdfResources(pdfDocument, loadingTask);
+    }
+  }
+
+  private filterPageArtifacts(pages: PageContent[]): PageContent[] {
+    const rules = this.collectHeaderFooterCandidates(pages);
+
+    if (rules.length === 0) {
+      return pages;
+    }
+
+    return pages.map((page) => this.filterArtifactsFromPage(page, rules));
+  }
+
+  private collectHeaderFooterCandidates(
+    pages: PageContent[],
+  ): PdfArtifactRule[] {
+    const counters = new Map<string, Set<number>>();
+
+    for (const page of pages) {
+      const headerLines = page.lines.slice(0, 2);
+      const footerLines = page.lines.slice(-2);
+
+      for (const line of headerLines) {
+        if (!this.isTextOnlyLine(line)) {
+          continue;
+        }
+
+        const signature = this.buildLineSignature(line, page.pageNumber);
+
+        if (!signature) {
+          continue;
+        }
+
+        const key = `header:${signature}`;
+        const pagesForKey = counters.get(key) ?? new Set<number>();
+        pagesForKey.add(page.pageNumber);
+        counters.set(key, pagesForKey);
+      }
+
+      for (const line of footerLines) {
+        if (!this.isTextOnlyLine(line)) {
+          continue;
+        }
+
+        const signature = this.buildLineSignature(line, page.pageNumber);
+
+        if (!signature) {
+          continue;
+        }
+
+        const key = `footer:${signature}`;
+        const pagesForKey = counters.get(key) ?? new Set<number>();
+        pagesForKey.add(page.pageNumber);
+        counters.set(key, pagesForKey);
+      }
+    }
+
+    return [...counters.entries()]
+      .filter(([, pageNumbers]) => pageNumbers.size >= 2)
+      .map(([key]) => {
+        const [zone, ...signatureParts] = key.split(':');
+
+        return {
+          zone: zone as PdfArtifactRule['zone'],
+          signature: signatureParts.join(':'),
+        };
+      });
+  }
+
+  private buildLineSignature(
+    line: LayoutLine,
+    pageNumber: number,
+  ): string | null {
+    const text = this.composeTextLine(line);
+    const sanitized = this.sanitizeLineText(text, pageNumber);
+
+    if (!sanitized) {
+      return null;
+    }
+
+    return normalizeImportSignature(sanitized);
+  }
+
+  private isArtifactLine(
+    line: LayoutLine,
+    pageNumber: number,
+    rules: PdfArtifactRule[],
+    zone: PdfArtifactRule['zone'] | null,
+  ): boolean {
+    if (!zone) {
+      return false;
+    }
+
+    const signature = this.buildLineSignature(line, pageNumber);
+
+    if (!signature) {
+      return false;
+    }
+
+    return rules.some(
+      (rule) => rule.zone === zone && rule.signature === signature,
+    );
+  }
+
+  private filterArtifactsFromPage(
+    page: PageContent,
+    rules: PdfArtifactRule[],
+  ): PageContent {
+    const headerIndexes = new Set(
+      [0, 1].filter((index) => index < page.lines.length),
+    );
+    const footerIndexes = new Set(
+      [page.lines.length - 2, page.lines.length - 1].filter(
+        (index) => index >= 0,
+      ),
+    );
+
+    return {
+      ...page,
+      lines: page.lines.filter((line, index) => {
+        if (!this.isTextOnlyLine(line)) {
+          return true;
+        }
+
+        const zone: PdfArtifactRule['zone'] | null = headerIndexes.has(index)
+          ? 'header'
+          : footerIndexes.has(index)
+            ? 'footer'
+            : null;
+
+        return !this.isArtifactLine(line, page.pageNumber, rules, zone);
+      }),
+    };
+  }
+
+  private sanitizeLineText(
+    lineText: string,
+    pageNumber: number,
+  ): string | null {
+    const compactLine = normalizeImportText(lineText);
+
+    if (!compactLine) {
+      return null;
+    }
+
+    if (
+      /^\d+$/.test(compactLine) &&
+      Number.parseInt(compactLine, 10) === pageNumber
+    ) {
+      return null;
+    }
+
+    const trailingPageNumberPattern = new RegExp(
+      `^(.*\\S)\\s+${pageNumber}$`,
+      'u',
+    );
+    const trailingPageNumberMatch = compactLine.match(
+      trailingPageNumberPattern,
+    );
+
+    if (!trailingPageNumberMatch) {
+      return compactLine;
+    }
+
+    const candidate = trailingPageNumberMatch[1].trim();
+    return candidate.split(/\s+/).length >= 2 ? candidate : compactLine;
+  }
+
+  private async parseStrictMultipleChoicePages(
+    pages: PageContent[],
+  ): Promise<ParsedDocumentResult> {
+    const parsedDocument = await this.questionParser.parsePages(pages);
+
+    for (const question of parsedDocument.questions) {
+      this.assertSupportedQuestionBlock(question);
+    }
+
+    return parsedDocument;
+  }
+
+  private assertSupportedQuestionBlock(question: ParsedQuestionBlock): void {
+    if (
+      question.kind === 'single_choice' ||
+      question.kind === 'multiple_choice' ||
+      question.kind === 'text_input'
+    ) {
+      return;
+    }
+
+    throw new PdfParsingError(
+      `Question type "${question.kind}" is recognized but not supported by this import flow`,
+      question.pageNumber,
+      { questionNumber: question.number },
+    );
+  }
+
+  private async persistParsedQuestions(
+    questionBankId: string,
+    parsedDocument: ParsedDocumentResult,
+  ): Promise<PdfImportProcessingResult> {
+    const createdQuestions: CreatedQuestionSummary[] = [];
+    let totalAnswers = 0;
+
+    for (const question of parsedDocument.questions) {
+      const persistResult = await this.persistQuestionBlock(
+        questionBankId,
+        question,
+        createdQuestions,
+      );
+
+      totalAnswers += persistResult.totalAnswers;
+    }
+
+    return {
+      createdQuestions,
+      totalAnswers,
+      detectedQuestions: parsedDocument.questions.length,
+      answerKey: parsedDocument.answerKey,
+    };
+  }
+
+  private async persistQuestionBlock(
+    questionBankId: string,
+    question: ParsedQuestionBlock,
+    createdQuestions: CreatedQuestionSummary[],
+  ): Promise<{ totalAnswers: number }> {
+    this.logger.debug(
+      `Persisting question ${question.number}: ${question.stemParts.length} question parts, ${question.answers.length} answers`,
+    );
+
+    const savedQuestions = await this.createContentChain(
+      questionBankId,
+      question.stemParts,
+      { type: question.questionType },
+      this.questionService.createBulk.bind(this.questionService),
+      this.questionService.updateBulk.bind(this.questionService),
+    );
+    const rootQuestion = savedQuestions[0];
+    const persistedAnswers = await this.persistAnswerBlocks(
+      questionBankId,
+      question.number,
+      rootQuestion,
+      question.answers.map((answer) =>
+        this.attachAnswerLabelMeta(answer.parts, answer.label),
+      ),
+    );
+
+    await this.createQuestionBankQuestionLink(
+      questionBankId,
+      rootQuestion.id,
+      question.number,
+    );
+
+    createdQuestions.push(
+      this.createQuestionSummary(rootQuestion, persistedAnswers.answerCount),
+    );
+
+    return { totalAnswers: persistedAnswers.totalAnswers };
+  }
+
+  private attachAnswerLabelMeta(
+    answerParts: ImportedContentPart[],
+    label: AnswerKeyOption,
+  ): ImportedContentPart[] {
+    return answerParts.map((part, index) =>
+      index === 0
+        ? {
+            ...part,
+            meta: {
+              ...(part.meta ?? {}),
+              importOptionLabel: label,
+            },
+          }
+        : part,
+    );
+  }
+
+  private async createContentChain<T extends ContentChainEntity>(
     questionBankId: string,
     contentParts: ImportedContentPart[],
     baseEntity: Record<string, unknown>,
-    createBulk: (entities: any[]) => Promise<T[]>,
+    createBulk: (entities: Record<string, unknown>[]) => Promise<T[]>,
     updateBulk: (entities: T[]) => Promise<T[]>,
   ): Promise<T[]> {
-    const entities: any[] = [];
-    const isQuestionEntity = typeof (baseEntity as any)?.type !== 'undefined';
+    const entities: Record<string, unknown>[] = [];
+    const isQuestionEntity = typeof baseEntity.type !== 'undefined';
 
     for (let index = 0; index < contentParts.length; index++) {
       const part = contentParts[index];
@@ -167,310 +507,126 @@ export class QuestionBankImportService {
     return savedEntities;
   }
 
-  private resolveStructuredQuestionBlock(
-    state: QuestionBlockState,
-  ): {
-    type: QuestionType;
-    questionParts: ImportedContentPart[];
-    answerPartsList: ImportedContentPart[][];
-  } | null {
-    const questionText = this.composePlainText(state.questionParts);
-    const matchingBlock = this.parseMatchingBlock(questionText);
-
-    if (matchingBlock) {
-      return matchingBlock;
-    }
-
-    const orderingBlock = this.parseOrderingBlock(state, questionText);
-    if (orderingBlock) {
-      return orderingBlock;
-    }
-
-    return null;
-  }
-
-  private parseMatchingBlock(
-    questionText: string,
-  ):
-    | {
-        type: QuestionType.MATCHING;
-        questionParts: ImportedContentPart[];
-        answerPartsList: ImportedContentPart[][];
-      }
-    | null {
-    const normalized = this.normalizeText(questionText);
-
-    if (
-      !/(\bnối\b|\bghép\b|\bmatch\b)/i.test(normalized) ||
-      !/\bcột\s*a\b/i.test(normalized) ||
-      !/\bcột\s*b\b/i.test(normalized)
-    ) {
-      return null;
-    }
-
-    const leftStart = normalized.search(/\b1\.\s+/);
-    const rightStart = normalized.search(/\ba\.\s+/i);
-
-    if (leftStart < 0 || rightStart < 0 || rightStart <= leftStart) {
-      return null;
-    }
-
-    const prompt = this.normalizeText(normalized.slice(0, leftStart));
-    const leftSection = normalized.slice(leftStart, rightStart);
-    const rightSection = normalized.slice(rightStart);
-
-    const leftItems = [...leftSection.matchAll(/(\d+)\.\s*([\s\S]*?)(?=(?:\s+\d+\.\s)|$)/gi)]
-      .map((match) => ({
-        key: match[1],
-        text: this.normalizeText(match[2] ?? ''),
-      }))
-      .filter((item) => item.text.length > 0);
-
-    const rightItems = [...rightSection.matchAll(/([a-z])\.\s*([\s\S]*?)(?=(?:\s+[a-z]\.\s)|$)/gi)]
-      .map((match) => ({
-        key: match[1].toLowerCase(),
-        text: this.normalizeText(match[2] ?? ''),
-      }))
-      .filter((item) => item.text.length > 0);
-
-    if (leftItems.length === 0 || rightItems.length === 0) {
-      return null;
-    }
-
-    const pairCount = Math.min(leftItems.length, rightItems.length);
-    const answerPartsList = Array.from({ length: pairCount }, (_, index) => [
-      {
-        content: leftItems[index].text,
-        contentType: ContentTypes.TEXT,
-        meta: {
-          kind: 'matching',
-          leftKey: leftItems[index].key,
-          leftText: leftItems[index].text,
-          rightKey: rightItems[index].key,
-          rightText: rightItems[index].text,
-        },
-      },
+  private async extractPageContent(
+    page: any,
+    pageNumber: number,
+    pdfjsLib: any,
+  ): Promise<PageContent> {
+    const viewport = page.getViewport({ scale: 1 });
+    const [textContent, imageFragments] = await Promise.all([
+      page.getTextContent({
+        normalizeWhitespace: true,
+        disableCombineTextItems: false,
+      }),
+      this.pdfImageExtractor.extractPageImages(
+        page,
+        pageNumber,
+        pdfjsLib,
+        viewport,
+      ),
     ]);
 
-    return {
-      type: QuestionType.MATCHING,
-      questionParts: prompt
-        ? [
-            {
-              content: prompt,
-              contentType: ContentTypes.TEXT,
-            },
-          ]
-        : [],
-      answerPartsList,
-    };
-  }
-
-  private parseOrderingBlock(
-    state: QuestionBlockState,
-    questionText: string,
-  ):
-    | {
-        type: QuestionType.ORDERING;
-        questionParts: ImportedContentPart[];
-        answerPartsList: ImportedContentPart[][];
-      }
-    | null {
-    const normalized = this.normalizeText(questionText);
-
-    if (
-      !/(\bsắp\s*xếp\b|\bthứ\s*tự\b|\bđúng\s*thứ\s*tự\b|\bđiền\s*số\b|\bđánh\s*số\b)/i.test(
-        normalized,
-      )
-    ) {
-      return null;
-    }
-
-    const itemMatches = [
-      ...normalized.matchAll(/Hình\s*số\.?\s*(?:☐|□)?\s*([\s\S]*?)(?=(?:Hình\s*số\.?|\s*$))/gi),
-    ];
-
-    const orderingItems = itemMatches
-      .map((match) => this.normalizeText(match[1] ?? ''))
-      .filter((item) => item.length > 0);
-
-    if (orderingItems.length === 0) {
-      return null;
-    }
-
-    const promptCutoff = normalized.search(/Hình\s*số\.?/i);
-    const prompt = promptCutoff > 0 ? this.normalizeText(normalized.slice(0, promptCutoff)) : normalized;
-    const mediaParts = state.pendingAnswerMedia.filter(
-      (part) => part.contentType === ContentTypes.IMAGE,
+    const textFragments = this.extractTextFragments(
+      textContent.items as any[],
+      viewport,
+      pdfjsLib,
+      pageNumber,
+    );
+    const allFragments = [...textFragments, ...imageFragments].sort(
+      (left, right) => this.compareFragments(left, right),
     );
 
-    const answerPartsList = orderingItems.map((item, index) => {
-      const media = mediaParts[index];
-      const content = media ? media.content : item;
-      return [
-        {
-          content,
-          contentType: media ? media.contentType : ContentTypes.TEXT,
-          meta: {
-            kind: 'ordering',
-            position: index + 1,
-            label: item,
-          },
-        },
-      ];
-    });
-
     return {
-      type: QuestionType.ORDERING,
-      questionParts: prompt
-        ? [
-            {
-              content: prompt,
-              contentType: ContentTypes.TEXT,
-            },
-          ]
-        : [],
-      answerPartsList,
+      pageNumber,
+      lines: this.groupFragmentsIntoLines(allFragments),
     };
   }
 
-  private composePlainText(parts: ImportedContentPart[]): string {
-    return parts
-      .filter((part) => part.contentType === ContentTypes.TEXT)
-      .map((part) => part.content)
-      .join(' ');
-  }
+  private extractTextFragments(
+    items: any[],
+    viewport: any,
+    pdfjsLib: any,
+    pageNumber: number,
+  ): LayoutFragment[] {
+    const textFragments: LayoutFragment[] = [];
+    let order = 0;
 
-  private normalizeText(value: string): string {
-    return value.replace(/\s+/g, ' ').replace(/\u00a0/g, ' ').trim();
-  }
+    for (const item of items) {
+      const content = typeof item.str === 'string' ? item.str.trim() : '';
 
-  private async persistImagePart(
-    questionBankId: string,
-    base64Content: string,
-    index: number,
-  ): Promise<string> {
-    const imageBuffer = Buffer.from(base64Content, 'base64');
-    const uploaded = await this.uploadService.saveBufferAsFile(imageBuffer, {
-      originalName: `pdf-image-${Date.now()}-${index}.png`,
-      mimetype: 'image/png',
-      uploadedBy: 'pdf-import',
-      fileType: FileType.NORMAL,
-      description: 'Generated from PDF import',
-      folderPath: `question-banks/${questionBankId}`,
-      storedPathPrefix: '/uploads',
-    });
+      if (!content) {
+        continue;
+      }
 
-    return uploaded.path;
-  }
+      const transform = pdfjsLib.Util.transform(
+        viewport.transform,
+        item.transform,
+      );
 
-  private async processPdfOnTheFly(
-    pdfBuffer: Buffer,
-    questionBankId: string,
-  ): Promise<{
-    createdQuestions: CreatedQuestionSummary[];
-    totalAnswers: number;
-    detectedQuestions: number;
-    answerKey: Record<number, 'A' | 'B' | 'C' | 'D'>;
-  }> {
-    let pdfDocument: any = null;
-    let loadingTask: any = null;
-
-    try {
-      const pdfjsLib: any = await import('pdfjs-dist/legacy/build/pdf.mjs');
-      loadingTask = pdfjsLib.getDocument({
-        data: new Uint8Array(pdfBuffer),
-        ...PDF_PARSER_CONFIG.PDF_WORKER_OPTIONS,
+      textFragments.push({
+        kind: 'text',
+        content,
+        x: transform[4],
+        y: transform[5],
+        width: item.width ?? 0,
+        height: item.height ?? 0,
+        pageNumber,
+        order: order++,
       });
-
-      pdfDocument = await loadingTask.promise;
-      const totalPages = pdfDocument.numPages ?? 0;
-
-      this.logger.debug(`PDF loaded: ${totalPages} pages`);
-
-      const createdQuestions: CreatedQuestionSummary[] = [];
-      let totalAnswers = 0;
-      let detectedQuestions = 0;
-      let parserState: PdfParserState | null = null;
-
-      for (let pageNumber = 1; pageNumber <= totalPages; pageNumber++) {
-        let page: any = null;
-
-        try {
-          page = await pdfDocument.getPage(pageNumber);
-          const pageContent = await this.extractPageContent(
-            page,
-            pageNumber,
-            pdfjsLib,
-          );
-
-          const result = await this.questionParser.processPageContent(
-            pageContent,
-            parserState,
-          );
-
-          detectedQuestions += result.completedQuestions.length;
-
-          for (const completedQuestion of result.completedQuestions) {
-            this.logger.debug(
-              `Flushing parsed question ${completedQuestion.number} from page ${pageNumber}`,
-            );
-            const flushResult = await this.flushQuestionBlock(
-              completedQuestion,
-              questionBankId,
-              createdQuestions,
-            );
-            totalAnswers += flushResult.totalAnswers;
-            this.logger.debug(
-              `Question ${completedQuestion.number} flushed successfully`,
-            );
-          }
-
-          parserState = result.parserState;
-          totalAnswers += result.totalAnswers;
-
-          this.logger.debug(`Page ${pageNumber} processed`);
-        } catch (error) {
-          throw new PdfParsingError(
-            `Failed to process page: ${error}`,
-            pageNumber,
-          );
-        } finally {
-          this.cleanupPage(page, pageNumber);
-        }
-      }
-
-      // Flush remaining question
-      if (parserState?.currentQuestion) {
-        detectedQuestions++;
-        this.logger.debug(
-          `Flushing final question ${parserState.currentQuestion.number} after page loop`,
-        );
-        const result = await this.flushQuestionBlock(
-          parserState.currentQuestion,
-          questionBankId,
-          createdQuestions,
-        );
-        totalAnswers += result.totalAnswers;
-        this.logger.debug(
-          `Final question ${parserState.currentQuestion.number} flushed successfully`,
-        );
-      }
-
-      return {
-        createdQuestions,
-        totalAnswers,
-        detectedQuestions,
-        answerKey: parserState?.answerKey ?? {},
-      };
-    } catch (error) {
-      if (error instanceof PdfParsingError) {
-        throw error;
-      }
-      throw new PdfParsingError(`PDF processing failed: ${error}`);
-    } finally {
-      await this.cleanupPdfResources(pdfDocument, loadingTask);
     }
+
+    return textFragments;
+  }
+
+  private compareFragments(
+    left: LayoutFragment,
+    right: LayoutFragment,
+  ): number {
+    const verticalDelta = left.y - right.y;
+
+    if (Math.abs(verticalDelta) > PDF_PARSER_CONFIG.LINE_TOLERANCE) {
+      return verticalDelta;
+    }
+
+    const horizontalDelta = left.x - right.x;
+
+    if (
+      Math.abs(horizontalDelta) > PDF_PARSER_CONFIG.HORIZONTAL_DELTA_THRESHOLD
+    ) {
+      return horizontalDelta;
+    }
+
+    return left.order - right.order;
+  }
+
+  private groupFragmentsIntoLines(fragments: LayoutFragment[]): LayoutLine[] {
+    const lines: LayoutLine[] = [];
+
+    for (const fragment of fragments) {
+      const currentLine = lines[lines.length - 1];
+
+      if (
+        !currentLine ||
+        Math.abs(currentLine.y - fragment.y) > PDF_PARSER_CONFIG.LINE_TOLERANCE
+      ) {
+        lines.push({
+          y: fragment.y,
+          x: fragment.x,
+          fragments: [fragment],
+        });
+        continue;
+      }
+
+      currentLine.fragments.push(fragment);
+      currentLine.x = Math.min(currentLine.x, fragment.x);
+    }
+
+    return lines.map((line) => ({
+      ...line,
+      fragments: [...line.fragments].sort((left, right) =>
+        this.compareFragments(left, right),
+      ),
+    }));
   }
 
   private cleanupPage(page: any, pageNumber: number): void {
@@ -523,167 +679,50 @@ export class QuestionBankImportService {
     }
   }
 
-  private async extractPageContent(
-    page: any,
-    pageNumber: number,
-    pdfjsLib: any,
-  ): Promise<PageContent> {
-    const viewport = page.getViewport({ scale: 1 });
-    const [textContent, imageFragments] = await Promise.all([
-      page.getTextContent({
-        normalizeWhitespace: true,
-        disableCombineTextItems: false,
-      }),
-      this.pdfImageExtractor.extractPageImages(
-        page,
-        pageNumber,
-        pdfjsLib,
-        viewport,
-      ),
-    ]);
-
-    const textFragments: LayoutFragment[] = [];
-    let order = 0;
-
-    for (const item of textContent.items as any[]) {
-      const content = typeof item.str === 'string' ? item.str.trim() : '';
-
-      if (!content) {
-        continue;
-      }
-
-      const transform = pdfjsLib.Util.transform(
-        viewport.transform,
-        item.transform,
-      );
-      textFragments.push({
-        kind: 'text',
-        content,
-        x: transform[4],
-        y: transform[5],
-        width: item.width ?? 0,
-        height: item.height ?? 0,
-        pageNumber,
-        order: order++,
-      });
-    }
-
-    const allFragments = [...textFragments, ...imageFragments].sort(
-      (left, right) => {
-        const verticalDelta = left.y - right.y;
-
-        if (Math.abs(verticalDelta) > PDF_PARSER_CONFIG.LINE_TOLERANCE) {
-          return verticalDelta;
-        }
-
-        const horizontalDelta = left.x - right.x;
-
-        if (
-          Math.abs(horizontalDelta) >
-          PDF_PARSER_CONFIG.HORIZONTAL_DELTA_THRESHOLD
-        ) {
-          return horizontalDelta;
-        }
-
-        return left.order - right.order;
-      },
-    );
-
-    return {
-      pageNumber,
-      lines: this.groupFragmentsIntoLines(allFragments),
-    };
+  private isTextOnlyLine(line: LayoutLine): boolean {
+    return line.fragments.every((fragment) => fragment.kind === 'text');
   }
 
-  private groupFragmentsIntoLines(fragments: LayoutFragment[]): LayoutLine[] {
-    const lines: LayoutLine[] = [];
-
-    for (const fragment of fragments) {
-      const currentLine = lines[lines.length - 1];
-
-      if (
-        !currentLine ||
-        Math.abs(currentLine.y - fragment.y) > PDF_PARSER_CONFIG.LINE_TOLERANCE
-      ) {
-        lines.push({
-          y: fragment.y,
-          x: fragment.x,
-          fragments: [fragment],
-        });
-        continue;
-      }
-
-      currentLine.fragments.push(fragment);
-      currentLine.x = Math.min(currentLine.x, fragment.x);
-    }
-
-    return lines.map((line) => ({
-      ...line,
-      fragments: [...line.fragments].sort((left, right) => {
-        const horizontalDelta = left.x - right.x;
-
-        if (
-          Math.abs(horizontalDelta) >
-          PDF_PARSER_CONFIG.HORIZONTAL_DELTA_THRESHOLD
-        ) {
-          return horizontalDelta;
-        }
-
-        return left.order - right.order;
-      }),
-    }));
+  private composeTextLine(line: LayoutLine): string {
+    return line.fragments
+      .filter((fragment) => fragment.kind === 'text')
+      .map((fragment) => fragment.content)
+      .join(' ');
   }
 
-  private async flushQuestionBlock(
-    state: QuestionBlockState,
+  private async persistImagePart(
     questionBankId: string,
-    createdQuestions: CreatedQuestionSummary[],
-  ): Promise<{ totalAnswers: number }> {
-    const structuredBlock = this.resolveStructuredQuestionBlock(state);
-    const answerPartsList =
-      structuredBlock?.answerPartsList ?? state.answerPartsList;
-    const questionParts =
-      structuredBlock?.questionParts ??
-      (answerPartsList.length > 0
-        ? state.questionParts.length > 0
-          ? state.questionParts
-          : [
-              {
-                content: '',
-                contentType: ContentTypes.TEXT,
-              },
-            ]
-        : [...state.questionParts, ...state.pendingAnswerMedia]);
+    base64Content: string,
+    index: number,
+  ): Promise<string> {
+    const imageBuffer = Buffer.from(base64Content, 'base64');
+    const uploaded = await this.uploadService.saveBufferAsFile(imageBuffer, {
+      originalName: `pdf-image-${Date.now()}-${index}.png`,
+      mimetype: 'image/png',
+      uploadedBy: 'pdf-import',
+      fileType: FileType.NORMAL,
+      description: 'Generated from PDF import',
+      folderPath: `question-banks/${questionBankId}`,
+      storedPathPrefix: '/uploads',
+    });
 
-    if (questionParts.length === 0) {
-      return { totalAnswers: 0 };
-    }
+    return uploaded.path;
+  }
 
-    const resolvedQuestionType =
-      structuredBlock?.type ??
-      this.questionParser.getQuestionType(answerPartsList.length);
-
-    this.logger.debug(
-      `Persisting question ${state.number}: ${questionParts.length} question parts, ${answerPartsList.length} answers`,
-    );
-
-    const savedParts = await this.createContentChain(
-      questionBankId,
-      questionParts,
-      { type: resolvedQuestionType },
-      this.questionService.createBulk.bind(this.questionService),
-      this.questionService.updateBulk.bind(this.questionService),
-    );
-
-    const rootQuestion = savedParts[0];
-
+  private async persistAnswerBlocks(
+    questionBankId: string,
+    questionNumber: number,
+    rootQuestion: ContentChainEntity,
+    answerPartsList: ImportedContentPart[][],
+  ): Promise<PersistedAnswerResult> {
     let totalAnswers = 0;
     let answerCount = 0;
 
     for (const answerParts of answerPartsList) {
       this.logger.debug(
-        `Persisting answer for question ${state.number}: ${answerParts.length} parts`,
+        `Persisting answer for question ${questionNumber}: ${answerParts.length} parts`,
       );
+
       const savedAnswerParts = await this.createContentChain(
         questionBankId,
         answerParts,
@@ -696,25 +735,27 @@ export class QuestionBankImportService {
       answerCount++;
     }
 
-    await this.createQuestionBankQuestionLink(
-      questionBankId,
-      rootQuestion.id,
-      state.number,
-    );
-
-    this.logger.debug(
-      `Linked question ${state.number} to question bank ${questionBankId}`,
-    );
-
-    createdQuestions.push({
-      id: rootQuestion.id,
-      content: (rootQuestion as any).content,
-      type: (rootQuestion as any).type,
-      contentType: (rootQuestion as any).contentType,
+    return {
+      totalAnswers,
       answerCount,
-    });
+    };
+  }
 
-    return { totalAnswers };
+  private createQuestionSummary(
+    rootQuestion: ContentChainEntity & {
+      content?: unknown;
+      type?: unknown;
+      contentType?: unknown;
+    },
+    answerCount: number,
+  ): CreatedQuestionSummary {
+    return {
+      id: rootQuestion.id,
+      content: String(rootQuestion.content ?? ''),
+      type: rootQuestion.type as QuestionType,
+      contentType: rootQuestion.contentType as ContentTypes,
+      answerCount,
+    };
   }
 
   private async createQuestionBankQuestionLink(
@@ -734,14 +775,20 @@ export class QuestionBankImportService {
   }
 
   private serializeAnswerKey(
-    answerKey: Record<number, 'A' | 'B' | 'C' | 'D'>,
-  ): Record<string, 'A' | 'B' | 'C' | 'D'> | undefined {
+    answerKey: Record<number, AnswerKeyOption>,
+  ): Record<string, AnswerKeyOption> | undefined {
     const entries = Object.entries(answerKey);
 
     if (entries.length === 0) {
       return undefined;
     }
 
-    return Object.fromEntries(entries.map(([key, value]) => [String(key), value]));
+    return Object.fromEntries(
+      entries
+        .filter((entry): entry is [string, AnswerKeyOption] =>
+          ANSWER_OPTION_LABELS.includes(entry[1] as AnswerKeyOption),
+        )
+        .map(([key, value]) => [String(key), value]),
+    );
   }
 }

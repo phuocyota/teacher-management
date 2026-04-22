@@ -1,3 +1,5 @@
+import * as path from 'path';
+
 /**
  * PDF Parser Configuration Constants
  * Contains regex patterns, thresholds, and other configuration for PDF parsing
@@ -92,6 +94,9 @@ export const PDF_PARSER_CONFIG = {
     disableWorker: true,
     isEvalSupported: false,
     useWorkerFetch: false,
+    standardFontDataUrl: path
+      .resolve(process.cwd(), 'node_modules', 'pdfjs-dist', 'standard_fonts')
+      .replace(/\\/g, '/') + '/',
   },
 };
 

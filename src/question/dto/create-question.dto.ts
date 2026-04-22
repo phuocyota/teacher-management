@@ -1,4 +1,11 @@
-import { IsEnum, IsNotEmpty, IsOptional, IsString, IsUUID } from 'class-validator';
+import {
+  IsEnum,
+  IsNotEmpty,
+  IsOptional,
+  IsString,
+  IsUUID,
+  IsObject,
+} from 'class-validator';
 import { ApiProperty, PartialType } from '@nestjs/swagger';
 import { ContentTypes } from 'src/common/enum/content-type.enum';
 import { QuestionType } from '../enum/question-type.enum';
@@ -31,6 +38,16 @@ export class CreateQuestionDto {
     example: 'What is the capital of France?',
   })
   content!: string;
+
+  @IsObject()
+  @IsOptional()
+  @ApiProperty({
+    description: 'Metadata mo rong cho cac kieu cau hoi dac biet',
+    required: false,
+    type: Object,
+    additionalProperties: true,
+  })
+  meta?: Record<string, unknown>;
 
   @IsUUID()
   @IsOptional()

@@ -412,17 +412,10 @@ export class AttemptService {
       const selectedIdSet = new Set(selectedIds);
       const questionChain = await this.loadQuestionChain(rootQuestion.id);
       const answerOptions = answersByQuestionId.get(rootQuestion.id) ?? [];
-      const mappedAnswers: AttemptReviewAnswerOptionDto[] = await Promise.all(
-        answerOptions.map(async (answer) => {
-          const chain = await this.loadAnswerChain(answer.id);
-          const mappedChain = this.mapAnswerChain(chain);
-
-          return {
-            ...mappedChain,
-            isCorrect: Boolean(answer.isCorrect),
-            isSelected: selectedIdSet.has(answer.id),
-          };
-        }),
+      const mappedAnswers = await this.mapAttemptReviewAnswerOptions(
+        rootQuestion,
+        answerOptions,
+        selectedIdSet,
       );
 
       questions.push({
@@ -747,11 +740,9 @@ export class AttemptService {
 
       const questionChain = await this.loadQuestionChain(rootQuestion.id);
       const answerOptions = answersByQuestionId.get(rootQuestion.id) ?? [];
-      const mappedAnswers = await Promise.all(
-        answerOptions.map(async (answer) => {
-          const chain = await this.loadAnswerChain(answer.id);
-          return this.mapAnswerChain(chain);
-        }),
+      const mappedAnswers = await this.mapAttemptAnswerOptions(
+        rootQuestion,
+        answerOptions,
       );
 
       result.push({
@@ -913,8 +904,55 @@ export class AttemptService {
       type: item.type,
       contentType: item.contentType,
       content: item.content,
+      meta: item.meta ?? null,
       nextContent: item.nextContent ?? null,
     }));
+  }
+
+  private async mapAttemptAnswerOptions(
+    question: QuestionEntity,
+    answerOptions: AnswerEntity[],
+  ): Promise<AttemptAnswerOptionDto[]> {
+    if (this.shouldHideAnswerOptions(question.type)) {
+      return [];
+    }
+
+    return Promise.all(
+      answerOptions.map(async (answer) => {
+        const chain = await this.loadAnswerChain(answer.id);
+        return this.mapAnswerChain(chain);
+      }),
+    );
+  }
+
+  private async mapAttemptReviewAnswerOptions(
+    question: QuestionEntity,
+    answerOptions: AnswerEntity[],
+    selectedIdSet: Set<string>,
+  ): Promise<AttemptReviewAnswerOptionDto[]> {
+    if (this.shouldHideAnswerOptions(question.type)) {
+      return [];
+    }
+
+    return Promise.all(
+      answerOptions.map(async (answer) => {
+        const chain = await this.loadAnswerChain(answer.id);
+        const mappedChain = this.mapAnswerChain(chain);
+
+        return {
+          ...mappedChain,
+          isCorrect: Boolean(answer.isCorrect),
+          isSelected: selectedIdSet.has(answer.id),
+        };
+      }),
+    );
+  }
+
+  private shouldHideAnswerOptions(questionType: QuestionType): boolean {
+    return (
+      questionType === QuestionType.MATCHING ||
+      questionType === QuestionType.ORDERING
+    );
   }
 
   private validateSubmittedAnswerByQuestionType(

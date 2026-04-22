@@ -1,142 +1,29 @@
+import { BadRequestException } from '@nestjs/common';
 import { ContentTypes } from 'src/common/enum/content-type.enum';
 import { QuestionType } from 'src/question/enum/question-type.enum';
+import {
+  PageContent,
+  ParsedDocumentResult,
+  ParsedQuestionBlock,
+} from '../types/question-bank-import.types';
 import { QuestionBankImportService } from './question-bank-import.service';
 
 describe('QuestionBankImportService', () => {
-  it('creates a placeholder question part when a question only has answers', async () => {
-    const questionBankRepo = {
-      findOne: jest.fn(),
-      save: jest.fn(),
-    };
-    const questionBankQuestionRepo = {
-      create: jest.fn((value) => value),
-      save: jest.fn(),
-      count: jest.fn(),
-    };
-    const questionService = {
-      createBulk: jest.fn().mockResolvedValue([
-        {
-          id: 'question-1',
-          content: '',
-          contentType: ContentTypes.TEXT,
-          type: QuestionType.SINGLE_CHOICE,
-        },
-      ]),
-      updateBulk: jest.fn().mockResolvedValue([]),
-    };
-    const answerService = {
-      createBulk: jest
-        .fn()
-        .mockImplementation(async (answers) =>
-          answers.map((_: unknown, index: number) => ({ id: `answer-${index + 1}` })),
-        ),
-      updateBulk: jest.fn().mockResolvedValue([]),
-    };
-    const questionParser = {
-      getQuestionType: jest.fn().mockReturnValue(QuestionType.SINGLE_CHOICE),
-    };
-    const uploadService = {
-      saveBufferAsFile: jest.fn(),
-    };
-
-    const service = new QuestionBankImportService(
-      questionBankRepo as any,
-      questionBankQuestionRepo as any,
-      questionService as any,
-      answerService as any,
-      {} as any,
-      questionParser as any,
-      uploadService as any,
-    );
-
-    const createdQuestions: Array<{
-      id: string;
-      content: string;
-      type: QuestionType;
-      contentType: ContentTypes;
-      answerCount: number;
-    }> = [];
-
-    const result = await (service as any).flushQuestionBlock(
-      {
-        number: 16,
-        questionParts: [],
-        answerPartsList: [
-          [{ content: 'This is a pen.', contentType: ContentTypes.TEXT }],
-          [{ content: 'This are a pen.', contentType: ContentTypes.TEXT }],
-        ],
-        pendingAnswerMedia: [],
-        currentAnswerParts: null,
-      },
-      'question-bank-1',
-      createdQuestions,
-    );
-
-    expect(questionService.createBulk).toHaveBeenCalledWith([
-      {
-        type: QuestionType.SINGLE_CHOICE,
-        content: '',
-        contentType: ContentTypes.TEXT,
-        isRoot: true,
-      },
-    ]);
-    expect(answerService.createBulk).toHaveBeenCalledTimes(2);
-    expect(result).toEqual({ totalAnswers: 2 });
-    expect(createdQuestions).toEqual([
+  it('uploads image parts and stores the uploaded path in persisted answers', async () => {
+    const deps = createServiceDependencies();
+    deps.questionService.createBulk.mockResolvedValue([
       {
         id: 'question-1',
-        content: '',
-        type: QuestionType.SINGLE_CHOICE,
+        content: 'Question root',
         contentType: ContentTypes.TEXT,
-        answerCount: 2,
+        type: QuestionType.SINGLE_CHOICE,
       },
     ]);
-  });
-
-  it('uploads image parts and stores the uploaded path in content', async () => {
-    const questionBankRepo = {
-      findOne: jest.fn(),
-      save: jest.fn(),
-    };
-    const questionBankQuestionRepo = {
-      create: jest.fn((value) => value),
-      save: jest.fn(),
-      count: jest.fn(),
-    };
-    const questionService = {
-      createBulk: jest.fn().mockResolvedValue([
-        {
-          id: 'question-1',
-          content: '',
-          contentType: ContentTypes.TEXT,
-          type: QuestionType.SINGLE_CHOICE,
-        },
-      ]),
-      updateBulk: jest.fn().mockResolvedValue([]),
-    };
-    const answerService = {
-      createBulk: jest.fn().mockResolvedValue([{ id: 'answer-1' }]),
-      updateBulk: jest.fn().mockResolvedValue([]),
-    };
-    const questionParser = {
-      getQuestionType: jest.fn().mockReturnValue(QuestionType.SINGLE_CHOICE),
-    };
-    const uploadService = {
-      saveBufferAsFile: jest.fn().mockResolvedValue({
-        path: '/uploads/question-banks/question-bank-1/image-1.png',
-      }),
-    };
-
-    const service = new QuestionBankImportService(
-      questionBankRepo as any,
-      questionBankQuestionRepo as any,
-      questionService as any,
-      answerService as any,
-      {} as any,
-      questionParser as any,
-      uploadService as any,
-    );
-
+    deps.answerService.createBulk.mockResolvedValue([{ id: 'answer-1' }]);
+    deps.uploadService.saveBufferAsFile.mockResolvedValue({
+      path: '/uploads/question-banks/question-bank-1/image-1.png',
+    });
+    const service = createService(deps);
     const createdQuestions: Array<{
       id: string;
       content: string;
@@ -145,21 +32,20 @@ describe('QuestionBankImportService', () => {
       answerCount: number;
     }> = [];
 
-    await (service as any).flushQuestionBlock(
-      {
-        number: 1,
-        questionParts: [],
-        answerPartsList: [
-          [{ content: 'iVBORw0KGgo=', contentType: ContentTypes.IMAGE }],
-        ],
-        pendingAnswerMedia: [],
-        currentAnswerParts: null,
-      },
+    await (service as any).persistQuestionBlock(
       'question-bank-1',
+      createParsedQuestionBlock({
+        answers: [
+          {
+            label: 'A',
+            parts: [{ content: 'iVBORw0KGgo=', contentType: ContentTypes.IMAGE }],
+          },
+        ],
+      }),
       createdQuestions,
     );
 
-    expect(uploadService.saveBufferAsFile).toHaveBeenCalledWith(
+    expect(deps.uploadService.saveBufferAsFile).toHaveBeenCalledWith(
       expect.any(Buffer),
       expect.objectContaining({
         originalName: expect.stringContaining('pdf-image-'),
@@ -169,105 +55,59 @@ describe('QuestionBankImportService', () => {
         storedPathPrefix: '/uploads',
       }),
     );
-    expect(questionService.createBulk).toHaveBeenCalledWith([
-      {
-        type: QuestionType.SINGLE_CHOICE,
-        content: '',
-        contentType: ContentTypes.TEXT,
-        isRoot: true,
-      },
-    ]);
-    expect(answerService.createBulk).toHaveBeenCalledWith([
+    expect(deps.answerService.createBulk).toHaveBeenCalledWith([
       expect.objectContaining({
         questionId: 'question-1',
         content: '/uploads/question-banks/question-bank-1/image-1.png',
         contentType: ContentTypes.IMAGE,
+        meta: { importOptionLabel: 'A' },
       }),
     ]);
   });
 
-  it('marks only the first question part as root so chained parts do not appear as standalone questions', async () => {
-    const questionBankRepo = {
-      findOne: jest.fn(),
-      save: jest.fn(),
-    };
-    const questionBankQuestionRepo = {
-      create: jest.fn((value) => value),
-      save: jest.fn(),
-      count: jest.fn(),
-    };
-    const questionService = {
-      createBulk: jest.fn().mockResolvedValue([
-        {
-          id: 'question-1',
-          content: 'Part 1',
-          contentType: ContentTypes.TEXT,
-          type: QuestionType.SINGLE_CHOICE,
-          isRoot: true,
-        },
-        {
-          id: 'question-2',
-          content: 'Part 2',
-          contentType: ContentTypes.TEXT,
-          type: QuestionType.SINGLE_CHOICE,
-          isRoot: false,
-        },
-      ]),
-      updateBulk: jest.fn().mockResolvedValue([]),
-    };
-    const answerService = {
-      createBulk: jest.fn().mockResolvedValue([]),
-      updateBulk: jest.fn().mockResolvedValue([]),
-    };
-    const questionParser = {
-      getQuestionType: jest.fn().mockReturnValue(QuestionType.SINGLE_CHOICE),
-    };
-    const uploadService = {
-      saveBufferAsFile: jest.fn(),
-    };
-
-    const service = new QuestionBankImportService(
-      questionBankRepo as any,
-      questionBankQuestionRepo as any,
-      questionService as any,
-      answerService as any,
-      {} as any,
-      questionParser as any,
-      uploadService as any,
-    );
-
-    const createdQuestions: Array<{
-      id: string;
-      content: string;
-      type: QuestionType;
-      contentType: ContentTypes;
-      answerCount: number;
-    }> = [];
-
-    await (service as any).flushQuestionBlock(
+  it('marks only the first stem part as root when persisting chained question content', async () => {
+    const deps = createServiceDependencies();
+    deps.questionService.createBulk.mockResolvedValue([
       {
-        number: 1,
-        questionParts: [
+        id: 'question-1',
+        content: 'Part 1',
+        contentType: ContentTypes.TEXT,
+        type: QuestionType.TEXT_INPUT,
+        isRoot: true,
+      },
+      {
+        id: 'question-2',
+        content: 'Part 2',
+        contentType: ContentTypes.TEXT,
+        type: QuestionType.TEXT_INPUT,
+        isRoot: false,
+      },
+    ]);
+    const service = createService(deps);
+
+    await (service as any).persistQuestionBlock(
+      'question-bank-1',
+      createParsedQuestionBlock({
+        questionType: QuestionType.TEXT_INPUT,
+        kind: 'text_input',
+        stemParts: [
           { content: 'Part 1', contentType: ContentTypes.TEXT },
           { content: 'Part 2', contentType: ContentTypes.TEXT },
         ],
-        answerPartsList: [],
-        pendingAnswerMedia: [],
-        currentAnswerParts: null,
-      },
-      'question-bank-1',
-      createdQuestions,
+        answers: [],
+      }),
+      [],
     );
 
-    expect(questionService.createBulk).toHaveBeenCalledWith([
+    expect(deps.questionService.createBulk).toHaveBeenCalledWith([
       {
-        type: QuestionType.SINGLE_CHOICE,
+        type: QuestionType.TEXT_INPUT,
         content: 'Part 1',
         contentType: ContentTypes.TEXT,
         isRoot: true,
       },
       {
-        type: QuestionType.SINGLE_CHOICE,
+        type: QuestionType.TEXT_INPUT,
         content: 'Part 2',
         contentType: ContentTypes.TEXT,
         isRoot: false,
@@ -275,97 +115,247 @@ describe('QuestionBankImportService', () => {
     ]);
   });
 
-  it('detects matching questions and stores pair metadata on answers', async () => {
-    const questionBankRepo = {
+  it('filters repeated headers and footers without removing unique content', () => {
+    const service = createService(createServiceDependencies());
+    const filtered = (service as any).filterPageArtifacts([
+      createPage(1, [
+        'HEADER SHARED',
+        'Cau 1. Noi dung trang 1',
+        'A. Lua chon A',
+        'FOOTER SHARED 1',
+      ]),
+      createPage(2, [
+        'HEADER SHARED',
+        'Cau 2. Noi dung trang 2',
+        'B. Lua chon B',
+        'FOOTER SHARED 2',
+      ]),
+      createPage(3, [
+        'HEADER UNIQUE',
+        'Cau 3. Noi dung trang 3',
+        'C. Lua chon C',
+        'FOOTER UNIQUE 3',
+      ]),
+    ]) as PageContent[];
+
+    expect(filtered[0].lines.map((line) => line.fragments[0].content)).toEqual([
+      'Cau 1. Noi dung trang 1',
+      'A. Lua chon A',
+    ]);
+    expect(filtered[1].lines.map((line) => line.fragments[0].content)).toEqual([
+      'Cau 2. Noi dung trang 2',
+      'B. Lua chon B',
+    ]);
+    expect(filtered[2].lines.map((line) => line.fragments[0].content)).toEqual([
+      'HEADER UNIQUE',
+      'Cau 3. Noi dung trang 3',
+      'C. Lua chon C',
+      'FOOTER UNIQUE 3',
+    ]);
+  });
+
+  it('does not treat answer anchor lines above image-only answers as repeated footers', () => {
+    const service = createService(createServiceDependencies());
+    const filtered = (service as any).filterPageArtifacts([
+      createMixedPage(5, [
+        createTextLine(5, 0, 'HEADER SHARED'),
+        createTextLine(5, 1, 'Cau 9. Noi dung trang 5'),
+        createTextLine(5, 2, 'A.'),
+        createTextLine(5, 3, 'B.'),
+        createImageLine(5, 4, 'answer-a-image'),
+        createImageLine(5, 5, 'answer-b-image'),
+      ]),
+      createMixedPage(6, [
+        createTextLine(6, 0, 'HEADER SHARED'),
+        createTextLine(6, 1, 'Cau 10. Noi dung trang 6'),
+        createTextLine(6, 2, 'A.'),
+        createTextLine(6, 3, 'B.'),
+        createImageLine(6, 4, 'answer-a-image'),
+        createImageLine(6, 5, 'answer-b-image'),
+      ]),
+    ]) as PageContent[];
+
+    expect(filtered[0].lines.map((line) => line.fragments[0].content)).toEqual([
+      'Cau 9. Noi dung trang 5',
+      'A.',
+      'B.',
+      'answer-a-image',
+      'answer-b-image',
+    ]);
+    expect(filtered[1].lines.map((line) => line.fragments[0].content)).toEqual([
+      'Cau 10. Noi dung trang 6',
+      'A.',
+      'B.',
+      'answer-a-image',
+      'answer-b-image',
+    ]);
+  });
+
+  it('fails before persistence when a recognized but unsupported question type is detected', async () => {
+    const deps = createServiceDependencies();
+    deps.questionBankRepo.findOne.mockResolvedValue({
+      id: 'question-bank-1',
+      totalQuestions: 0,
+    });
+    deps.questionParser.parsePages.mockResolvedValue({
+      questions: [
+        createParsedQuestionBlock({
+          number: 9,
+          kind: 'matching',
+          questionType: QuestionType.MATCHING,
+          answers: [],
+        }),
+      ],
+      answerKey: {},
+    } satisfies ParsedDocumentResult);
+    const service = createService(deps);
+    jest
+      .spyOn(service as any, 'readPdfPages')
+      .mockResolvedValue([createPage(1, ['Cau 9. Em hay noi cot A voi cot B'])]);
+
+    await expect(
+      service.importExamFromPdf('question-bank-1', Buffer.from('pdf')),
+    ).rejects.toThrow(BadRequestException);
+    expect(deps.questionService.createBulk).not.toHaveBeenCalled();
+    expect(deps.answerService.createBulk).not.toHaveBeenCalled();
+    expect(deps.questionBankQuestionRepo.count).not.toHaveBeenCalled();
+  });
+});
+
+function createServiceDependencies() {
+  return {
+    questionBankRepo: {
       findOne: jest.fn(),
       save: jest.fn(),
-    };
-    const questionBankQuestionRepo = {
+    },
+    questionBankQuestionRepo: {
       create: jest.fn((value) => value),
       save: jest.fn(),
       count: jest.fn(),
-    };
-    const questionService = {
-      createBulk: jest.fn().mockResolvedValue([
-        {
-          id: 'question-1',
-          content: 'Em hãy nối hành vi ở cột A với kết quả đúng ở cột B',
-          contentType: ContentTypes.TEXT,
-          type: QuestionType.MATCHING,
-          isRoot: true,
-        },
-      ]),
+    },
+    questionService: {
+      createBulk: jest.fn(),
       updateBulk: jest.fn().mockResolvedValue([]),
-    };
-    const answerService = {
-      createBulk: jest
-        .fn()
-        .mockImplementation(async (answers) =>
-          answers.map((answer: any, index: number) => ({
-            id: `answer-${index + 1}`,
-            ...answer,
-          })),
-        ),
+    },
+    answerService: {
+      createBulk: jest.fn(),
       updateBulk: jest.fn().mockResolvedValue([]),
-    };
-    const questionParser = {
-      getQuestionType: jest.fn().mockReturnValue(QuestionType.TEXT_INPUT),
-    };
-    const uploadService = {
+    },
+    pdfImageExtractor: {
+      extractPageImages: jest.fn(),
+    },
+    questionParser: {
+      parsePages: jest.fn(),
+    },
+    uploadService: {
       saveBufferAsFile: jest.fn(),
-    };
+    },
+  };
+}
 
-    const service = new QuestionBankImportService(
-      questionBankRepo as any,
-      questionBankQuestionRepo as any,
-      questionService as any,
-      answerService as any,
-      {} as any,
-      questionParser as any,
-      uploadService as any,
-    );
+function createService(
+  deps: ReturnType<typeof createServiceDependencies>,
+): QuestionBankImportService {
+  return new QuestionBankImportService(
+    deps.questionBankRepo as any,
+    deps.questionBankQuestionRepo as any,
+    deps.questionService as any,
+    deps.answerService as any,
+    deps.pdfImageExtractor as any,
+    deps.questionParser as any,
+    deps.uploadService as any,
+  );
+}
 
-    const createdQuestions: Array<{
-      id: string;
-      content: string;
-      type: QuestionType;
-      contentType: ContentTypes;
-      answerCount: number;
-    }> = [];
-
-    await (service as any).flushQuestionBlock(
+function createParsedQuestionBlock(
+  overrides: Partial<ParsedQuestionBlock> = {},
+): ParsedQuestionBlock {
+  return {
+    number: 1,
+    pageNumber: 1,
+    stemParts: [{ content: 'Question root', contentType: ContentTypes.TEXT }],
+    answers: [
       {
-        number: 5,
-        questionParts: [
-          {
-            content:
-              'Em hãy nối hành vi ở cột A với kết quả đúng ở cột B 1. Giữ gìn đồ dùng cá nhân 2. Giúp đỡ bạn bè 3. Lễ phép với người lớn a. Được mọi người yêu quý b. Đồ dùng bền và gọn gàng c. Có thêm bạn tốt',
-            contentType: ContentTypes.TEXT,
-          },
-        ],
-        answerPartsList: [],
-        pendingAnswerMedia: [],
-        currentAnswerParts: null,
+        label: 'A',
+        parts: [{ content: 'Lua chon A', contentType: ContentTypes.TEXT }],
       },
-      'question-bank-1',
-      createdQuestions,
-    );
+      {
+        label: 'B',
+        parts: [{ content: 'Lua chon B', contentType: ContentTypes.TEXT }],
+      },
+    ],
+    kind: 'single_choice',
+    questionType: QuestionType.SINGLE_CHOICE,
+    ...overrides,
+  };
+}
 
-    expect(questionService.createBulk).toHaveBeenCalledWith([
-      expect.objectContaining({
-        type: QuestionType.MATCHING,
-        isRoot: true,
-      }),
-    ]);
-    expect(answerService.createBulk).toHaveBeenCalledWith([
-      expect.objectContaining({
-        content: 'Giữ gìn đồ dùng cá nhân',
-        meta: expect.objectContaining({
-          kind: 'matching',
-          leftKey: '1',
-          rightKey: 'a',
-        }),
-      }),
-    ]);
-  });
-});
+function createPage(pageNumber: number, textLines: string[]): PageContent {
+  return {
+    pageNumber,
+    lines: textLines.map((content, index) => ({
+      y: (index + 1) * 10,
+      x: 10,
+      fragments: [
+        {
+          kind: 'text' as const,
+          content,
+          x: 10,
+          y: (index + 1) * 10,
+          width: 100,
+          height: 10,
+          pageNumber,
+          order: index,
+        },
+      ],
+    })),
+  };
+}
+
+function createMixedPage(
+  pageNumber: number,
+  lines: PageContent['lines'],
+): PageContent {
+  return {
+    pageNumber,
+    lines,
+  };
+}
+
+function createTextLine(pageNumber: number, order: number, content: string) {
+  return {
+    y: (order + 1) * 10,
+    x: 10,
+    fragments: [
+      {
+        kind: 'text' as const,
+        content,
+        x: 10,
+        y: (order + 1) * 10,
+        width: 100,
+        height: 10,
+        pageNumber,
+        order,
+      },
+    ],
+  };
+}
+
+function createImageLine(pageNumber: number, order: number, content: string) {
+  return {
+    y: (order + 1) * 10,
+    x: 10,
+    fragments: [
+      {
+        kind: 'image' as const,
+        content,
+        x: 10,
+        y: (order + 1) * 10,
+        width: 100,
+        height: 10,
+        pageNumber,
+        order,
+      },
+    ],
+  };
+}

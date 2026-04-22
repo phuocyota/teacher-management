@@ -30,6 +30,14 @@ export class NextContentDto {
     example: ContentTypes.IMAGE,
   })
   contentType!: ContentTypes;
+
+  @ApiProperty({
+    description: 'Metadata mo rong cho cac kieu cau hoi dac biet',
+    required: false,
+    nullable: true,
+    type: Object,
+  })
+  meta?: Record<string, unknown> | null;
 }
 
 export class QuestionChainNodeDto {
@@ -51,6 +59,14 @@ export class QuestionChainNodeDto {
     example: ContentTypes.IMAGE,
   })
   contentType!: ContentTypes;
+
+  @ApiProperty({
+    description: 'Metadata mo rong cho cac kieu cau hoi dac biet',
+    required: false,
+    nullable: true,
+    type: Object,
+  })
+  meta?: Record<string, unknown> | null;
 
   @ApiProperty({
     description: 'ID cua noi dung tiep theo',
@@ -95,6 +111,14 @@ export class QuestionResponseDto extends BaseDto {
     example: 'What is the capital of France?',
   })
   content!: string;
+
+  @ApiProperty({
+    description: 'Metadata mo rong cho cac kieu cau hoi dac biet',
+    required: false,
+    nullable: true,
+    type: Object,
+  })
+  meta?: Record<string, unknown> | null;
 
   @ApiProperty({
     description: 'Danh dau day co phai question goc cua chain hay khong',

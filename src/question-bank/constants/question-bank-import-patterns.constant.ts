@@ -1,7 +1,4 @@
-/**
- * Common question and answer patterns seen in imported PDF exam files.
- * Keep this file as the single place to extend parsing heuristics.
- */
+import { AnswerOptionLabel } from '../types/question-bank-import.types';
 
 export interface QuestionStartPatternDefinition {
   name: string;
@@ -10,48 +7,55 @@ export interface QuestionStartPatternDefinition {
 
 export const QUESTION_START_PATTERNS: QuestionStartPatternDefinition[] = [
   {
-    name: 'vn_question_prefix',
+    name: 'vn_or_en_question_prefix',
     pattern:
-      /^(?:(?:Câu|Question)\s*(\d+)\s*[:\.]?\s*(.*)|(\d+)\s*[\.:]+\s*(.*))$/i,
+      /^(?:(?:C(?:\u00e2u|au)|Question)\s*(\d+)\s*[:.]?\s*(.*)|(\d+)\s*[.:]+\s*(.*))$/iu,
   },
   {
-    name: 'vn_question_prefix_with_dash',
+    name: 'vn_or_en_question_prefix_with_dash',
     pattern:
-      /^(?:(?:Câu|Question)\s*(\d+)\s*[-–—]\s*(.*)|(\d+)\s*[-–—]\s*(.*))$/i,
+      /^(?:(?:C(?:\u00e2u|au)|Question)\s*(\d+)\s*[-\u2013\u2014]\s*(.*)|(\d+)\s*[-\u2013\u2014]\s*(.*))$/iu,
   },
 ];
 
-export const ANSWER_LINE_PATTERNS: RegExp[] = [
-  /^([A-Da-d])\s*[\.\)\:\-]\s*/,
-];
+export const ANSWER_OPTION_LABELS: AnswerOptionLabel[] = ['A', 'B', 'C', 'D'];
 
-export const ANSWER_SEGMENT_PATTERNS: RegExp[] = [
-  /([A-Da-d])\s*[\.\)\:\-]\s*/g,
-];
+export const ANSWER_SEGMENT_PATTERN = /([A-Da-d])\s*[\.\)\:\-]\s*/g;
 
 export const ANSWER_KEY_START_PATTERNS: RegExp[] = [
-  /^(?:[\*\u2022]\s*)?(?:Đáp\s*án|Answer\s*Key|ĐA)\s*:?\s*$/i,
+  /^(?:[\*\u2022]\s*)?(?:\u0110\u00e1p\s*\u00e1n|Dap\s*an|Answer\s*Key|\u0110A|DA)\s*:?\s*$/iu,
 ];
 
 export const ANSWER_KEY_ENTRY_PATTERNS: RegExp[] = [
-  /(?:Câu|Question)\s*(\d+)\s*[:.\-]?\s*([A-Da-d])(?:\b|$)/gi,
-];
-
-export const NOISE_LINE_PATTERNS: RegExp[] = [
-  /^CHƯƠNG\s+TRÌNH\s+GIÁO\s+DỤC\s+KỸ\s+NĂNG\s+SỐNG(?:\s*_?\s*ICHISKILL)?$/iu,
-  /^Khối\s+\d+\s*\.\s*Đề kiểm tra học kì\s+[IVX]+\s+\d+$/iu,
-  /^chuong trinh giao duc ky nang song(?:\s*_?\s*ichiskill)?$/i,
-  /^khoi\s+\d+\s*\.\s*de kiem tra hoc ki\s+[ivx]+\s+\d+$/i,
+  /(?:C(?:\u00e2u|au)|Question)\s*(\d+)\s*[:.\-]?\s*([A-Da-d])(?:\b|$)/giu,
+  /(?:^|[,\s])(\d+)\s*[\.\)\:\-]\s*([A-Da-d])(?:\b|$)/g,
 ];
 
 export const FIGURE_LABEL_PATTERNS: RegExp[] = [
-  /^(?:Hình|Hinh)\s+\d+[\.:]?$/i,
+  /^(?:H(?:\u00ecnh|inh))\s+\d+[\.:]?$/iu,
 ];
 
-export const QUESTION_GROUP_HINT_PATTERNS: RegExp[] = [
-  /\bnối\b/i,
-  /\bghép\b/i,
+export const MATCHING_HINT_PATTERNS: RegExp[] = [
+  /\bnoi\s+cot\b/i,
+  /\bnoi\s+cau\b/i,
+  /\bghep\s+noi\b/i,
   /\bmatch\b/i,
-  /\bđiền\b/i,
-  /\bchọn\b/i,
+  /\bcot\s*a\b/i,
+  /\bcot\s*b\b/i,
+];
+
+export const ORDERING_HINT_PATTERNS: RegExp[] = [
+  /\bsap\s*xep\b/i,
+  /\bthu\s*tu\b/i,
+  /\bdung\s*thu\s*tu\b/i,
+  /\bdien\s*so\b/i,
+  /\bdanh\s*so\b/i,
+];
+
+export const MULTIPLE_CHOICE_HINT_PATTERNS: RegExp[] = [
+  /\bchon\s*nhieu\b/i,
+  /\bnhieu\s*dap\s*an\b/i,
+  /\bchon\s*tat\s*ca\b/i,
+  /\ball\s*that\s*apply\b/i,
+  /\bmultiple\s*answers?\b/i,
 ];

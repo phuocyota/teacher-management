@@ -1,534 +1,689 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ContentTypes } from 'src/common/enum/content-type.enum';
-import { QuestionType } from 'src/question/enum/question-type.enum';
-import { PDF_PARSER_CONFIG } from '../constants/pdf-parser.constant';
-import {
-  ANSWER_KEY_ENTRY_PATTERNS,
-  ANSWER_KEY_START_PATTERNS,
-  ANSWER_LINE_PATTERNS,
-  ANSWER_SEGMENT_PATTERNS,
-  FIGURE_LABEL_PATTERNS,
-  NOISE_LINE_PATTERNS,
-  QUESTION_START_PATTERNS,
-} from '../constants/question-bank-import-patterns.constant';
+import { PdfParsingError } from '../exceptions/pdf-parsing.exception';
 import {
   AnswerKeyOption,
+  AnswerOptionLabel,
+  ImportedContentPart,
+  LayoutFragment,
   PageContent,
-  PdfParserState,
-  QuestionBlockState,
+  ParsedAnswerOption,
+  ParsedDocumentResult,
+  ParsedQuestionBlock,
 } from '../types/question-bank-import.types';
+import {
+  AnswerSegment,
+  appendLineToParts,
+  extractAnswerKeyEntries,
+  extractAnswerSegments,
+  extractQuestionStart,
+  isAnswerKeyStart,
+  QuestionStartMatch,
+  sanitizeCommonPdfLine,
+  splitInlineAnswerKeyLine,
+} from '../utils/question-parser.utils';
+import { mergeImportText } from '../utils/question-import-text.utils';
+import { classifyQuestionType } from '../utils/question-type-classifier.utils';
+
+interface DraftQuestionBlock {
+  number: number;
+  pageNumber: number;
+  stemParts: ImportedContentPart[];
+  answers: ParsedAnswerOption[];
+  currentAnswer: ParsedAnswerOption | null;
+  pendingAnswerAnchors: PendingAnswerAnchor[];
+}
+
+interface ParserRuntimeState {
+  currentQuestion: DraftQuestionBlock | null;
+  parsedQuestions: ParsedQuestionBlock[];
+  answerKey: Record<number, AnswerKeyOption>;
+}
+
+interface PendingAnswerAnchor {
+  label: AnswerOptionLabel;
+  x: number;
+  answer: ParsedAnswerOption;
+}
+
+type TextLayoutFragment = LayoutFragment & { kind: 'text' };
+type ImageLayoutFragment = LayoutFragment & { kind: 'image' };
+
+type ParseEvent =
+  | { kind: 'question_start'; number: number }
+  | { kind: 'text'; text: string }
+  | { kind: 'answer_start'; label: AnswerOptionLabel; text: string };
+
+interface ProcessLineResult {
+  shouldEnterAnswerKey: boolean;
+  inlineAnswerKeyText?: string;
+}
 
 @Injectable()
 export class QuestionParserService {
   private readonly logger = new Logger(QuestionParserService.name);
 
-  async processPageContent(
-    pageContent: PageContent,
-    parserState: PdfParserState | null,
-  ): Promise<{
-    parserState: PdfParserState;
-    completedQuestions: QuestionBlockState[];
-    totalAnswers: number;
-  }> {
-    let currentState = this.initializeParserState(parserState);
-    let totalAnswers = 0;
-    const completedQuestions: QuestionBlockState[] = [];
+  async parsePages(pages: PageContent[]): Promise<ParsedDocumentResult> {
+    const runtimeState: ParserRuntimeState = {
+      currentQuestion: null,
+      parsedQuestions: [],
+      answerKey: {},
+    };
+    const flattenedLines = pages.flatMap((page) =>
+      page.lines.map((line) => ({
+        pageNumber: page.pageNumber,
+        line,
+      })),
+    );
 
-    for (const line of pageContent.lines) {
-      let lineBuffer = '';
+    for (let index = 0; index < flattenedLines.length; index++) {
+      const { line, pageNumber } = flattenedLines[index];
+      const lineResult = this.processLine(line, runtimeState, pageNumber);
 
-      for (const fragment of line.fragments) {
-        if (fragment.kind === 'image') {
-          if (lineBuffer.trim().length > 0) {
-            const processed = this.processTextLine(
-              lineBuffer,
-              currentState,
-              pageContent.pageNumber,
-            );
-            currentState = processed.parserState;
-
-            if (processed.completedQuestion) {
-              completedQuestions.push(processed.completedQuestion);
-            }
-
-            lineBuffer = '';
-          }
-
-          currentState = {
-            ...currentState,
-            currentQuestion: this.appendImageToState(
-              currentState.currentQuestion,
-              fragment.content,
-            ),
-          };
-          continue;
-        }
-
-        lineBuffer = this.mergeLineText(lineBuffer, fragment.content);
+      if (!lineResult.shouldEnterAnswerKey) {
+        continue;
       }
 
-      if (lineBuffer.trim().length > 0) {
-        const processed = this.processTextLine(
-          lineBuffer,
-          currentState,
-          pageContent.pageNumber,
-        );
-        currentState = processed.parserState;
+      this.finalizeCurrentQuestion(runtimeState);
+      const inlineAnswerKeyLines = lineResult.inlineAnswerKeyText
+        ? [
+            {
+              text: lineResult.inlineAnswerKeyText,
+              pageNumber,
+            },
+          ]
+        : [];
 
-        if (processed.completedQuestion) {
-          completedQuestions.push(processed.completedQuestion);
-        }
+      runtimeState.answerKey = {
+        ...runtimeState.answerKey,
+        ...this.parseAnswerKeySection([
+          ...inlineAnswerKeyLines,
+          ...flattenedLines.slice(index + 1).map((entry) => ({
+            pageNumber: entry.pageNumber,
+            text: this.composeTextLine(entry.line),
+          })),
+        ]),
+      };
+      break;
+    }
+
+    this.finalizeCurrentQuestion(runtimeState);
+
+    return {
+      questions: runtimeState.parsedQuestions,
+      answerKey: runtimeState.answerKey,
+    };
+  }
+
+  private processLine(
+    line: PageContent['lines'][number],
+    runtimeState: ParserRuntimeState,
+    pageNumber: number,
+  ): ProcessLineResult {
+    const currentQuestion = runtimeState.currentQuestion;
+
+    if (currentQuestion?.pendingAnswerAnchors.length) {
+      const consumedPendingLine = this.tryAppendPendingAnswerLine(
+        currentQuestion,
+        line,
+      );
+
+      if (consumedPendingLine) {
+        return { shouldEnterAnswerKey: false };
       }
     }
 
-    return { parserState: currentState, completedQuestions, totalAnswers };
+    if (currentQuestion) {
+      const answerAnchors = this.detectBareAnswerAnchorLine(line);
+
+      if (answerAnchors) {
+        this.queuePendingAnswerAnchors(
+          currentQuestion,
+          answerAnchors,
+          pageNumber,
+        );
+        return { shouldEnterAnswerKey: false };
+      }
+    }
+
+    let lineBuffer = '';
+
+    for (const fragment of line.fragments) {
+      if (fragment.kind === 'image') {
+        if (lineBuffer.trim()) {
+          const lineResult = this.processTextLine(
+            lineBuffer,
+            runtimeState,
+            pageNumber,
+          );
+
+          if (lineResult.shouldEnterAnswerKey) {
+            return lineResult;
+          }
+        }
+
+        lineBuffer = '';
+        this.appendImage(fragment.content, runtimeState, pageNumber);
+        continue;
+      }
+
+      lineBuffer = mergeImportText(lineBuffer, fragment.content);
+    }
+
+    if (!lineBuffer.trim()) {
+      return { shouldEnterAnswerKey: false };
+    }
+
+    return this.processTextLine(lineBuffer, runtimeState, pageNumber);
   }
 
   private processTextLine(
     line: string,
-    parserState: PdfParserState,
+    runtimeState: ParserRuntimeState,
     pageNumber: number,
-  ): {
-    parserState: PdfParserState;
-    completedQuestion: QuestionBlockState | null;
-    totalAnswers: number;
-  } {
-    const normalizedLine = this.sanitizeCommonPdfLine(line, pageNumber);
+  ): ProcessLineResult {
+    const normalizedLine = sanitizeCommonPdfLine(line, pageNumber);
 
     if (!normalizedLine) {
-      return {
-        parserState,
-        completedQuestion: null,
-        totalAnswers: 0,
-      };
+      return { shouldEnterAnswerKey: false };
     }
 
-    if (this.isAnswerKeyStart(normalizedLine)) {
-      const completedQuestion = this.hasImportableContent(
-        parserState.currentQuestion,
-      )
-        ? parserState.currentQuestion
-        : null;
+    const inlineAnswerKey = splitInlineAnswerKeyLine(normalizedLine);
+    if (inlineAnswerKey) {
+      if (inlineAnswerKey.questionText) {
+        const prefixResult = this.processTextLine(
+          inlineAnswerKey.questionText,
+          runtimeState,
+          pageNumber,
+        );
 
-      return {
-        parserState: {
-          ...parserState,
-          mode: 'answer_key',
-          currentQuestion: null,
-        },
-        completedQuestion,
-        totalAnswers: 0,
-      };
-    }
-
-    if (parserState.mode === 'answer_key') {
-      return {
-        parserState: {
-          ...parserState,
-          answerKey: {
-            ...parserState.answerKey,
-            ...this.extractAnswerKeyEntries(normalizedLine),
-          },
-        },
-        completedQuestion: null,
-        totalAnswers: 0,
-      };
-    }
-
-    const questionStart = this.extractQuestionStart(normalizedLine);
-
-    if (questionStart) {
-      const completedQuestion = this.hasImportableContent(
-        parserState.currentQuestion,
-      )
-        ? parserState.currentQuestion
-        : null;
-
-      const currentQuestion: QuestionBlockState = {
-        number: questionStart.number,
-        questionParts: [],
-        answerPartsList: [],
-        pendingAnswerMedia: [],
-        currentAnswerParts: null,
-      };
-
-      this.appendLineToParts(currentQuestion.questionParts, questionStart.content);
-
-      return {
-        parserState: {
-          ...parserState,
-          currentQuestion,
-        },
-        completedQuestion,
-        totalAnswers: 0,
-      };
-    }
-
-    if (!parserState.currentQuestion) {
-      return {
-        parserState,
-        completedQuestion: null,
-        totalAnswers: 0,
-      };
-    }
-
-    const answerSegments = this.extractAnswerSegments(normalizedLine);
-
-    if (answerSegments.length > 0) {
-      const pendingAnswerMedia = [
-        ...parserState.currentQuestion.pendingAnswerMedia,
-      ];
-      parserState.currentQuestion.pendingAnswerMedia = [];
-
-      for (const [index, answerSegment] of answerSegments.entries()) {
-        const answerParts: Array<{
-          content: string;
-          contentType: ContentTypes;
-        }> = [];
-
-        if (pendingAnswerMedia[index]) {
-          answerParts.push(pendingAnswerMedia[index]);
-        }
-
-        parserState.currentQuestion.answerPartsList.push(answerParts);
-        parserState.currentQuestion.currentAnswerParts = answerParts;
-        this.appendLineToParts(answerParts, answerSegment);
-      }
-
-      if (pendingAnswerMedia.length > answerSegments.length) {
-        const fallbackAnswer =
-          parserState.currentQuestion.answerPartsList[
-            parserState.currentQuestion.answerPartsList.length - 1
-          ];
-
-        for (
-          let index = answerSegments.length;
-          index < pendingAnswerMedia.length;
-          index++
-        ) {
-          fallbackAnswer.push(pendingAnswerMedia[index]);
+        if (prefixResult.shouldEnterAnswerKey) {
+          return prefixResult;
         }
       }
-    } else if (parserState.currentQuestion.currentAnswerParts) {
-      this.appendLineToParts(
-        parserState.currentQuestion.currentAnswerParts,
-        normalizedLine,
-      );
-    } else {
-      this.appendLineToParts(
-        parserState.currentQuestion.questionParts,
-        normalizedLine,
-      );
+
+      return {
+        shouldEnterAnswerKey: true,
+        inlineAnswerKeyText: inlineAnswerKey.answerText,
+      };
     }
 
-    return {
-      parserState,
-      completedQuestion: null,
-      totalAnswers: 0,
-    };
-  }
-
-  private initializeParserState(
-    parserState: PdfParserState | null,
-  ): PdfParserState {
-    return (
-      parserState ?? {
-        mode: 'questions',
-        currentQuestion: null,
-        answerKey: {},
-      }
-    );
-  }
-
-  private isAnswerLine(line: string): boolean {
-    const normalized = line.trim();
-
-    return this.matchesAnyPattern(normalized, ANSWER_LINE_PATTERNS);
-  }
-
-  private isAnswerKeyStart(line: string): boolean {
-    const normalized = line.trim();
-
-    return this.matchesAnyPattern(normalized, ANSWER_KEY_START_PATTERNS);
-  }
-
-  private isNoiseLine(line: string): boolean {
-    const compactLine = line.replace(/\s+/g, ' ').trim();
-    const normalizedLine = this.normalizeLineForNoiseMatch(line);
-
-    return (
-      FIGURE_LABEL_PATTERNS.some(
-        (pattern) => pattern.test(compactLine) || pattern.test(normalizedLine),
-      ) ||
-      NOISE_LINE_PATTERNS.some(
-        (pattern) => pattern.test(compactLine) || pattern.test(normalizedLine),
-      )
-    );
-  }
-
-  private sanitizeCommonPdfLine(
-    line: string,
-    pageNumber: number,
-  ): string | null {
-    const compactLine = line.replace(/\s+/g, ' ').trim();
-
-    if (!compactLine) {
-      return null;
-    }
-
-    if (this.isStandalonePageNumber(compactLine, pageNumber)) {
-      return null;
-    }
-
-    if (this.isNoiseLine(compactLine)) {
-      return null;
-    }
-
-    const withoutTrailingPageNumber = this.stripTrailingPageNumber(
-      compactLine,
-      pageNumber,
-    );
-
-    if (!withoutTrailingPageNumber || this.isNoiseLine(withoutTrailingPageNumber)) {
-      return null;
-    }
-
-    return withoutTrailingPageNumber;
-  }
-
-  private isStandalonePageNumber(line: string, pageNumber: number): boolean {
-    if (!/^\d+$/.test(line)) {
-      return false;
-    }
-
-    return Number.parseInt(line, 10) === pageNumber;
-  }
-
-  private stripTrailingPageNumber(line: string, pageNumber: number): string {
-    if (pageNumber <= 0) {
-      return line;
+    if (isAnswerKeyStart(normalizedLine)) {
+      return { shouldEnterAnswerKey: true };
     }
 
     if (
-      this.isAnswerLine(line) ||
-      this.isAnswerKeyStart(line) ||
-      this.extractQuestionStart(line) ||
-      Object.keys(this.extractAnswerKeyEntries(line)).length > 0
+      runtimeState.currentQuestion &&
+      this.shouldAppendLineToStem(runtimeState.currentQuestion, normalizedLine)
     ) {
-      return line;
+      this.appendStemText(runtimeState.currentQuestion, normalizedLine);
+      return { shouldEnterAnswerKey: false };
     }
 
-    const trailingPageNumberPattern = new RegExp(`^(.*\\S)\\s+${pageNumber}$`, 'u');
-    const match = line.match(trailingPageNumberPattern);
-
-    if (!match) {
-      return line;
+    for (const event of this.splitLineIntoEvents(normalizedLine)) {
+      this.applyEvent(event, runtimeState, pageNumber);
     }
 
-    const candidate = match[1].trim();
-
-    if (candidate.split(/\s+/).length < 4) {
-      return line;
-    }
-
-    return candidate;
+    return { shouldEnterAnswerKey: false };
   }
 
-  private extractAnswerSegments(line: string): string[] {
-    if (!this.isAnswerLine(line)) {
-      return [];
-    }
+  private splitLineIntoEvents(line: string): ParseEvent[] {
+    const questionStart = this.detectQuestionStart(line);
 
-    const normalizedLine = line.trim();
-    const pattern = ANSWER_SEGMENT_PATTERNS.find((candidate) =>
-      this.matchesPattern(normalizedLine, candidate),
-    );
-
-    if (!pattern) {
-      return [];
-    }
-
-    pattern.lastIndex = 0;
-    const matches = [
-      ...normalizedLine.matchAll(
-        new RegExp(pattern.source, pattern.flags),
-      ),
-    ].filter((match) => typeof match.index === 'number');
-
-    if (matches.length === 0 || matches[0].index !== 0) {
-      return [];
-    }
-
-    return matches
-      .map((match, index) => {
-        const startIndex = (match.index ?? 0) + match[0].length;
-        const endIndex =
-          index + 1 < matches.length
-            ? (matches[index + 1].index ?? normalizedLine.length)
-            : normalizedLine.length;
-
-        return normalizedLine.slice(startIndex, endIndex).trim();
-      })
-      .filter((segment) => segment.length > 0);
-  }
-
-  private extractAnswerKeyEntries(
-    line: string,
-  ): Record<number, AnswerKeyOption> {
-    const answerKeyEntries: Record<number, AnswerKeyOption> = {};
-    const matches = ANSWER_KEY_ENTRY_PATTERNS.flatMap((pattern) => [
-      ...line.matchAll(new RegExp(pattern.source, pattern.flags)),
-    ]);
-
-    for (const match of matches) {
-      const questionNumber = Number.parseInt(match[1], 10);
-      const answer = match[2]?.toUpperCase() as AnswerKeyOption | undefined;
-
-      if (
-        Number.isNaN(questionNumber) ||
-        !answer ||
-        !['A', 'B', 'C', 'D'].includes(answer)
-      ) {
-        continue;
-      }
-
-      answerKeyEntries[questionNumber] = answer;
-    }
-
-    return answerKeyEntries;
-  }
-
-  private extractQuestionStart(
-    line: string,
-  ): { number: number; content: string } | null {
-    for (const pattern of QUESTION_START_PATTERNS) {
-      const match = line.match(pattern.pattern);
-
-      if (!match) {
-        continue;
-      }
-
-      const questionNumber = match[1] ?? match[3];
-      const questionContent = this.normalizeQuestionContent(
-        match[2] ?? match[4] ?? '',
+    if (questionStart) {
+      const answerDetection = this.detectAnswerSegments(
+        questionStart.content,
+        true,
       );
-      const parsedNumber = Number.parseInt(questionNumber, 10);
+      const events: ParseEvent[] = [
+        {
+          kind: 'question_start',
+          number: questionStart.number,
+        },
+      ];
 
-      if (Number.isNaN(parsedNumber)) {
-        continue;
+      if (answerDetection.leadingText) {
+        events.push({
+          kind: 'text',
+          text: answerDetection.leadingText,
+        });
       }
 
-      return {
-        number: parsedNumber,
-        content: questionContent,
-      };
+      events.push(
+        ...answerDetection.segments.map((segment) => ({
+          kind: 'answer_start' as const,
+          label: segment.label,
+          text: segment.content,
+        })),
+      );
+
+      return events;
     }
 
-    return null;
+    const answerDetection = this.detectAnswerSegments(line);
+    if (answerDetection.segments.length > 0) {
+      return answerDetection.segments.map((segment) => ({
+        kind: 'answer_start' as const,
+        label: segment.label,
+        text: segment.content,
+      }));
+    }
+
+    return [
+      {
+        kind: 'text',
+        text: line,
+      },
+    ];
   }
 
-  private hasImportableContent(
-    currentState: QuestionBlockState | null,
-  ): currentState is QuestionBlockState {
-    if (!currentState) {
-      return false;
-    }
-
-    if (currentState.questionParts.length > 0) {
-      return true;
-    }
-
-    if (currentState.pendingAnswerMedia.length > 0) {
-      return true;
-    }
-
-    return currentState.answerPartsList.some(
-      (answerParts) => answerParts.length > 0,
-    );
+  private detectQuestionStart(line: string): QuestionStartMatch | null {
+    return extractQuestionStart(line);
   }
 
-  private appendLineToParts(
-    parts: Array<{ content: string; contentType: ContentTypes }>,
+  private detectAnswerSegments(
     line: string,
-  ): void {
-    const normalized = line.trim();
+    allowLeadingText = false,
+  ): { leadingText: string; segments: AnswerSegment[] } {
+    return extractAnswerSegments(line, allowLeadingText);
+  }
 
-    if (!normalized) {
+  private applyEvent(
+    event: ParseEvent,
+    runtimeState: ParserRuntimeState,
+    pageNumber: number,
+  ): void {
+    if (event.kind === 'question_start') {
+      this.finalizeCurrentQuestion(runtimeState);
+      runtimeState.currentQuestion = {
+        number: event.number,
+        pageNumber,
+        stemParts: [],
+        answers: [],
+        currentAnswer: null,
+        pendingAnswerAnchors: [],
+      };
       return;
     }
 
-    parts.push({
-      content: normalized,
-      contentType: ContentTypes.TEXT,
-    });
-  }
-
-  private normalizeQuestionContent(content: string): string {
-    return content.trim().replace(/^[\s:.\-–—]+/, '').trim();
-  }
-
-  private mergeLineText(currentLine: string, fragment: string): string {
-    const normalizedFragment = fragment.trim();
-
-    if (!currentLine) {
-      return normalizedFragment;
+    if (event.kind === 'answer_start') {
+      this.startAnswer(runtimeState, pageNumber, event.label, event.text);
+      return;
     }
 
-    if (!normalizedFragment) {
-      return currentLine;
+    if (!runtimeState.currentQuestion) {
+      return;
     }
 
-    return `${currentLine} ${normalizedFragment}`;
+    if (runtimeState.currentQuestion.currentAnswer) {
+      this.appendAnswerText(runtimeState.currentQuestion.currentAnswer, event.text);
+      return;
+    }
+
+    this.appendStemText(runtimeState.currentQuestion, event.text);
   }
 
-  private normalizeLineForNoiseMatch(line: string): string {
-    return line
-      .normalize('NFD')
-      .replace(/[\u0300-\u036f]/g, '')
-      .replace(/[\u0111\u0110]/g, 'd')
-      .replace(/\s+/g, ' ')
-      .trim()
-      .toLowerCase();
+  private appendStemText(question: DraftQuestionBlock, text: string): void {
+    appendLineToParts(question.stemParts, text);
   }
 
-  private appendImageToState(
-    currentState: QuestionBlockState | null,
-    imageContent: string,
-  ): QuestionBlockState | null {
-    if (!currentState) {
-      this.logger.debug('Ignoring image fragment before question start');
-      return null;
-    }
-
-    if (currentState.currentAnswerParts) {
-      currentState.currentAnswerParts.push({
-        content: imageContent,
-        contentType: ContentTypes.IMAGE,
-      });
-
-      return currentState;
-    }
-
-    currentState.pendingAnswerMedia.push({
+  private appendStemImage(question: DraftQuestionBlock, imageContent: string): void {
+    question.stemParts.push({
       content: imageContent,
       contentType: ContentTypes.IMAGE,
     });
-
-    return currentState;
   }
 
-  getQuestionType(answerCount: number): QuestionType {
-    return answerCount > 0
-      ? QuestionType.SINGLE_CHOICE
-      : QuestionType.TEXT_INPUT;
+  private startAnswer(
+    runtimeState: ParserRuntimeState,
+    pageNumber: number,
+    label: AnswerOptionLabel,
+    initialText: string,
+  ): void {
+    const currentQuestion = runtimeState.currentQuestion;
+
+    if (!currentQuestion) {
+      throw new PdfParsingError(
+        `Found answer label ${label} before question start`,
+        pageNumber,
+      );
+    }
+
+    const answer = this.createAnswerPlaceholder(currentQuestion, label, pageNumber);
+    currentQuestion.currentAnswer = answer;
+
+    if (initialText) {
+      this.appendAnswerText(answer, initialText);
+    }
   }
 
-  private matchesAnyPattern(line: string, patterns: RegExp[]): boolean {
-    return patterns.some((pattern) => this.matchesPattern(line, pattern));
+  private appendAnswerText(answer: ParsedAnswerOption, text: string): void {
+    appendLineToParts(answer.parts, text);
   }
 
-  private matchesPattern(line: string, pattern: RegExp): boolean {
-    const cloned = new RegExp(pattern.source, pattern.flags.replace('g', ''));
-    return cloned.test(line);
+  private appendAnswerImage(
+    answer: ParsedAnswerOption,
+    imageContent: string,
+  ): void {
+    answer.parts.push({
+      content: imageContent,
+      contentType: ContentTypes.IMAGE,
+    });
+  }
+
+  private appendImage(
+    imageContent: string,
+    runtimeState: ParserRuntimeState,
+    pageNumber: number,
+  ): void {
+    const currentQuestion = runtimeState.currentQuestion;
+
+    if (!currentQuestion) {
+      this.logger.debug(
+        `Ignoring image fragment before question start on page ${pageNumber}`,
+      );
+      return;
+    }
+
+    if (currentQuestion.currentAnswer) {
+      this.appendAnswerImage(currentQuestion.currentAnswer, imageContent);
+      return;
+    }
+
+    this.appendStemImage(currentQuestion, imageContent);
+  }
+
+  private finalizeCurrentQuestion(runtimeState: ParserRuntimeState): void {
+    const currentQuestion = runtimeState.currentQuestion;
+
+    if (!currentQuestion) {
+      return;
+    }
+
+    const classification = classifyQuestionType({
+      stemParts: currentQuestion.stemParts,
+      answers: currentQuestion.answers,
+    });
+    const parsedQuestion: ParsedQuestionBlock = {
+      number: currentQuestion.number,
+      pageNumber: currentQuestion.pageNumber,
+      stemParts: currentQuestion.stemParts,
+      answers: currentQuestion.answers,
+      kind: classification.kind,
+      questionType: classification.questionType,
+      layoutKey: classification.layoutKey,
+    };
+
+    this.validateQuestionBlock(parsedQuestion);
+    runtimeState.parsedQuestions.push(parsedQuestion);
+    runtimeState.currentQuestion = null;
+  }
+
+  private validateQuestionBlock(question: ParsedQuestionBlock): void {
+    const hasStemText = question.stemParts.some(
+      (part) =>
+        part.contentType === ContentTypes.TEXT && part.content.trim().length > 0,
+    );
+
+    if (!hasStemText) {
+      throw new PdfParsingError('Question stem text is required', question.pageNumber, {
+        questionNumber: question.number,
+      });
+    }
+
+    if (question.answers.length === 0) {
+      return;
+    }
+
+    if (question.answers.length < 2 || question.answers.length > 4) {
+      throw new PdfParsingError(
+        `Question must contain from 2 to 4 answers, received ${question.answers.length}`,
+        question.pageNumber,
+        { questionNumber: question.number },
+      );
+    }
+
+    for (const [index, answer] of question.answers.entries()) {
+      const expectedLabel = (['A', 'B', 'C', 'D'] as const)[index];
+
+      if (answer.label !== expectedLabel) {
+        throw new PdfParsingError(
+          `Answer labels must be sequential from A, expected ${expectedLabel} but got ${answer.label}`,
+          question.pageNumber,
+          { questionNumber: question.number },
+        );
+      }
+
+      const hasAnswerContent = answer.parts.some(
+        (part) =>
+          part.contentType === ContentTypes.IMAGE ||
+          (part.contentType === ContentTypes.TEXT &&
+            part.content.trim().length > 0),
+      );
+
+      if (!hasAnswerContent) {
+        throw new PdfParsingError(
+          `Answer ${answer.label} must contain text or image content`,
+          question.pageNumber,
+          { questionNumber: question.number },
+        );
+      }
+    }
+  }
+
+  private parseAnswerKeySection(
+    lines: Array<{ pageNumber: number; text: string }>,
+  ): Record<number, AnswerKeyOption> {
+    const answerKey: Record<number, AnswerKeyOption> = {};
+
+    for (const line of lines) {
+      const normalizedLine = sanitizeCommonPdfLine(line.text, line.pageNumber);
+
+      if (!normalizedLine) {
+        continue;
+      }
+
+      Object.assign(answerKey, extractAnswerKeyEntries(normalizedLine));
+    }
+
+    return answerKey;
+  }
+
+  private composeTextLine(line: PageContent['lines'][number]): string {
+    return line.fragments
+      .filter((fragment) => fragment.kind === 'text')
+      .map((fragment) => fragment.content)
+      .join(' ');
+  }
+
+  private shouldAppendLineToStem(
+    currentQuestion: DraftQuestionBlock,
+    line: string,
+  ): boolean {
+    if (currentQuestion.answers.length > 0) {
+      return false;
+    }
+
+    const classification = classifyQuestionType({
+      stemParts: currentQuestion.stemParts,
+      answers: currentQuestion.answers,
+    });
+
+    if (
+      classification.kind !== 'matching' &&
+      classification.kind !== 'ordering'
+    ) {
+      return false;
+    }
+
+    return /^(\d+|[a-z])\s*[.):-]\s+/i.test(line);
+  }
+
+  private detectBareAnswerAnchorLine(
+    line: PageContent['lines'][number],
+  ): Array<{ label: AnswerOptionLabel; x: number }> | null {
+    if (line.fragments.some((fragment) => fragment.kind === 'image')) {
+      return null;
+    }
+
+    const anchors = line.fragments
+      .map((fragment) => {
+        if (fragment.kind !== 'text') {
+          return null;
+        }
+
+        const match = fragment.content.trim().match(/^([A-Da-d])\s*[.)\:\-]?$/);
+
+        if (!match) {
+          return null;
+        }
+
+        return {
+          label: match[1].toUpperCase() as AnswerOptionLabel,
+          x: fragment.x,
+        };
+      })
+      .filter(
+        (
+          anchor,
+        ): anchor is {
+          label: AnswerOptionLabel;
+          x: number;
+        } => !!anchor,
+      )
+      .sort((left, right) => left.x - right.x);
+
+    return anchors.length >= 2 && anchors.length === line.fragments.length
+      ? anchors
+      : null;
+  }
+
+  private queuePendingAnswerAnchors(
+    currentQuestion: DraftQuestionBlock,
+    anchors: Array<{ label: AnswerOptionLabel; x: number }>,
+    pageNumber: number,
+  ): void {
+    if (currentQuestion.pendingAnswerAnchors.length > 0) {
+      currentQuestion.pendingAnswerAnchors = [];
+    }
+
+    currentQuestion.pendingAnswerAnchors = anchors.map((anchor) => ({
+      ...anchor,
+      answer: this.createAnswerPlaceholder(
+        currentQuestion,
+        anchor.label,
+        pageNumber,
+      ),
+    }));
+    currentQuestion.currentAnswer = null;
+  }
+
+  private tryAppendPendingAnswerLine(
+    currentQuestion: DraftQuestionBlock,
+    line: PageContent['lines'][number],
+  ): boolean {
+    const anchors = [...currentQuestion.pendingAnswerAnchors].sort(
+      (left, right) => left.x - right.x,
+    );
+
+    if (anchors.length === 0) {
+      return false;
+    }
+
+    const imageFragments = line.fragments
+      .filter(
+        (fragment): fragment is ImageLayoutFragment => fragment.kind === 'image',
+      )
+      .sort((left, right) => left.x - right.x);
+    const textFragments = line.fragments
+      .filter(
+        (fragment): fragment is TextLayoutFragment =>
+          fragment.kind === 'text' && fragment.content.trim().length > 0,
+      )
+      .sort((left, right) => left.x - right.x);
+
+    if (imageFragments.length >= anchors.length && textFragments.length === 0) {
+      anchors.forEach((anchor, index) => {
+        const fragment = imageFragments[index];
+
+        if (fragment) {
+          this.appendAnswerImage(anchor.answer, fragment.content);
+        }
+      });
+
+      for (let index = anchors.length; index < imageFragments.length; index++) {
+        this.appendAnswerImage(
+          anchors[anchors.length - 1].answer,
+          imageFragments[index].content,
+        );
+      }
+
+      currentQuestion.pendingAnswerAnchors = [];
+      currentQuestion.currentAnswer = null;
+      return true;
+    }
+
+    if (imageFragments.length === 1 && textFragments.length === 0) {
+      this.appendAnswerImage(anchors[0].answer, imageFragments[0].content);
+      currentQuestion.pendingAnswerAnchors = anchors.slice(1);
+      currentQuestion.currentAnswer = null;
+      return true;
+    }
+
+    if (textFragments.length >= anchors.length && imageFragments.length === 0) {
+      anchors.forEach((anchor, index) => {
+        const fragment = textFragments[index];
+
+        if (fragment) {
+          this.appendAnswerText(anchor.answer, fragment.content);
+        }
+      });
+
+      for (let index = anchors.length; index < textFragments.length; index++) {
+        this.appendAnswerText(
+          anchors[anchors.length - 1].answer,
+          textFragments[index].content,
+        );
+      }
+
+      currentQuestion.pendingAnswerAnchors = [];
+      currentQuestion.currentAnswer = null;
+      return true;
+    }
+
+    if (textFragments.length === 1 && imageFragments.length === 0) {
+      this.appendAnswerText(anchors[0].answer, textFragments[0].content);
+      currentQuestion.pendingAnswerAnchors = anchors.slice(1);
+      currentQuestion.currentAnswer = null;
+      return true;
+    }
+
+    return false;
+  }
+
+  private createAnswerPlaceholder(
+    currentQuestion: DraftQuestionBlock,
+    label: AnswerOptionLabel,
+    pageNumber: number,
+  ): ParsedAnswerOption {
+    const expectedLabel = (['A', 'B', 'C', 'D'] as const)[
+      currentQuestion.answers.length
+    ];
+
+    if (!expectedLabel || label !== expectedLabel) {
+      throw new PdfParsingError(
+        `Invalid answer order, expected ${expectedLabel ?? 'no more answers'} but got ${label}`,
+        pageNumber,
+        { questionNumber: currentQuestion.number },
+      );
+    }
+
+    const answer: ParsedAnswerOption = {
+      label,
+      parts: [],
+    };
+
+    currentQuestion.answers.push(answer);
+    return answer;
   }
 }

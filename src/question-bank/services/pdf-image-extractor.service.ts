@@ -28,6 +28,7 @@ export class PdfImageExtractorService {
       const transformStack: number[][] = [];
       let currentTransform = [1, 0, 0, 1, 0, 0];
       let order = PDF_PARSER_CONFIG.IMAGE_ORDER_START;
+      let imageCount = 0;
 
       for (let index = 0; index < operatorList.fnArray.length; index++) {
         const fn = operatorList.fnArray[index];
@@ -62,15 +63,22 @@ export class PdfImageExtractorService {
           continue;
         }
 
+        imageCount++;
+        this.logger.debug(
+          `Found image operation #${imageCount} on page ${pageNumber}, imageName: ${args[0]}`,
+        );
+
         try {
           const imageObject = await this.resolveImageObject(
             page,
             args[0],
             pageNumber,
           );
-          const encodedImage = await this.encodeImageObject(imageObject);
 
-          if (!encodedImage) {
+          if (!imageObject) {
+            this.logger.debug(
+              `Image #${imageCount} on page ${pageNumber} returned null/undefined`,
+            );
             continue;
           }
 
@@ -79,9 +87,13 @@ export class PdfImageExtractorService {
             currentTransform,
           );
 
+          this.logger.debug(
+            `Successfully extracted image #${imageCount} on page ${pageNumber}`,
+          );
+
           fragments.push({
             kind: 'image',
-            content: encodedImage.toString('base64'),
+            content: imageObject,
             x: positionMatrix[4],
             y: positionMatrix[5],
             width: this.getMatrixScale(currentTransform, true),
@@ -91,12 +103,15 @@ export class PdfImageExtractorService {
           });
         } catch (error) {
           this.logger.warn(
-            `Failed to process image on page ${pageNumber}: ${error}`,
+            `Failed to process image #${imageCount} on page ${pageNumber}: ${error}`,
           );
           continue;
         }
       }
 
+      this.logger.debug(
+        `Extracted ${fragments.length} images from page ${pageNumber} (total image operations found: ${imageCount})`,
+      );
       return fragments;
     } catch (error) {
       throw new PdfParsingError(
@@ -114,18 +129,28 @@ export class PdfImageExtractorService {
     imageName: any,
     pageNumber: number,
   ): Promise<any> {
+    this.logger.debug(
+      `resolveImageObject called with: type=${typeof imageName}, value=${imageName}, page=${pageNumber}`,
+    );
+
     if (imageName && typeof imageName === 'object') {
+      this.logger.debug(
+        `ImageName is already an object, returning it directly`,
+      );
       return imageName;
     }
 
     if (typeof imageName !== 'string') {
+      this.logger.debug(
+        `ImageName is not a string (type: ${typeof imageName}), returning null`,
+      );
       return null;
     }
 
     return await new Promise((resolve) => {
       const timeout = setTimeout(() => {
         this.logger.warn(
-          `Timed out resolving image object "${imageName}" on page ${pageNumber}`,
+          `Timed out (${PDF_PARSER_CONFIG.IMAGE_OBJECT_TIMEOUT_MS}ms) resolving image "${imageName}" on page ${pageNumber}`,
         );
         resolve(null);
       }, PDF_PARSER_CONFIG.IMAGE_OBJECT_TIMEOUT_MS);
@@ -133,112 +158,25 @@ export class PdfImageExtractorService {
       try {
         page.objs.get(imageName, (image: any) => {
           clearTimeout(timeout);
+          if (image) {
+            this.logger.debug(
+              `Successfully resolved image "${imageName}" on page ${pageNumber}`,
+            );
+          } else {
+            this.logger.warn(
+              `page.objs.get returned null for image "${imageName}" on page ${pageNumber}`,
+            );
+          }
           resolve(image);
         });
-      } catch {
+      } catch (err) {
         clearTimeout(timeout);
+        this.logger.error(
+          `Exception in page.objs.get for image "${imageName}" on page ${pageNumber}: ${err}`,
+        );
         resolve(null);
       }
     });
-  }
-
-  /**
-   * Encode image object to PNG buffer
-   * Handles raw image data and converts to PNG format
-   */
-  private async encodeImageObject(imageObject: any): Promise<Buffer | null> {
-    if (!imageObject) {
-      return null;
-    }
-
-    if (Buffer.isBuffer(imageObject)) {
-      return this.toPngBuffer(imageObject);
-    }
-
-    if (Buffer.isBuffer(imageObject.data)) {
-      return this.toPngBuffer(imageObject.data);
-    }
-
-    const rawData = imageObject.data;
-
-    if (
-      !rawData ||
-      typeof imageObject.width !== 'number' ||
-      typeof imageObject.height !== 'number' ||
-      typeof rawData.length !== 'number'
-    ) {
-      return null;
-    }
-
-    const channels = this.detectChannelCount(
-      rawData.length,
-      imageObject.width,
-      imageObject.height,
-    );
-
-    if (!channels) {
-      return Buffer.from(rawData);
-    }
-
-    try {
-      const sharp = require('sharp');
-      return await sharp(Buffer.from(rawData), {
-        raw: {
-          width: imageObject.width,
-          height: imageObject.height,
-          channels,
-        },
-      })
-        .png()
-        .toBuffer();
-    } catch (error) {
-      this.logger.warn(
-        `Failed to encode image with sharp: ${error}, returning raw data`,
-      );
-      return Buffer.from(rawData);
-    }
-  }
-
-  private async toPngBuffer(buffer: Buffer): Promise<Buffer> {
-    try {
-      const sharp = require('sharp');
-      return await sharp(buffer).png().toBuffer();
-    } catch (error) {
-      this.logger.warn(
-        `Failed to normalize image buffer to PNG: ${error}, keeping original bytes`,
-      );
-      return buffer;
-    }
-  }
-
-  /**
-   * Detect number of color channels from data length
-   * Returns 4 (RGBA), 3 (RGB), 1 (Grayscale), or null if cannot determine
-   */
-  private detectChannelCount(
-    dataLength: number,
-    width: number,
-    height: number,
-  ): number | null {
-    const pixelCount = width * height;
-
-    if (pixelCount <= 0) {
-      return null;
-    }
-
-    if (dataLength === pixelCount * 4) {
-      return 4; // RGBA
-    }
-
-    if (dataLength === pixelCount * 3) {
-      return 3; // RGB
-    }
-
-    if (dataLength === pixelCount) {
-      return 1; // Grayscale
-    }
-
-    return null;
   }
 
   /**

@@ -1,5 +1,7 @@
 import { ContentTypes } from 'src/common/enum/content-type.enum';
-import { PageContent } from '../types/question-bank-import.types';
+import { QuestionType } from 'src/question/enum/question-type.enum';
+import { PdfParsingError } from '../exceptions/pdf-parsing.exception';
+import { LayoutLine, PageContent } from '../types/question-bank-import.types';
 import { QuestionParserService } from './question-parser.service';
 
 describe('QuestionParserService', () => {
@@ -9,636 +11,373 @@ describe('QuestionParserService', () => {
     service = new QuestionParserService();
   });
 
-  it('parses numbered questions and splits multiple answers on the same line', async () => {
+  it('parses a strict single-choice block and keeps stem/answer images on the correct side', async () => {
     const pageContent: PageContent = {
       pageNumber: 1,
       lines: [
-        {
-          y: 10,
-          x: 10,
-          fragments: [
-            {
-              kind: 'text',
-              content: '1. I have a ___.',
-              x: 10,
-              y: 10,
-              width: 50,
-              height: 10,
-              pageNumber: 1,
-              order: 0,
-            },
-          ],
-        },
-        {
-          y: 20,
-          x: 10,
-          fragments: [
-            {
-              kind: 'text',
-              content: 'A. cat B. pen C. book D. bag',
-              x: 10,
-              y: 20,
-              width: 50,
-              height: 10,
-              pageNumber: 1,
-              order: 1,
-            },
-          ],
-        },
-        {
-          y: 30,
-          x: 10,
-          fragments: [
-            {
-              kind: 'text',
-              content: '2. This is my ___.',
-              x: 10,
-              y: 30,
-              width: 50,
-              height: 10,
-              pageNumber: 1,
-              order: 2,
-            },
-          ],
-        },
+        createTextLine(1, 0, 10, 'Cau 12. Chon dap an dung'),
+        createImageLine(1, 1, 20, 'stem-image'),
+        createTextLine(1, 2, 30, 'A.'),
+        createImageLine(1, 3, 40, 'answer-a-image'),
+        createTextLine(1, 4, 50, 'Noi dung A'),
+        createTextLine(1, 5, 60, 'B. Noi dung B C. Noi dung C'),
       ],
     };
 
-    const result = await service.processPageContent(pageContent, null);
+    const result = await service.parsePages([pageContent]);
 
-    expect(result.completedQuestions).toHaveLength(1);
-    expect(result.completedQuestions[0].number).toBe(1);
-    expect(result.completedQuestions[0].questionParts).toEqual([
-      { content: 'I have a ___.', contentType: ContentTypes.TEXT },
+    expect(result.questions).toHaveLength(1);
+    expect(result.questions[0]).toMatchObject({
+      number: 12,
+      questionType: QuestionType.SINGLE_CHOICE,
+      kind: 'single_choice',
+      layoutKey: 'text_with_image_stem_mixed_answers',
+    });
+    expect(result.questions[0].stemParts).toEqual([
+      { content: 'Chon dap an dung', contentType: ContentTypes.TEXT },
+      { content: 'stem-image', contentType: ContentTypes.IMAGE },
     ]);
-    expect(result.completedQuestions[0].answerPartsList).toHaveLength(4);
-    expect(
-      result.completedQuestions[0].answerPartsList.map((parts) => parts[0].content),
-    ).toEqual(['cat', 'pen', 'book', 'bag']);
-    expect(result.parserState.currentQuestion?.number).toBe(2);
-    expect(result.parserState.currentQuestion?.questionParts).toEqual([
-      { content: 'This is my ___.', contentType: ContentTypes.TEXT },
+    expect(result.questions[0].answers).toEqual([
+      {
+        label: 'A',
+        parts: [
+          { content: 'answer-a-image', contentType: ContentTypes.IMAGE },
+          { content: 'Noi dung A', contentType: ContentTypes.TEXT },
+        ],
+      },
+      {
+        label: 'B',
+        parts: [{ content: 'Noi dung B', contentType: ContentTypes.TEXT }],
+      },
+      {
+        label: 'C',
+        parts: [{ content: 'Noi dung C', contentType: ContentTypes.TEXT }],
+      },
     ]);
   });
 
-  it('buffers images before answer labels so they can be attached to choices', async () => {
+  it('parses answer key sections after questions', async () => {
     const pageContent: PageContent = {
       pageNumber: 1,
       lines: [
-        {
-          y: 10,
-          x: 10,
-          fragments: [
-            {
-              kind: 'text',
-              content: '11.',
-              x: 10,
-              y: 10,
-              width: 20,
-              height: 10,
-              pageNumber: 1,
-              order: 0,
-            },
-          ],
-        },
-        {
-          y: 20,
-          x: 10,
-          fragments: [
-            {
-              kind: 'image',
-              content: 'base64-image',
-              x: 10,
-              y: 20,
-              width: 20,
-              height: 20,
-              pageNumber: 1,
-              order: 1,
-            },
-          ],
-        },
+        createTextLine(1, 0, 10, 'Cau 1. Chon dap an dung'),
+        createTextLine(1, 1, 20, 'A. Dap an A B. Dap an B'),
+        createTextLine(1, 2, 30, '* Dap an'),
+        createTextLine(1, 3, 40, 'Cau 1: B'),
+        createTextLine(1, 4, 50, '2. A'),
       ],
     };
 
-    const result = await service.processPageContent(pageContent, null);
+    const result = await service.parsePages([pageContent]);
 
-    expect(result.completedQuestions).toHaveLength(0);
-    expect(result.parserState.currentQuestion?.number).toBe(11);
-    expect(result.parserState.currentQuestion?.questionParts).toEqual([]);
-    expect(result.parserState.currentQuestion?.pendingAnswerMedia).toEqual([
-      { content: 'base64-image', contentType: ContentTypes.IMAGE },
-    ]);
-  });
-
-  it('attaches buffered images to each answer when answer labels appear', async () => {
-    const pageContent: PageContent = {
-      pageNumber: 1,
-      lines: [
-        {
-          y: 10,
-          x: 10,
-          fragments: [
-            {
-              kind: 'text',
-              content: 'C\u00e2u 12. Chon dap an dung',
-              x: 10,
-              y: 10,
-              width: 80,
-              height: 10,
-              pageNumber: 1,
-              order: 0,
-            },
-          ],
-        },
-        {
-          y: 20,
-          x: 10,
-          fragments: [
-            {
-              kind: 'image',
-              content: 'image-a',
-              x: 10,
-              y: 20,
-              width: 20,
-              height: 20,
-              pageNumber: 1,
-              order: 1,
-            },
-            {
-              kind: 'image',
-              content: 'image-b',
-              x: 40,
-              y: 20,
-              width: 20,
-              height: 20,
-              pageNumber: 1,
-              order: 2,
-            },
-            {
-              kind: 'image',
-              content: 'image-c',
-              x: 70,
-              y: 20,
-              width: 20,
-              height: 20,
-              pageNumber: 1,
-              order: 3,
-            },
-          ],
-        },
-        {
-          y: 30,
-          x: 10,
-          fragments: [
-            {
-              kind: 'text',
-              content: 'A. Lua chon A B. Lua chon B C. Lua chon C',
-              x: 10,
-              y: 30,
-              width: 120,
-              height: 10,
-              pageNumber: 1,
-              order: 4,
-            },
-          ],
-        },
-      ],
-    };
-
-    const result = await service.processPageContent(pageContent, null);
-
-    expect(result.parserState.currentQuestion?.answerPartsList).toHaveLength(3);
-    expect(
-      result.parserState.currentQuestion?.answerPartsList.map((parts) =>
-        parts.map((part) => part.contentType),
-      ),
-    ).toEqual([
-      [ContentTypes.IMAGE, ContentTypes.TEXT],
-      [ContentTypes.IMAGE, ContentTypes.TEXT],
-      [ContentTypes.IMAGE, ContentTypes.TEXT],
-    ]);
-    expect(
-      result.parserState.currentQuestion?.answerPartsList.map((parts) =>
-        parts.map((part) => part.content),
-      ),
-    ).toEqual([
-      ['image-a', 'Lua chon A'],
-      ['image-b', 'Lua chon B'],
-      ['image-c', 'Lua chon C'],
-    ]);
-  });
-
-  it('switches to answer_key mode when it sees the answer section', async () => {
-    const pageContent: PageContent = {
-      pageNumber: 1,
-      lines: [
-        {
-          y: 10,
-          x: 10,
-          fragments: [
-            {
-              kind: 'text',
-              content: 'C\u00e2u 1. Chon dap an dung',
-              x: 10,
-              y: 10,
-              width: 80,
-              height: 10,
-              pageNumber: 1,
-              order: 0,
-            },
-          ],
-        },
-        {
-          y: 20,
-          x: 10,
-          fragments: [
-            {
-              kind: 'text',
-              content: 'A. Dap an A B. Dap an B',
-              x: 10,
-              y: 20,
-              width: 80,
-              height: 10,
-              pageNumber: 1,
-              order: 1,
-            },
-          ],
-        },
-        {
-          y: 30,
-          x: 10,
-          fragments: [
-            {
-              kind: 'text',
-              content: '* \u0110\u00e1p \u00e1n',
-              x: 10,
-              y: 30,
-              width: 40,
-              height: 10,
-              pageNumber: 1,
-              order: 2,
-            },
-          ],
-        },
-        {
-          y: 40,
-          x: 10,
-          fragments: [
-            {
-              kind: 'text',
-              content: 'C\u00e2u 1: B',
-              x: 10,
-              y: 40,
-              width: 40,
-              height: 10,
-              pageNumber: 1,
-              order: 3,
-            },
-          ],
-        },
-        {
-          y: 50,
-          x: 10,
-          fragments: [
-            {
-              kind: 'text',
-              content: 'C\u00e2u 2. C',
-              x: 10,
-              y: 50,
-              width: 40,
-              height: 10,
-              pageNumber: 1,
-              order: 4,
-            },
-          ],
-        },
-        {
-          y: 60,
-          x: 10,
-          fragments: [
-            {
-              kind: 'text',
-              content: 'C\u00e2u 3. Khong duoc parse thanh cau hoi moi',
-              x: 10,
-              y: 60,
-              width: 120,
-              height: 10,
-              pageNumber: 1,
-              order: 5,
-            },
-          ],
-        },
-      ],
-    };
-
-    const result = await service.processPageContent(pageContent, null);
-
-    expect(result.completedQuestions).toHaveLength(1);
-    expect(result.completedQuestions[0].number).toBe(1);
-    expect(result.completedQuestions[0].answerPartsList).toHaveLength(2);
-    expect(result.parserState.mode).toBe('answer_key');
-    expect(result.parserState.currentQuestion).toBeNull();
-    expect(result.parserState.answerKey).toEqual({
+    expect(result.questions).toHaveLength(1);
+    expect(result.answerKey).toEqual({
       1: 'B',
-      2: 'C',
+      2: 'A',
     });
   });
 
-  it('splits answer labels even when there is whitespace before the dot', async () => {
+  it('splits inline answer key content from the question line', async () => {
     const pageContent: PageContent = {
       pageNumber: 1,
       lines: [
-        {
-          y: 10,
-          x: 10,
-          fragments: [
-            {
-              kind: 'text',
-              content: 'C\u00e2u 6. Khi muon nho giup do, em nen:',
-              x: 10,
-              y: 10,
-              width: 80,
-              height: 10,
-              pageNumber: 1,
-              order: 0,
-            },
-          ],
-        },
-        {
-          y: 20,
-          x: 10,
-          fragments: [
-            {
-              kind: 'text',
-              content: 'A. Khoc to B . Noi ro rang C. Danh nhau',
-              x: 10,
-              y: 20,
-              width: 120,
-              height: 10,
-              pageNumber: 1,
-              order: 1,
-            },
-          ],
-        },
+        createTextLine(
+          1,
+          0,
+          10,
+          'Cau 8. Truoc khi vao lop hoc online, Huy chuan bi vo but. Dap an: 1.C, 2.D, 8.B',
+        ),
       ],
     };
 
-    const result = await service.processPageContent(pageContent, null);
+    const result = await service.parsePages([pageContent]);
 
-    expect(result.parserState.currentQuestion?.answerPartsList).toHaveLength(3);
-    expect(
-      result.parserState.currentQuestion?.answerPartsList.map(
-        (parts) => parts[0].content,
-      ),
-    ).toEqual(['Khoc to', 'Noi ro rang', 'Danh nhau']);
+    expect(result.questions).toHaveLength(1);
+    expect(result.questions[0]).toMatchObject({
+      number: 8,
+      questionType: QuestionType.TEXT_INPUT,
+      kind: 'text_input',
+    });
+    expect(result.questions[0].stemParts).toEqual([
+      {
+        content: 'Truoc khi vao lop hoc online, Huy chuan bi vo but.',
+        contentType: ContentTypes.TEXT,
+      },
+    ]);
+    expect(result.answerKey).toEqual({
+      1: 'C',
+      2: 'D',
+      8: 'B',
+    });
   });
 
-  it('recognizes common English question prefixes and lowercase answer labels', async () => {
+  it('classifies essay and matching prompts into different question kinds', async () => {
+    const pages: PageContent[] = [
+      {
+        pageNumber: 1,
+        lines: [
+          createTextLine(1, 0, 10, 'Cau 1. Neu cam thay buon em se lam gi?'),
+          createTextLine(1, 1, 20, 'Tra loi bang cach viet ngan gon.'),
+          createTextLine(1, 2, 30, 'Cau 2. Em hay noi cot A voi cot B'),
+          createTextLine(1, 3, 40, '1. Viec tot'),
+          createTextLine(1, 4, 50, 'a. Ket qua tot'),
+        ],
+      },
+    ];
+
+    const result = await service.parsePages(pages);
+
+    expect(result.questions).toHaveLength(2);
+    expect(result.questions[0]).toMatchObject({
+      number: 1,
+      kind: 'text_input',
+      questionType: QuestionType.TEXT_INPUT,
+    });
+    expect(result.questions[1]).toMatchObject({
+      number: 2,
+      kind: 'matching',
+      questionType: QuestionType.MATCHING,
+    });
+  });
+
+  it('rejects questions that skip answer labels', async () => {
     const pageContent: PageContent = {
       pageNumber: 1,
       lines: [
-        {
-          y: 10,
-          x: 10,
-          fragments: [
-            {
-              kind: 'text',
-              content: 'Question 7 - Choose the correct answer',
-              x: 10,
-              y: 10,
-              width: 120,
-              height: 10,
-              pageNumber: 1,
-              order: 0,
-            },
-          ],
-        },
-        {
-          y: 20,
-          x: 10,
-          fragments: [
-            {
-              kind: 'text',
-              content: 'a) First option b: Second option',
-              x: 10,
-              y: 20,
-              width: 120,
-              height: 10,
-              pageNumber: 1,
-              order: 1,
-            },
-          ],
-        },
+        createTextLine(1, 0, 10, 'Cau 3. Chon dap an dung'),
+        createTextLine(1, 1, 20, 'A. Lua chon A'),
+        createTextLine(1, 2, 30, 'C. Lua chon C'),
       ],
     };
 
-    const result = await service.processPageContent(pageContent, null);
-
-    expect(result.parserState.currentQuestion?.number).toBe(7);
-    expect(result.parserState.currentQuestion?.questionParts).toEqual([
-      { content: 'Choose the correct answer', contentType: ContentTypes.TEXT },
-    ]);
-    expect(result.parserState.currentQuestion?.answerPartsList).toHaveLength(2);
-    expect(
-      result.parserState.currentQuestion?.answerPartsList.map(
-        (parts) => parts[0].content,
-      ),
-    ).toEqual(['First option', 'Second option']);
+    await expect(service.parsePages([pageContent])).rejects.toThrow(
+      PdfParsingError,
+    );
+    await expect(service.parsePages([pageContent])).rejects.toThrow(
+      'Invalid answer order',
+    );
   });
 
-  it('ignores repeated headers and footers while parsing question content', async () => {
+  it('rejects answers that never receive text or image content', async () => {
     const pageContent: PageContent = {
-      pageNumber: 2,
+      pageNumber: 1,
       lines: [
-        {
-          y: 10,
-          x: 10,
-          fragments: [
-            {
-              kind: 'text',
-              content: 'C\u00e2u 3. Noi dung cau hoi',
-              x: 10,
-              y: 10,
-              width: 80,
-              height: 10,
-              pageNumber: 2,
-              order: 0,
-            },
-          ],
-        },
-        {
-          y: 15,
-          x: 10,
-          fragments: [
-            {
-              kind: 'text',
-              content: '2',
-              x: 10,
-              y: 15,
-              width: 20,
-              height: 10,
-              pageNumber: 2,
-              order: 1,
-            },
-          ],
-        },
-        {
-          y: 20,
-          x: 10,
-          fragments: [
-            {
-              kind: 'text',
-              content: 'Kh\u1ed1i 1 . \u0110\u1ec1 ki\u1ec3m tra h\u1ecdc k\u00ec II 2',
-              x: 10,
-              y: 20,
-              width: 90,
-              height: 10,
-              pageNumber: 2,
-              order: 2,
-            },
-          ],
-        },
-        {
-          y: 30,
-          x: 10,
-          fragments: [
-            {
-              kind: 'text',
-              content:
-                'CH\u01af\u01a0NG TR\u00ccNH GI\u00c1O D\u1ee4C K\u1ef8 N\u0102NG S\u1ed0NG _ ICHISKILL',
-              x: 10,
-              y: 30,
-              width: 140,
-              height: 10,
-              pageNumber: 2,
-              order: 3,
-            },
-          ],
-        },
-        {
-          y: 40,
-          x: 10,
-          fragments: [
-            {
-              kind: 'text',
-              content: 'A. Lua chon 1 B. Lua chon 2',
-              x: 10,
-              y: 40,
-              width: 100,
-              height: 10,
-              pageNumber: 2,
-              order: 4,
-            },
-          ],
-        },
+        createTextLine(1, 0, 10, 'Cau 4. Chon dap an dung'),
+        createTextLine(1, 1, 20, 'A.'),
+        createTextLine(1, 2, 30, 'B. Lua chon B'),
       ],
     };
 
-    const result = await service.processPageContent(pageContent, null);
-
-    expect(result.parserState.currentQuestion?.questionParts).toEqual([
-      { content: 'Noi dung cau hoi', contentType: ContentTypes.TEXT },
-    ]);
-    expect(
-      result.parserState.currentQuestion?.answerPartsList.map(
-        (parts) => parts[0].content,
-      ),
-    ).toEqual(['Lua chon 1', 'Lua chon 2']);
+    await expect(service.parsePages([pageContent])).rejects.toThrow(
+      'Answer A must contain text or image content',
+    );
   });
 
-  it('ignores standalone figure labels inside answer blocks', async () => {
+  it('assigns the image-only answer layout for text-plus-image stem questions', async () => {
     const pageContent: PageContent = {
-      pageNumber: 2,
+      pageNumber: 1,
       lines: [
-        {
-          y: 10,
-          x: 10,
-          fragments: [
-            {
-              kind: 'text',
-              content: 'C\u00e2u 3. Chon hinh dung',
-              x: 10,
-              y: 10,
-              width: 80,
-              height: 10,
-              pageNumber: 2,
-              order: 0,
-            },
-          ],
-        },
-        {
-          y: 20,
-          x: 10,
-          fragments: [
-            {
-              kind: 'text',
-              content: 'A. Lua chon A',
-              x: 10,
-              y: 20,
-              width: 80,
-              height: 10,
-              pageNumber: 2,
-              order: 1,
-            },
-          ],
-        },
-        {
-          y: 30,
-          x: 10,
-          fragments: [
-            {
-              kind: 'text',
-              content: 'H\u00ecnh 1',
-              x: 10,
-              y: 30,
-              width: 40,
-              height: 10,
-              pageNumber: 2,
-              order: 2,
-            },
-          ],
-        },
-        {
-          y: 40,
-          x: 10,
-          fragments: [
-            {
-              kind: 'text',
-              content: 'B. Lua chon B',
-              x: 10,
-              y: 40,
-              width: 80,
-              height: 10,
-              pageNumber: 2,
-              order: 3,
-            },
-          ],
-        },
-        {
-          y: 50,
-          x: 10,
-          fragments: [
-            {
-              kind: 'text',
-              content: 'Hinh 2.',
-              x: 10,
-              y: 50,
-              width: 40,
-              height: 10,
-              pageNumber: 2,
-              order: 4,
-            },
-          ],
-        },
+        createTextLine(1, 0, 10, 'Cau 8. Em hay giup Ro bot di chuyen den dich'),
+        createImageLine(1, 1, 20, 'maze-image'),
+        createTextLine(1, 2, 30, 'A.'),
+        createImageLine(1, 3, 40, 'up-arrow'),
+        createTextLine(1, 4, 50, 'B.'),
+        createImageLine(1, 5, 60, 'right-arrow'),
+        createTextLine(1, 6, 70, 'C.'),
+        createImageLine(1, 7, 80, 'left-arrow'),
       ],
     };
 
-    const result = await service.processPageContent(pageContent, null);
+    const result = await service.parsePages([pageContent]);
 
-    expect(
-      result.parserState.currentQuestion?.answerPartsList.map(
-        (parts) => parts[0].content,
-      ),
-    ).toEqual(['Lua chon A', 'Lua chon B']);
+    expect(result.questions[0]).toMatchObject({
+      number: 8,
+      kind: 'single_choice',
+      questionType: QuestionType.SINGLE_CHOICE,
+      layoutKey: 'text_with_image_stem_image_only_answers',
+    });
+  });
+
+  it('does not misclassify stems containing "noi" as matching', async () => {
+    const pageContent: PageContent = {
+      pageNumber: 1,
+      lines: [
+        createTextLine(1, 0, 10, 'Cau 1. Noi dung nao em khong nen xem?'),
+        createTextLine(1, 1, 20, 'A. Video day ve tranh B. Bai hat thieu nhi'),
+      ],
+    };
+
+    const result = await service.parsePages([pageContent]);
+
+    expect(result.questions[0]).toMatchObject({
+      number: 1,
+      kind: 'single_choice',
+      questionType: QuestionType.SINGLE_CHOICE,
+    });
+  });
+
+  it('distributes image answers when labels A B C appear on the same line', async () => {
+    const pageContent: PageContent = {
+      pageNumber: 4,
+      lines: [
+        createTextLine(4, 0, 10, 'Cau 8. Em hay giup Ro bot di chuyen den dich'),
+        createImageLine(4, 1, 20, 'maze-image'),
+        createTextFragmentsLine(4, 30, [
+          { order: 2, x: 80, content: 'A.' },
+          { order: 3, x: 230, content: 'B.' },
+          { order: 4, x: 380, content: 'C.' },
+        ]),
+        createImageFragmentsLine(4, 40, [
+          { order: 5, x: 70, content: 'up-arrow' },
+          { order: 6, x: 220, content: 'right-arrow' },
+          { order: 7, x: 370, content: 'left-arrow' },
+        ]),
+      ],
+    };
+
+    const result = await service.parsePages([pageContent]);
+
+    expect(result.questions[0].answers).toEqual([
+      {
+        label: 'A',
+        parts: [{ content: 'up-arrow', contentType: ContentTypes.IMAGE }],
+      },
+      {
+        label: 'B',
+        parts: [{ content: 'right-arrow', contentType: ContentTypes.IMAGE }],
+      },
+      {
+        label: 'C',
+        parts: [{ content: 'left-arrow', contentType: ContentTypes.IMAGE }],
+      },
+    ]);
+  });
+
+  it('distributes image answers across consecutive image-only lines after a shared label line', async () => {
+    const pageContent: PageContent = {
+      pageNumber: 4,
+      lines: [
+        createTextLine(4, 0, 10, 'Cau 8. Em hay giup Ro bot di chuyen den dich'),
+        createImageLine(4, 1, 20, 'maze-image'),
+        createTextFragmentsLine(4, 30, [
+          { order: 2, x: 80, content: 'A.' },
+          { order: 3, x: 230, content: 'B.' },
+          { order: 4, x: 380, content: 'C.' },
+        ]),
+        createImageLine(4, 5, 40, 'up-arrow'),
+        createImageLine(4, 6, 50, 'right-arrow'),
+        createImageLine(4, 7, 60, 'left-arrow'),
+      ],
+    };
+
+    const result = await service.parsePages([pageContent]);
+
+    expect(result.questions[0]).toMatchObject({
+      layoutKey: 'text_with_image_stem_image_only_answers',
+    });
+    expect(result.questions[0].answers).toEqual([
+      {
+        label: 'A',
+        parts: [{ content: 'up-arrow', contentType: ContentTypes.IMAGE }],
+      },
+      {
+        label: 'B',
+        parts: [{ content: 'right-arrow', contentType: ContentTypes.IMAGE }],
+      },
+      {
+        label: 'C',
+        parts: [{ content: 'left-arrow', contentType: ContentTypes.IMAGE }],
+      },
+    ]);
   });
 });
+
+function createTextLine(
+  pageNumber: number,
+  order: number,
+  y: number,
+  content: string,
+): LayoutLine {
+  return {
+    y,
+    x: 10,
+    fragments: [
+      {
+        kind: 'text',
+        content,
+        x: 10,
+        y,
+        width: 100,
+        height: 10,
+        pageNumber,
+        order,
+      },
+    ],
+  };
+}
+
+function createImageLine(
+  pageNumber: number,
+  order: number,
+  y: number,
+  content: string,
+): LayoutLine {
+  return {
+    y,
+    x: 10,
+    fragments: [
+      {
+        kind: 'image',
+        content,
+        x: 10,
+        y,
+        width: 40,
+        height: 40,
+        pageNumber,
+        order,
+      },
+    ],
+  };
+}
+
+function createTextFragmentsLine(
+  pageNumber: number,
+  y: number,
+  fragments: Array<{ order: number; x: number; content: string }>,
+): LayoutLine {
+  return {
+    y,
+    x: Math.min(...fragments.map((fragment) => fragment.x)),
+    fragments: fragments.map((fragment) => ({
+      kind: 'text' as const,
+      content: fragment.content,
+      x: fragment.x,
+      y,
+      width: 20,
+      height: 10,
+      pageNumber,
+      order: fragment.order,
+    })),
+  };
+}
+
+function createImageFragmentsLine(
+  pageNumber: number,
+  y: number,
+  fragments: Array<{ order: number; x: number; content: string }>,
+): LayoutLine {
+  return {
+    y,
+    x: Math.min(...fragments.map((fragment) => fragment.x)),
+    fragments: fragments.map((fragment) => ({
+      kind: 'image' as const,
+      content: fragment.content,
+      x: fragment.x,
+      y,
+      width: 40,
+      height: 40,
+      pageNumber,
+      order: fragment.order,
+    })),
+  };
+}

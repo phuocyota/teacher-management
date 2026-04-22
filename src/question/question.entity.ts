@@ -26,6 +26,9 @@ export class QuestionEntity extends BaseEntity {
   @Column({ name: 'content', type: 'text', nullable: false })
   content: string;
 
+  @Column({ name: 'meta', type: 'jsonb', nullable: true })
+  meta?: Record<string, unknown> | null;
+
   @Column({ name: 'next_content', type: 'uuid', nullable: true })
   nextContent?: string;
 
