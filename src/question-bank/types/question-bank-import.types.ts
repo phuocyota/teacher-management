@@ -17,7 +17,7 @@ export interface ImportedContentPart {
 
 export interface LayoutFragment {
   kind: 'text' | 'image';
-  content: string;
+  content: string | any;
   x: number;
   y: number;
   width: number;

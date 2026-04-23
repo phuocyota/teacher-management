@@ -90,12 +90,19 @@ export class CourseController {
     type: String,
     description: 'Filter options by classId',
   })
+  @ApiQuery({
+    name: 'all',
+    required: false,
+    type: Boolean,
+    description: 'Set true to return all courses without pagination',
+  })
   @ApiOkResponse({ type: CourseOptionListResponseDto })
   getOptions(
     @Query('page') page?: number,
     @Query('size') size?: number,
     @Query('q') q?: string,
     @Query('classId') classId?: string,
+    @Query('all') all?: string | boolean,
   ): Promise<
     PaginationResponseDto<CourseOptionDto> & {
       classes: ClassOptionDto[];
@@ -103,7 +110,13 @@ export class CourseController {
       lectures: LectureOptionDto[];
     }
   > {
-    return this.courseService.getOptions(page, size, q, classId);
+    return this.courseService.getOptions(
+      page,
+      size,
+      q,
+      classId,
+      all === true || all === 'true',
+    );
   }
 
   @Get(':id')

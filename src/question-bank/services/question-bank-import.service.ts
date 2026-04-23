@@ -114,6 +114,7 @@ export class QuestionBankImportService {
       });
 
       questionBank.totalQuestions = totalQuestions;
+      questionBank.totalScore = totalQuestions;
       await this.questionBankRepo.save(questionBank);
 
       const duration = Date.now() - startTime;
@@ -399,6 +400,7 @@ export class QuestionBankImportService {
         questionBankId,
         question,
         createdQuestions,
+        parsedDocument.answerKey,
       );
 
       totalAnswers += persistResult.totalAnswers;
@@ -416,6 +418,7 @@ export class QuestionBankImportService {
     questionBankId: string,
     question: ParsedQuestionBlock,
     createdQuestions: CreatedQuestionSummary[],
+    answerKey: Record<number, AnswerKeyOption>,
   ): Promise<{ totalAnswers: number }> {
     this.logger.debug(
       `Persisting question ${question.number}: ${question.stemParts.length} question parts, ${question.answers.length} answers`,
@@ -429,12 +432,20 @@ export class QuestionBankImportService {
       this.questionService.updateBulk.bind(this.questionService),
     );
     const rootQuestion = savedQuestions[0];
+
+    // Check which answer is correct based on answerKey
+    const correctAnswerLabel = answerKey[question.number];
+
     const persistedAnswers = await this.persistAnswerBlocks(
       questionBankId,
       question.number,
       rootQuestion,
       question.answers.map((answer) =>
-        this.attachAnswerLabelMeta(answer.parts, answer.label),
+        this.attachAnswerLabelMeta(
+          answer.parts,
+          answer.label,
+          answer.label === correctAnswerLabel,
+        ),
       ),
     );
 
@@ -454,6 +465,7 @@ export class QuestionBankImportService {
   private attachAnswerLabelMeta(
     answerParts: ImportedContentPart[],
     label: AnswerKeyOption,
+    isCorrect?: boolean,
   ): ImportedContentPart[] {
     return answerParts.map((part, index) =>
       index === 0
@@ -462,6 +474,7 @@ export class QuestionBankImportService {
             meta: {
               ...(part.meta ?? {}),
               importOptionLabel: label,
+              ...(isCorrect ? { isCorrect: true } : {}),
             },
           }
         : part,
@@ -692,10 +705,33 @@ export class QuestionBankImportService {
 
   private async persistImagePart(
     questionBankId: string,
-    base64Content: string,
+    imageObjectOrBase64: any,
     index: number,
   ): Promise<string> {
-    const imageBuffer = Buffer.from(base64Content, 'base64');
+    let imageBuffer: Buffer;
+
+    // If it's a string (base64), convert to buffer
+    if (typeof imageObjectOrBase64 === 'string') {
+      imageBuffer = Buffer.from(imageObjectOrBase64, 'base64');
+    }
+    // If it's an image object with raw data
+    else if (imageObjectOrBase64 && imageObjectOrBase64.data) {
+      imageBuffer = Buffer.from(imageObjectOrBase64.data);
+    }
+    // If it's already a buffer
+    else if (Buffer.isBuffer(imageObjectOrBase64)) {
+      imageBuffer = imageObjectOrBase64;
+    }
+    // If it's a string representation (JSON), try to parse
+    else if (typeof imageObjectOrBase64 === 'object') {
+      imageBuffer = Buffer.from(JSON.stringify(imageObjectOrBase64));
+    } else {
+      this.logger.warn(
+        `Cannot convert image to buffer: ${imageObjectOrBase64}`,
+      );
+      throw new Error('Invalid image format');
+    }
+
     const uploaded = await this.uploadService.saveBufferAsFile(imageBuffer, {
       originalName: `pdf-image-${Date.now()}-${index}.png`,
       mimetype: 'image/png',
@@ -730,6 +766,15 @@ export class QuestionBankImportService {
         this.answerService.createBulk.bind(this.answerService),
         this.answerService.updateBulk.bind(this.answerService),
       );
+
+      // Mark first answer part as correct if needed
+      const firstAnswerPart = savedAnswerParts[0];
+      const isCorrect = answerParts[0]?.meta?.isCorrect;
+      if (firstAnswerPart && isCorrect) {
+        await this.answerService.updateBulk([
+          { ...firstAnswerPart, isCorrect: true },
+        ]);
+      }
 
       totalAnswers += savedAnswerParts.length;
       answerCount++;

@@ -111,6 +111,7 @@ export class CourseService {
     size = 10,
     q?: string,
     classId?: string,
+    all = false,
   ): Promise<
     PaginationResponseDto<CourseOptionDto> & {
       classes: ClassOptionDto[];
@@ -152,7 +153,9 @@ export class CourseService {
 
     coursesQb.orderBy('class.name', 'ASC');
     coursesQb.addOrderBy('course.name', 'ASC');
-    coursesQb.skip(skip).take(size);
+    if (!all) {
+      coursesQb.skip(skip).take(size);
+    }
 
     const classesQb = this.classRepo
       .createQueryBuilder('class')
@@ -226,7 +229,7 @@ export class CourseService {
       courses: data,
       lectures,
       page,
-      size,
+      size: all ? data.length : size,
       total,
     };
   }

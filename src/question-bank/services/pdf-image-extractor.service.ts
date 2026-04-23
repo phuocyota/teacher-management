@@ -64,10 +64,6 @@ export class PdfImageExtractorService {
         }
 
         imageCount++;
-        this.logger.debug(
-          `Found image operation #${imageCount} on page ${pageNumber}, imageName: ${args[0]}`,
-        );
-
         try {
           const imageObject = await this.resolveImageObject(
             page,
@@ -76,19 +72,12 @@ export class PdfImageExtractorService {
           );
 
           if (!imageObject) {
-            this.logger.debug(
-              `Image #${imageCount} on page ${pageNumber} returned null/undefined`,
-            );
             continue;
           }
 
           const positionMatrix = pdfjsLib.Util.transform(
             viewport.transform,
             currentTransform,
-          );
-
-          this.logger.debug(
-            `Successfully extracted image #${imageCount} on page ${pageNumber}`,
           );
 
           fragments.push({
@@ -109,9 +98,6 @@ export class PdfImageExtractorService {
         }
       }
 
-      this.logger.debug(
-        `Extracted ${fragments.length} images from page ${pageNumber} (total image operations found: ${imageCount})`,
-      );
       return fragments;
     } catch (error) {
       throw new PdfParsingError(
@@ -129,21 +115,11 @@ export class PdfImageExtractorService {
     imageName: any,
     pageNumber: number,
   ): Promise<any> {
-    this.logger.debug(
-      `resolveImageObject called with: type=${typeof imageName}, value=${imageName}, page=${pageNumber}`,
-    );
-
     if (imageName && typeof imageName === 'object') {
-      this.logger.debug(
-        `ImageName is already an object, returning it directly`,
-      );
       return imageName;
     }
 
     if (typeof imageName !== 'string') {
-      this.logger.debug(
-        `ImageName is not a string (type: ${typeof imageName}), returning null`,
-      );
       return null;
     }
 
@@ -158,22 +134,10 @@ export class PdfImageExtractorService {
       try {
         page.objs.get(imageName, (image: any) => {
           clearTimeout(timeout);
-          if (image) {
-            this.logger.debug(
-              `Successfully resolved image "${imageName}" on page ${pageNumber}`,
-            );
-          } else {
-            this.logger.warn(
-              `page.objs.get returned null for image "${imageName}" on page ${pageNumber}`,
-            );
-          }
           resolve(image);
         });
       } catch (err) {
         clearTimeout(timeout);
-        this.logger.error(
-          `Exception in page.objs.get for image "${imageName}" on page ${pageNumber}: ${err}`,
-        );
         resolve(null);
       }
     });
