@@ -538,6 +538,38 @@ describe('QuestionParserService', () => {
       },
     ]);
   });
+
+  it('does not assign the next left-aligned question line into pending column answers', () => {
+    const question: any = {
+      number: 1,
+      pageNumber: 8,
+      stemParts: [
+        { content: 'Chon dap an dung', contentType: ContentTypes.TEXT },
+      ],
+      answers: [
+        { label: 'A', parts: [] },
+        { label: 'B', parts: [] },
+      ],
+      currentAnswer: null,
+      pendingAnswerAnchors: [
+        { label: 'A', x: 180, answer: { label: 'A', parts: [] } },
+        { label: 'B', x: 330, answer: { label: 'B', parts: [] } },
+      ],
+      pendingAnswerLastY: 20,
+    };
+
+    const consumed = (service as any).tryAppendPendingAnswerLine(
+      question,
+      createTextLine(8, 3, 30, 'Cau 2. Be lau sach va cat do choi dung cho'),
+    );
+
+    expect(consumed).toBe(false);
+    expect(question.pendingAnswerAnchors).toEqual([]);
+    expect(question.answers).toEqual([
+      { label: 'A', parts: [] },
+      { label: 'B', parts: [] },
+    ]);
+  });
 });
 
 function createTextLine(

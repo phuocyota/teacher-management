@@ -735,6 +735,16 @@ export class QuestionParserService {
       )
       .sort((left, right) => left.x - right.x);
 
+    if (
+      textFragments.length > 0 &&
+      this.shouldStopPendingAnswerAssignment(anchors, textFragments)
+    ) {
+      currentQuestion.pendingAnswerAnchors = [];
+      currentQuestion.pendingAnswerLastY = null;
+      currentQuestion.currentAnswer = null;
+      return false;
+    }
+
     const assignFragmentsToAnchors = <
       T extends TextLayoutFragment | ImageLayoutFragment,
     >(
@@ -836,6 +846,31 @@ export class QuestionParserService {
     }
 
     return false;
+  }
+
+  private shouldStopPendingAnswerAssignment(
+    anchors: PendingAnswerAnchor[],
+    textFragments: TextLayoutFragment[],
+  ): boolean {
+    const textLine = joinTextFragments(textFragments).trim();
+
+    if (!textLine) {
+      return false;
+    }
+
+    if (this.detectQuestionStart(textLine)) {
+      return true;
+    }
+
+    const answerDetection = this.detectAnswerSegments(textLine);
+    if (answerDetection.segments.length > 0) {
+      return true;
+    }
+
+    const leftmostAnchorX = Math.min(...anchors.map((anchor) => anchor.x));
+    const leftmostTextX = textFragments[0].x;
+
+    return leftmostTextX + 20 < leftmostAnchorX;
   }
 
   private normalizeQuestionAnswers(
