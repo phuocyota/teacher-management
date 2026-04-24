@@ -154,4 +154,41 @@ describe('classifyQuestionType', () => {
       layoutKey: 'text_with_image_stem_image_only_answers',
     });
   });
+
+  it('detects the layout for text-plus-image stem with text-plus-image answers', () => {
+    expect(
+      classifyQuestionType({
+        stemParts: [
+          {
+            content: 'Chon dap an dung cho buc tranh',
+            contentType: ContentTypes.TEXT,
+          },
+          {
+            content: 'question-image',
+            contentType: ContentTypes.IMAGE,
+          },
+        ],
+        answers: [
+          {
+            label: 'A',
+            parts: [
+              { content: 'Dap an A', contentType: ContentTypes.TEXT },
+              { content: 'answer-a-image', contentType: ContentTypes.IMAGE },
+            ],
+          },
+          {
+            label: 'B',
+            parts: [
+              { content: 'Dap an B', contentType: ContentTypes.TEXT },
+              { content: 'answer-b-image', contentType: ContentTypes.IMAGE },
+            ],
+          },
+        ],
+      }),
+    ).toEqual({
+      kind: 'single_choice',
+      questionType: QuestionType.SINGLE_CHOICE,
+      layoutKey: 'text_with_image_stem_text_with_image_answers',
+    });
+  });
 });

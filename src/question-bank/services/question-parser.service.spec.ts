@@ -227,6 +227,41 @@ describe('QuestionParserService', () => {
     ]);
   });
 
+  it('treats repeated labels on the active answer as fragmented content instead of duplicates', () => {
+    const runtimeState: any = {
+      currentQuestion: {
+        number: 2,
+        pageNumber: 2,
+        stemParts: [],
+        answers: [
+          {
+            label: 'A',
+            parts: [{ content: 'Lua chon A', contentType: ContentTypes.TEXT }],
+          },
+          {
+            label: 'B',
+            parts: [{ content: 'Lua chon B', contentType: ContentTypes.TEXT }],
+          },
+          {
+            label: 'C',
+            parts: [{ content: 'Khong ro nguon goc.', contentType: ContentTypes.TEXT }],
+          },
+        ],
+        currentAnswer: {
+          label: 'C',
+          parts: [{ content: 'Khong ro nguon goc.', contentType: ContentTypes.TEXT }],
+        },
+        pendingAnswerAnchors: [],
+        pendingAnswerLastY: null,
+      },
+    };
+
+    (service as any).startAnswer(runtimeState, 2, 'C', '');
+
+    expect(runtimeState.currentQuestion.answers).toHaveLength(3);
+    expect(runtimeState.currentQuestion.currentAnswer.label).toBe('C');
+  });
+
   it('rejects answers that never receive text or image content', async () => {
     const pageContent: PageContent = {
       pageNumber: 1,
@@ -356,6 +391,150 @@ describe('QuestionParserService', () => {
       {
         label: 'C',
         parts: [{ content: 'left-arrow', contentType: ContentTypes.IMAGE }],
+      },
+    ]);
+  });
+
+  it('maps continuation text into the nearest answer column after a shared A B C row', async () => {
+    const pageContent: PageContent = {
+      pageNumber: 5,
+      lines: [
+        createTextLine(5, 0, 10, 'Cau 7. Hay chon hinh co hanh vi dung?'),
+        createTextFragmentsLine(5, 20, [
+          { order: 1, x: 80, width: 140, content: 'A. Su dung dien thoai qua' },
+          { order: 2, x: 235, width: 145, content: 'B. Binh tinh tim loi thoat' },
+          { order: 3, x: 390, width: 130, content: 'C. Tu y be canh, be hoa.' },
+        ]),
+        createTextFragmentsLine(5, 30, [
+          { order: 4, x: 80, width: 35, content: 'nhieu.' },
+          { order: 5, x: 235, width: 95, content: 'hiem khi co chay.' },
+        ]),
+      ],
+    };
+
+    const result = await service.parsePages([pageContent]);
+
+    expect(result.questions[0].answers).toEqual([
+      {
+        label: 'A',
+        parts: [
+          {
+            content: 'Su dung dien thoai qua nhieu.',
+            contentType: ContentTypes.TEXT,
+          },
+        ],
+      },
+      {
+        label: 'B',
+        parts: [
+          {
+            content: 'Binh tinh tim loi thoat hiem khi co chay.',
+            contentType: ContentTypes.TEXT,
+          },
+        ],
+      },
+      {
+        label: 'C',
+        parts: [{ content: 'Tu y be canh, be hoa.', contentType: ContentTypes.TEXT }],
+      },
+    ]);
+  });
+
+  it('does not split the trailing "a." in a normal word into a new A answer', async () => {
+    const pageContent: PageContent = {
+      pageNumber: 6,
+      lines: [
+        createTextLine(6, 0, 10, 'Cau 7. Hay chon hinh co hanh vi dung?'),
+        createTextLine(6, 1, 20, 'A. Su dung dien thoai qua nhieu.'),
+        createTextLine(6, 2, 30, 'B. Binh tinh tim loi thoat hiem khi co chay.'),
+        createTextLine(6, 3, 40, 'C. Tu y be canh, be hoa.'),
+      ],
+    };
+
+    const result = await service.parsePages([pageContent]);
+
+    expect(result.questions).toHaveLength(1);
+    expect(result.questions[0].answers).toEqual([
+      {
+        label: 'A',
+        parts: [
+          {
+            content: 'Su dung dien thoai qua nhieu.',
+            contentType: ContentTypes.TEXT,
+          },
+        ],
+      },
+      {
+        label: 'B',
+        parts: [
+          {
+            content: 'Binh tinh tim loi thoat hiem khi co chay.',
+            contentType: ContentTypes.TEXT,
+          },
+        ],
+      },
+      {
+        label: 'C',
+        parts: [{ content: 'Tu y be canh, be hoa.', contentType: ContentTypes.TEXT }],
+      },
+    ]);
+  });
+
+  it('keeps question image on the stem and answer images under their matching text labels', async () => {
+    const pageContent: PageContent = {
+      pageNumber: 7,
+      lines: [
+        createTextLine(7, 0, 10, 'Cau 1. Chon dap an dung cho buc tranh'),
+        createImageLine(7, 1, 20, 'question-image'),
+        createTextLine(7, 2, 30, 'A. Dap an A'),
+        createImageLine(7, 3, 40, 'answer-a-image'),
+        createTextLine(7, 4, 50, 'B. Dap an B'),
+        createImageLine(7, 5, 60, 'answer-b-image'),
+        createTextLine(7, 6, 70, 'C. Dap an C'),
+        createImageLine(7, 7, 80, 'answer-c-image'),
+      ],
+    };
+
+    const result = await service.parsePages([pageContent]);
+
+    expect(result.questions).toHaveLength(1);
+    expect(result.questions[0]).toMatchObject({
+      number: 1,
+      kind: 'single_choice',
+      questionType: QuestionType.SINGLE_CHOICE,
+      layoutKey: 'text_with_image_stem_text_with_image_answers',
+    });
+    expect(result.questions[0].stemParts).toEqual([
+      {
+        content: 'Chon dap an dung cho buc tranh',
+        contentType: ContentTypes.TEXT,
+      },
+      {
+        content: 'question-image',
+        contentType: ContentTypes.IMAGE,
+      },
+    ]);
+    expect(result.questions[0].answers).toEqual([
+      {
+        label: 'A',
+        parts: [
+          { content: 'Dap an A', contentType: ContentTypes.TEXT },
+          { content: 'answer-a-image', contentType: ContentTypes.IMAGE },
+        ],
+      },
+      {
+        label: 'B',
+        parts: [
+          { content: 'Dap an B', contentType: ContentTypes.TEXT },
+          { content: 'answer-b-image', contentType: ContentTypes.IMAGE },
+        ],
+      },
+      {
+        label: 'C',
+        parts: [
+          { content: 'Dap an C', contentType: ContentTypes.TEXT },
+          { content: 'answer-c-image', contentType: ContentTypes.IMAGE },
+        ],
       },
     ]);
   });

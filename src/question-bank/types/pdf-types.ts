@@ -42,9 +42,12 @@ export interface PdfPage {
   getOperatorList(): Promise<PdfOperatorList>;
   cleanup?(): boolean;
   objs: {
+    get(name: string): any;
     get(name: string, callback: (obj: any) => void): void;
+    has(name: string): boolean;
   };
-  render(options: any): Promise<void>;
+  imageCoordinates?: ArrayLike<number> | null;
+  render(options: any): Promise<void> | { promise: Promise<void> };
 }
 
 export interface PdfDocument {
@@ -75,6 +78,13 @@ export interface PdfJsLib {
   Util: {
     transform(m1: number[], m2: number[]): number[];
   };
+}
+
+export interface PdfCanvas {
+  width: number;
+  height: number;
+  toBuffer(mimeType?: string): Buffer;
+  getContext(contextId: '2d'): any;
 }
 
 export interface ImageObject {

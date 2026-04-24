@@ -32,6 +32,7 @@ interface DraftQuestionBlock {
   answers: ParsedAnswerOption[];
   currentAnswer: ParsedAnswerOption | null;
   pendingAnswerAnchors: PendingAnswerAnchor[];
+  pendingAnswerLastY: number | null;
 }
 
 interface ParserRuntimeState {
@@ -44,6 +45,12 @@ interface PendingAnswerAnchor {
   label: AnswerOptionLabel;
   x: number;
   answer: ParsedAnswerOption;
+}
+
+interface ColumnAnswerTextAnchor {
+  label: AnswerOptionLabel;
+  x: number;
+  text: string;
 }
 
 type TextLayoutFragment = LayoutFragment & { kind: 'text' };
@@ -134,6 +141,18 @@ export class QuestionParserService {
     }
 
     if (currentQuestion) {
+      const columnAnswerAnchors = this.detectColumnAnswerTextLine(line);
+
+      if (columnAnswerAnchors) {
+        this.queuePendingColumnAnswerAnchors(
+          currentQuestion,
+          columnAnswerAnchors,
+          pageNumber,
+          line.y,
+        );
+        return { shouldEnterAnswerKey: false };
+      }
+
       const answerAnchors = this.detectBareAnswerAnchorLine(line);
 
       if (answerAnchors) {
@@ -141,6 +160,7 @@ export class QuestionParserService {
           currentQuestion,
           answerAnchors,
           pageNumber,
+          line.y,
         );
         return { shouldEnterAnswerKey: false };
       }
@@ -306,6 +326,7 @@ export class QuestionParserService {
         answers: [],
         currentAnswer: null,
         pendingAnswerAnchors: [],
+        pendingAnswerLastY: null,
       };
       return;
     }
@@ -350,6 +371,33 @@ export class QuestionParserService {
       throw new PdfParsingError(
         `Found answer label ${label} before question start`,
         pageNumber,
+      );
+    }
+
+    const existingAnswer = currentQuestion.answers.find(
+      (answer) => answer.label === label,
+    );
+
+    if (existingAnswer) {
+      const activeAnswer =
+        currentQuestion.currentAnswer ??
+        currentQuestion.answers[currentQuestion.answers.length - 1] ??
+        null;
+
+      if (activeAnswer?.label === label) {
+        currentQuestion.currentAnswer = existingAnswer;
+
+        if (initialText) {
+          this.appendAnswerText(existingAnswer, initialText);
+        }
+
+        return;
+      }
+
+      throw new PdfParsingError(
+        `Duplicate answer label ${label} detected`,
+        pageNumber,
+        { questionNumber: currentQuestion.number },
       );
     }
 
@@ -563,10 +611,48 @@ export class QuestionParserService {
       : null;
   }
 
+  private detectColumnAnswerTextLine(
+    line: PageContent['lines'][number],
+  ): ColumnAnswerTextAnchor[] | null {
+    if (line.fragments.some((fragment) => fragment.kind === 'image')) {
+      return null;
+    }
+
+    const anchors: ColumnAnswerTextAnchor[] = [];
+
+    for (const fragment of line.fragments) {
+      if (fragment.kind !== 'text') {
+        return null;
+      }
+
+      const content = fragment.content.trim();
+      const match = content.match(/^([A-Da-d])\s*[.)\:\-]\s*(.*)$/);
+
+      if (match) {
+        anchors.push({
+          label: match[1].toUpperCase() as AnswerOptionLabel,
+          x: fragment.x,
+          text: match[2]?.trim() ?? '',
+        });
+        continue;
+      }
+
+      if (/^[.,;:!?]+$/.test(content) && anchors.length > 0) {
+        anchors[anchors.length - 1].text = `${anchors[anchors.length - 1].text}${content}`;
+        continue;
+      }
+
+      return null;
+    }
+
+    return anchors.length >= 2 ? anchors.sort((left, right) => left.x - right.x) : null;
+  }
+
   private queuePendingAnswerAnchors(
     currentQuestion: DraftQuestionBlock,
     anchors: Array<{ label: AnswerOptionLabel; x: number }>,
     pageNumber: number,
+    lineY: number,
   ): void {
     if (currentQuestion.pendingAnswerAnchors.length > 0) {
       currentQuestion.pendingAnswerAnchors = [];
@@ -580,6 +666,38 @@ export class QuestionParserService {
         pageNumber,
       ),
     }));
+    currentQuestion.pendingAnswerLastY = lineY;
+    currentQuestion.currentAnswer = null;
+  }
+
+  private queuePendingColumnAnswerAnchors(
+    currentQuestion: DraftQuestionBlock,
+    anchors: ColumnAnswerTextAnchor[],
+    pageNumber: number,
+    lineY: number,
+  ): void {
+    if (currentQuestion.pendingAnswerAnchors.length > 0) {
+      currentQuestion.pendingAnswerAnchors = [];
+    }
+
+    currentQuestion.pendingAnswerAnchors = anchors.map((anchor) => {
+      const answer = this.createAnswerPlaceholder(
+        currentQuestion,
+        anchor.label,
+        pageNumber,
+      );
+
+      if (anchor.text) {
+        this.appendAnswerText(answer, anchor.text);
+      }
+
+      return {
+        label: anchor.label,
+        x: anchor.x,
+        answer,
+      };
+    });
+    currentQuestion.pendingAnswerLastY = lineY;
     currentQuestion.currentAnswer = null;
   }
 
@@ -595,6 +713,16 @@ export class QuestionParserService {
       return false;
     }
 
+    if (
+      currentQuestion.pendingAnswerLastY !== null &&
+      Math.abs(line.y - currentQuestion.pendingAnswerLastY) > 120
+    ) {
+      currentQuestion.pendingAnswerAnchors = [];
+      currentQuestion.pendingAnswerLastY = null;
+      currentQuestion.currentAnswer = null;
+      return false;
+    }
+
     const imageFragments = line.fragments
       .filter(
         (fragment): fragment is ImageLayoutFragment => fragment.kind === 'image',
@@ -606,6 +734,28 @@ export class QuestionParserService {
           fragment.kind === 'text' && fragment.content.trim().length > 0,
       )
       .sort((left, right) => left.x - right.x);
+
+    const assignFragmentsToAnchors = <
+      T extends TextLayoutFragment | ImageLayoutFragment,
+    >(
+      fragments: T[],
+      append: (anchor: PendingAnswerAnchor, fragment: T) => void,
+    ): void => {
+      for (const fragment of fragments) {
+        const nearestAnchor = anchors.reduce((closest, candidate) => {
+          if (
+            Math.abs(candidate.x - fragment.x) <
+            Math.abs(closest.x - fragment.x)
+          ) {
+            return candidate;
+          }
+
+          return closest;
+        }, anchors[0]);
+
+        append(nearestAnchor, fragment);
+      }
+    };
 
     if (imageFragments.length >= anchors.length && textFragments.length === 0) {
       anchors.forEach((anchor, index) => {
@@ -624,6 +774,7 @@ export class QuestionParserService {
       }
 
       currentQuestion.pendingAnswerAnchors = [];
+      currentQuestion.pendingAnswerLastY = line.y;
       currentQuestion.currentAnswer = null;
       return true;
     }
@@ -631,6 +782,7 @@ export class QuestionParserService {
     if (imageFragments.length === 1 && textFragments.length === 0) {
       this.appendAnswerImage(anchors[0].answer, imageFragments[0].content);
       currentQuestion.pendingAnswerAnchors = anchors.slice(1);
+      currentQuestion.pendingAnswerLastY = line.y;
       currentQuestion.currentAnswer = null;
       return true;
     }
@@ -652,6 +804,7 @@ export class QuestionParserService {
       }
 
       currentQuestion.pendingAnswerAnchors = [];
+      currentQuestion.pendingAnswerLastY = line.y;
       currentQuestion.currentAnswer = null;
       return true;
     }
@@ -659,6 +812,25 @@ export class QuestionParserService {
     if (textFragments.length === 1 && imageFragments.length === 0) {
       this.appendAnswerText(anchors[0].answer, textFragments[0].content);
       currentQuestion.pendingAnswerAnchors = anchors.slice(1);
+      currentQuestion.pendingAnswerLastY = line.y;
+      currentQuestion.currentAnswer = null;
+      return true;
+    }
+
+    if (textFragments.length > 0 && imageFragments.length === 0) {
+      assignFragmentsToAnchors(textFragments, (anchor, fragment) => {
+        this.appendAnswerText(anchor.answer, fragment.content);
+      });
+      currentQuestion.pendingAnswerLastY = line.y;
+      currentQuestion.currentAnswer = null;
+      return true;
+    }
+
+    if (imageFragments.length > 0 && textFragments.length === 0) {
+      assignFragmentsToAnchors(imageFragments, (anchor, fragment) => {
+        this.appendAnswerImage(anchor.answer, fragment.content);
+      });
+      currentQuestion.pendingAnswerLastY = line.y;
       currentQuestion.currentAnswer = null;
       return true;
     }

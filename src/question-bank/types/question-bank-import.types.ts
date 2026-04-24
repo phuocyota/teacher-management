@@ -58,12 +58,15 @@ export type ContentLayoutShape =
 export type MultipleChoiceLayoutKey =
   | 'text_only_stem_text_only_answers'
   | 'text_only_stem_image_only_answers'
+  | 'text_only_stem_text_with_image_answers'
   | 'text_only_stem_mixed_answers'
   | 'image_only_stem_text_only_answers'
   | 'image_only_stem_image_only_answers'
+  | 'image_only_stem_text_with_image_answers'
   | 'image_only_stem_mixed_answers'
   | 'text_with_image_stem_text_only_answers'
   | 'text_with_image_stem_image_only_answers'
+  | 'text_with_image_stem_text_with_image_answers'
   | 'text_with_image_stem_mixed_answers'
   | 'mixed_stem_mixed_answers';
 

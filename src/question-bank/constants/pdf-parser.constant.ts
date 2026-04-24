@@ -76,10 +76,22 @@ export const PDF_PARSER_CONFIG = {
   IMAGE_ORDER_START: 100000,
 
   /**
-   * Maximum time to wait for pdf.js to resolve an image object before skipping it.
-   * This prevents a single unresolved XObject from stalling the whole page import.
+   * Scale used when rendering a PDF page to bitmap before cropping image regions.
+   * Higher values improve crop fidelity at the cost of CPU/memory.
    */
-  IMAGE_OBJECT_TIMEOUT_MS: 2000,
+  IMAGE_RENDER_SCALE: 2,
+
+  /**
+   * Minimum rendered image width/height in pixels.
+   * Tiny paint operations are usually masks/noise and should be ignored.
+   */
+  MIN_IMAGE_CROP_SIZE_PX: 8,
+
+  /**
+   * Ignore extremely thin image regions such as separator lines or borders
+   * that pdf.js can still record as images after rendering.
+   */
+  MIN_IMAGE_THICKNESS_PX: 12,
 
   /**
    * Maximum time to wait for pdf.js document destroy to complete before
