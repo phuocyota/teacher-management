@@ -26,16 +26,22 @@ import { autoMapListToDto } from 'src/common/utils/auto-map.util';
 import { QuestionBankQuestionEntity } from 'src/question-bank-question/question-bank-question.entity';
 import { QuestionBankQuestionService } from 'src/question-bank-question/question-bank-question.service';
 import { QuestionType } from './enum/question-type.enum';
+import { AnswerEntity } from 'src/answer/answer.entity';
+import { ContentTypes } from 'src/common/enum/content-type.enum';
+import { UploadService } from 'src/upload/upload.service';
 
 @Injectable()
 export class QuestionService {
   constructor(
     @InjectRepository(QuestionEntity)
     private readonly questionRepo: Repository<QuestionEntity>,
+    @InjectRepository(AnswerEntity)
+    private readonly answerRepo: Repository<AnswerEntity>,
     @Inject(forwardRef(() => QuestionBankService))
     private readonly questionBankService: QuestionBankService,
     @Inject(forwardRef(() => QuestionBankQuestionService))
     private readonly questionBankQuestionService: QuestionBankQuestionService,
+    private readonly uploadService: UploadService,
   ) {}
 
   async create(dto: CreateQuestionDto): Promise<QuestionEntity> {
@@ -233,8 +239,21 @@ export class QuestionService {
   }
 
   async remove(id: string): Promise<void> {
-    const record = await this.findOne(id);
-    await this.questionRepo.remove(record);
+    const questionChain = await this.getQuestionChainEntities(id);
+    const questionIds = questionChain.map((question) => question.id);
+    const answerChains = await this.getAnswerChainsForQuestions(questionIds);
+
+    await this.deleteImagesFromAnswers(answerChains.flat());
+    await this.deleteImagesFromQuestions(questionChain);
+
+    const answersToDelete = answerChains.flat();
+    if (answersToDelete.length > 0) {
+      await this.answerRepo.remove(answersToDelete);
+    }
+
+    if (questionChain.length > 0) {
+      await this.questionRepo.remove(questionChain);
+    }
   }
 
   async createBulk(
@@ -318,5 +337,96 @@ export class QuestionService {
       meta: question.meta,
       nextContent: nextQuestion?.id ?? question.nextContent ?? null,
     };
+  }
+
+  private async getQuestionChainEntities(id: string): Promise<QuestionEntity[]> {
+    const chain: QuestionEntity[] = [];
+    let currentId: string | undefined = id;
+    const visited = new Set<string>();
+
+    while (currentId && !visited.has(currentId)) {
+      const question = await this.questionRepo.findOne({
+        where: { id: currentId },
+      });
+
+      if (!question) {
+        break;
+      }
+
+      chain.push(question);
+      visited.add(question.id);
+      currentId = question.nextContent;
+    }
+
+    if (chain.length === 0) {
+      throw new NotFoundException(
+        ERROR_MESSAGES.NOT_FOUND_WITH_ID(
+          ENTITY_NAMES.QUESTION ?? 'CÃ¢u há»i',
+          id,
+        ),
+      );
+    }
+
+    return chain;
+  }
+
+  private async getAnswerChainsForQuestions(
+    questionIds: string[],
+  ): Promise<AnswerEntity[][]> {
+    if (questionIds.length === 0) {
+      return [];
+    }
+
+    const answers = await this.answerRepo.find({
+      where: questionIds.map((questionId) => ({ questionId })),
+    });
+    const answersById = new Map(answers.map((answer) => [answer.id, answer]));
+    const nextContentTargets = new Set(
+      answers
+        .map((answer) => answer.nextContent)
+        .filter((nextContent): nextContent is string => !!nextContent),
+    );
+    const rootAnswers = answers.filter((answer) => !nextContentTargets.has(answer.id));
+
+    return rootAnswers.map((rootAnswer) => {
+      const chain: AnswerEntity[] = [];
+      const visited = new Set<string>();
+      let current: AnswerEntity | undefined = rootAnswer;
+
+      while (current && !visited.has(current.id)) {
+        chain.push(current);
+        visited.add(current.id);
+        current = current.nextContent
+          ? answersById.get(current.nextContent)
+          : undefined;
+      }
+
+      return chain;
+    });
+  }
+
+  private async deleteImagesFromQuestions(
+    questions: QuestionEntity[],
+  ): Promise<void> {
+    for (const question of questions) {
+      await this.deleteImageIfNeeded(question.contentType, question.content);
+    }
+  }
+
+  private async deleteImagesFromAnswers(answers: AnswerEntity[]): Promise<void> {
+    for (const answer of answers) {
+      await this.deleteImageIfNeeded(answer.contentType, answer.content);
+    }
+  }
+
+  private async deleteImageIfNeeded(
+    contentType: ContentTypes,
+    content: string,
+  ): Promise<void> {
+    if (contentType !== ContentTypes.IMAGE || !content) {
+      return;
+    }
+
+    await this.uploadService.deleteFileByPath(content);
   }
 }
