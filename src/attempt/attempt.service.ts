@@ -425,7 +425,7 @@ export class AttemptService {
         type: rootQuestion.type,
         contentType: rootQuestion.contentType,
         content: rootQuestion.content,
-        nextContent: rootQuestion.nextContent ?? null,
+        nextContent: rootQuestion.nextContent ?? questionChain[1]?.id ?? null,
         chain: this.mapQuestionChain(questionChain),
         answers: mappedAnswers,
         studentAnswerId: studentAnswer?.id ?? null,
@@ -752,7 +752,7 @@ export class AttemptService {
         type: rootQuestion.type,
         contentType: rootQuestion.contentType,
         content: rootQuestion.content,
-        nextContent: rootQuestion.nextContent ?? null,
+        nextContent: rootQuestion.nextContent ?? questionChain[1]?.id ?? null,
         chain: this.mapQuestionChain(questionChain),
         answers: mappedAnswers,
       });
@@ -899,13 +899,13 @@ export class AttemptService {
   private mapQuestionChain(
     chain: QuestionEntity[],
   ): AttemptQuestionChainItemDto[] {
-    return chain.map((item) => ({
+    return chain.map((item, index) => ({
       id: item.id,
       type: item.type,
       contentType: item.contentType,
       content: item.content,
       meta: item.meta ?? null,
-      nextContent: item.nextContent ?? null,
+      nextContent: item.nextContent ?? chain[index + 1]?.id ?? null,
     }));
   }
 
@@ -997,12 +997,12 @@ export class AttemptService {
 
   private mapAnswerChain(chain: AnswerEntity[]): AttemptAnswerOptionDto {
     const root = chain[0];
-    const mappedParts: AttemptAnswerChainItemDto[] = chain.map((item) => ({
+    const mappedParts: AttemptAnswerChainItemDto[] = chain.map((item, index) => ({
       id: item.id,
       contentType: item.contentType,
       content: item.content,
       meta: item.meta ?? null,
-      nextContent: item.nextContent ?? null,
+      nextContent: item.nextContent ?? chain[index + 1]?.id ?? null,
     }));
 
     return {
@@ -1010,7 +1010,7 @@ export class AttemptService {
       contentType: root.contentType,
       content: root.content,
       meta: root.meta ?? null,
-      nextContent: root.nextContent ?? null,
+      nextContent: root.nextContent ?? chain[1]?.id ?? null,
       chain: mappedParts,
     };
   }
