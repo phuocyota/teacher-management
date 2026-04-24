@@ -38,6 +38,7 @@ import { UploadService } from 'src/upload/upload.service';
 import { FileType } from 'src/upload/enum/file-visibility.enum';
 import { ANSWER_OPTION_LABELS } from '../constants/question-bank-import-patterns.constant';
 import {
+  joinTextFragments,
   normalizeImportSignature,
   normalizeImportText,
 } from '../utils/question-import-text.utils';
@@ -697,10 +698,7 @@ export class QuestionBankImportService {
   }
 
   private composeTextLine(line: LayoutLine): string {
-    return line.fragments
-      .filter((fragment) => fragment.kind === 'text')
-      .map((fragment) => fragment.content)
-      .join(' ');
+    return joinTextFragments(line.fragments);
   }
 
   private async persistImagePart(

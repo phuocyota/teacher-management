@@ -154,8 +154,77 @@ describe('QuestionParserService', () => {
       PdfParsingError,
     );
     await expect(service.parsePages([pageContent])).rejects.toThrow(
-      'Invalid answer order',
+      'Answer labels must be sequential from A',
     );
+  });
+
+  it('reorders answers by label when pdf layout surfaces B and C before A', async () => {
+    const pageContent: PageContent = {
+      pageNumber: 2,
+      lines: [
+        createTextLine(2, 0, 10, 'Cau 4. Hanh dong nao the hien em yeu thuong gia dinh?'),
+        createTextLine(
+          2,
+          1,
+          20,
+          'B. Gianh do choi voi em nho C. Bo di choi khong xin phep',
+        ),
+        createTextLine(2, 2, 30, 'A. Giup bo me viec nha'),
+      ],
+    };
+
+    const result = await service.parsePages([pageContent]);
+
+    expect(result.questions).toHaveLength(1);
+    expect(result.questions[0].answers).toEqual([
+      {
+        label: 'A',
+        parts: [{ content: 'Giup bo me viec nha', contentType: ContentTypes.TEXT }],
+      },
+      {
+        label: 'B',
+        parts: [
+          { content: 'Gianh do choi voi em nho', contentType: ContentTypes.TEXT },
+        ],
+      },
+      {
+        label: 'C',
+        parts: [
+          { content: 'Bo di choi khong xin phep', contentType: ContentTypes.TEXT },
+        ],
+      },
+    ]);
+  });
+
+  it('joins fragmented pdf text without injecting spaces inside words', async () => {
+    const pageContent: PageContent = {
+      pageNumber: 1,
+      lines: [
+        createTextFragmentsLine(1, 10, [
+          { order: 0, x: 10, width: 42, content: 'Câu 2: T' },
+          { order: 1, x: 52.2, width: 56, content: 'heo quy t' },
+          { order: 2, x: 108.4, width: 5, content: 'ắ' },
+          { order: 3, x: 113.7, width: 58, content: 'c 5 ngón tay' },
+          {
+            order: 4,
+            x: 172.1,
+            width: 140,
+            content: ', ngón tay áp út tượng trưng cho ai?',
+          },
+        ]),
+        createTextLine(1, 5, 20, 'A. Người thân'),
+        createTextLine(1, 6, 30, 'B. Người quen'),
+      ],
+    };
+
+    const result = await service.parsePages([pageContent]);
+
+    expect(result.questions[0].stemParts).toEqual([
+      {
+        content: 'Theo quy tắc 5 ngón tay, ngón tay áp út tượng trưng cho ai?',
+        contentType: ContentTypes.TEXT,
+      },
+    ]);
   });
 
   it('rejects answers that never receive text or image content', async () => {
@@ -343,7 +412,12 @@ function createImageLine(
 function createTextFragmentsLine(
   pageNumber: number,
   y: number,
-  fragments: Array<{ order: number; x: number; content: string }>,
+  fragments: Array<{
+    order: number;
+    x: number;
+    content: string;
+    width?: number;
+  }>,
 ): LayoutLine {
   return {
     y,
@@ -353,7 +427,7 @@ function createTextFragmentsLine(
       content: fragment.content,
       x: fragment.x,
       y,
-      width: 20,
+      width: fragment.width ?? 20,
       height: 10,
       pageNumber,
       order: fragment.order,

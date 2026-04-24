@@ -22,7 +22,7 @@ import {
   sanitizeCommonPdfLine,
   splitInlineAnswerKeyLine,
 } from '../utils/question-parser.utils';
-import { mergeImportText } from '../utils/question-import-text.utils';
+import { joinTextFragments } from '../utils/question-import-text.utils';
 import { classifyQuestionType } from '../utils/question-type-classifier.utils';
 
 interface DraftQuestionBlock {
@@ -146,10 +146,12 @@ export class QuestionParserService {
       }
     }
 
-    let lineBuffer = '';
+    let pendingTextFragments: TextLayoutFragment[] = [];
 
     for (const fragment of line.fragments) {
       if (fragment.kind === 'image') {
+        const lineBuffer = joinTextFragments(pendingTextFragments);
+
         if (lineBuffer.trim()) {
           const lineResult = this.processTextLine(
             lineBuffer,
@@ -162,13 +164,15 @@ export class QuestionParserService {
           }
         }
 
-        lineBuffer = '';
+        pendingTextFragments = [];
         this.appendImage(fragment.content, runtimeState, pageNumber);
         continue;
       }
 
-      lineBuffer = mergeImportText(lineBuffer, fragment.content);
+      pendingTextFragments.push(fragment as TextLayoutFragment);
     }
+
+    const lineBuffer = joinTextFragments(pendingTextFragments);
 
     if (!lineBuffer.trim()) {
       return { shouldEnterAnswerKey: false };
@@ -400,6 +404,10 @@ export class QuestionParserService {
       return;
     }
 
+    currentQuestion.answers = this.normalizeQuestionAnswers(
+      currentQuestion.answers,
+    );
+
     const classification = classifyQuestionType({
       stemParts: currentQuestion.stemParts,
       answers: currentQuestion.answers,
@@ -490,10 +498,7 @@ export class QuestionParserService {
   }
 
   private composeTextLine(line: PageContent['lines'][number]): string {
-    return line.fragments
-      .filter((fragment) => fragment.kind === 'text')
-      .map((fragment) => fragment.content)
-      .join(' ');
+    return joinTextFragments(line.fragments);
   }
 
   private shouldAppendLineToStem(
@@ -661,18 +666,37 @@ export class QuestionParserService {
     return false;
   }
 
+  private normalizeQuestionAnswers(
+    answers: ParsedAnswerOption[],
+  ): ParsedAnswerOption[] {
+    const answerOrder: Record<AnswerOptionLabel, number> = {
+      A: 0,
+      B: 1,
+      C: 2,
+      D: 3,
+    };
+
+    return [...answers].sort(
+      (left, right) => answerOrder[left.label] - answerOrder[right.label],
+    );
+  }
+
   private createAnswerPlaceholder(
     currentQuestion: DraftQuestionBlock,
     label: AnswerOptionLabel,
     pageNumber: number,
   ): ParsedAnswerOption {
-    const expectedLabel = (['A', 'B', 'C', 'D'] as const)[
-      currentQuestion.answers.length
-    ];
-
-    if (!expectedLabel || label !== expectedLabel) {
+    if (currentQuestion.answers.length >= 4) {
       throw new PdfParsingError(
-        `Invalid answer order, expected ${expectedLabel ?? 'no more answers'} but got ${label}`,
+        `Invalid answer order, expected no more answers but got ${label}`,
+        pageNumber,
+        { questionNumber: currentQuestion.number },
+      );
+    }
+
+    if (currentQuestion.answers.some((answer) => answer.label === label)) {
+      throw new PdfParsingError(
+        `Duplicate answer label ${label} detected`,
         pageNumber,
         { questionNumber: currentQuestion.number },
       );
