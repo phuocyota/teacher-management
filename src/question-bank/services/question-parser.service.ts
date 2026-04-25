@@ -32,7 +32,6 @@ interface DraftQuestionBlock {
   answers: ParsedAnswerOption[];
   currentAnswer: ParsedAnswerOption | null;
   pendingAnswerAnchors: PendingAnswerAnchor[];
-  pendingAnswerLastY: number | null;
 }
 
 interface ParserRuntimeState {
@@ -44,6 +43,7 @@ interface ParserRuntimeState {
 interface PendingAnswerAnchor {
   label: AnswerOptionLabel;
   x: number;
+  y: number;
   answer: ParsedAnswerOption;
 }
 
@@ -326,7 +326,6 @@ export class QuestionParserService {
         answers: [],
         currentAnswer: null,
         pendingAnswerAnchors: [],
-        pendingAnswerLastY: null,
       };
       return;
     }
@@ -341,7 +340,10 @@ export class QuestionParserService {
     }
 
     if (runtimeState.currentQuestion.currentAnswer) {
-      this.appendAnswerText(runtimeState.currentQuestion.currentAnswer, event.text);
+      this.appendAnswerText(
+        runtimeState.currentQuestion.currentAnswer,
+        event.text,
+      );
       return;
     }
 
@@ -352,7 +354,10 @@ export class QuestionParserService {
     appendLineToParts(question.stemParts, text);
   }
 
-  private appendStemImage(question: DraftQuestionBlock, imageContent: string): void {
+  private appendStemImage(
+    question: DraftQuestionBlock,
+    imageContent: string,
+  ): void {
     question.stemParts.push({
       content: imageContent,
       contentType: ContentTypes.IMAGE,
@@ -401,7 +406,11 @@ export class QuestionParserService {
       );
     }
 
-    const answer = this.createAnswerPlaceholder(currentQuestion, label, pageNumber);
+    const answer = this.createAnswerPlaceholder(
+      currentQuestion,
+      label,
+      pageNumber,
+    );
     currentQuestion.currentAnswer = answer;
 
     if (initialText) {
@@ -478,13 +487,18 @@ export class QuestionParserService {
   private validateQuestionBlock(question: ParsedQuestionBlock): void {
     const hasStemText = question.stemParts.some(
       (part) =>
-        part.contentType === ContentTypes.TEXT && part.content.trim().length > 0,
+        part.contentType === ContentTypes.TEXT &&
+        part.content.trim().length > 0,
     );
 
     if (!hasStemText) {
-      throw new PdfParsingError('Question stem text is required', question.pageNumber, {
-        questionNumber: question.number,
-      });
+      throw new PdfParsingError(
+        'Question stem text is required',
+        question.pageNumber,
+        {
+          questionNumber: question.number,
+        },
+      );
     }
 
     if (question.answers.length === 0) {
@@ -638,14 +652,17 @@ export class QuestionParserService {
       }
 
       if (/^[.,;:!?]+$/.test(content) && anchors.length > 0) {
-        anchors[anchors.length - 1].text = `${anchors[anchors.length - 1].text}${content}`;
+        anchors[anchors.length - 1].text =
+          `${anchors[anchors.length - 1].text}${content}`;
         continue;
       }
 
       return null;
     }
 
-    return anchors.length >= 2 ? anchors.sort((left, right) => left.x - right.x) : null;
+    return anchors.length >= 2
+      ? anchors.sort((left, right) => left.x - right.x)
+      : null;
   }
 
   private queuePendingAnswerAnchors(
@@ -660,13 +677,13 @@ export class QuestionParserService {
 
     currentQuestion.pendingAnswerAnchors = anchors.map((anchor) => ({
       ...anchor,
+      y: lineY,
       answer: this.createAnswerPlaceholder(
         currentQuestion,
         anchor.label,
         pageNumber,
       ),
     }));
-    currentQuestion.pendingAnswerLastY = lineY;
     currentQuestion.currentAnswer = null;
   }
 
@@ -694,10 +711,10 @@ export class QuestionParserService {
       return {
         label: anchor.label,
         x: anchor.x,
+        y: lineY,
         answer,
       };
     });
-    currentQuestion.pendingAnswerLastY = lineY;
     currentQuestion.currentAnswer = null;
   }
 
@@ -713,19 +730,21 @@ export class QuestionParserService {
       return false;
     }
 
-    if (
-      currentQuestion.pendingAnswerLastY !== null &&
-      Math.abs(line.y - currentQuestion.pendingAnswerLastY) > 120
-    ) {
-      currentQuestion.pendingAnswerAnchors = [];
-      currentQuestion.pendingAnswerLastY = null;
-      currentQuestion.currentAnswer = null;
-      return false;
+    if (anchors.length > 0) {
+      const allAnchorsOutOfRange = anchors.every(
+        (anchor) => Math.abs(line.y - anchor.y) > 120,
+      );
+      if (allAnchorsOutOfRange) {
+        currentQuestion.pendingAnswerAnchors = [];
+        currentQuestion.currentAnswer = null;
+        return false;
+      }
     }
 
     const imageFragments = line.fragments
       .filter(
-        (fragment): fragment is ImageLayoutFragment => fragment.kind === 'image',
+        (fragment): fragment is ImageLayoutFragment =>
+          fragment.kind === 'image',
       )
       .sort((left, right) => left.x - right.x);
     const textFragments = line.fragments
@@ -740,7 +759,6 @@ export class QuestionParserService {
       this.shouldStopPendingAnswerAssignment(anchors, textFragments)
     ) {
       currentQuestion.pendingAnswerAnchors = [];
-      currentQuestion.pendingAnswerLastY = null;
       currentQuestion.currentAnswer = null;
       return false;
     }
@@ -768,79 +786,99 @@ export class QuestionParserService {
     };
 
     if (imageFragments.length >= anchors.length && textFragments.length === 0) {
-      anchors.forEach((anchor, index) => {
-        const fragment = imageFragments[index];
-
-        if (fragment) {
-          this.appendAnswerImage(anchor.answer, fragment.content);
-        }
+      // Track which anchors received fragments
+      const anchorsWithContent = new Set<PendingAnswerAnchor>();
+      assignFragmentsToAnchors(imageFragments, (anchor, fragment) => {
+        this.appendAnswerImage(anchor.answer, fragment.content);
+        anchorsWithContent.add(anchor);
       });
 
-      for (let index = anchors.length; index < imageFragments.length; index++) {
-        this.appendAnswerImage(
-          anchors[anchors.length - 1].answer,
-          imageFragments[index].content,
-        );
-      }
-
-      currentQuestion.pendingAnswerAnchors = [];
-      currentQuestion.pendingAnswerLastY = line.y;
+      // Remove anchors that received content; keep only those that didn't
+      currentQuestion.pendingAnswerAnchors =
+        currentQuestion.pendingAnswerAnchors
+          .filter((anchor) => !anchorsWithContent.has(anchor))
+          .map((anchor) => ({
+            ...anchor,
+            y: line.y,
+          }));
       currentQuestion.currentAnswer = null;
       return true;
     }
 
     if (imageFragments.length === 1 && textFragments.length === 0) {
       this.appendAnswerImage(anchors[0].answer, imageFragments[0].content);
-      currentQuestion.pendingAnswerAnchors = anchors.slice(1);
-      currentQuestion.pendingAnswerLastY = line.y;
+      currentQuestion.pendingAnswerAnchors = anchors.slice(1).map((anchor) => ({
+        ...anchor,
+        y: line.y,
+      }));
       currentQuestion.currentAnswer = null;
       return true;
     }
 
     if (textFragments.length >= anchors.length && imageFragments.length === 0) {
-      anchors.forEach((anchor, index) => {
-        const fragment = textFragments[index];
-
-        if (fragment) {
-          this.appendAnswerText(anchor.answer, fragment.content);
-        }
+      // Track which anchors received fragments
+      const anchorsWithContent = new Set<PendingAnswerAnchor>();
+      assignFragmentsToAnchors(textFragments, (anchor, fragment) => {
+        this.appendAnswerText(anchor.answer, fragment.content);
+        anchorsWithContent.add(anchor);
       });
 
-      for (let index = anchors.length; index < textFragments.length; index++) {
-        this.appendAnswerText(
-          anchors[anchors.length - 1].answer,
-          textFragments[index].content,
-        );
-      }
-
-      currentQuestion.pendingAnswerAnchors = [];
-      currentQuestion.pendingAnswerLastY = line.y;
+      // Remove anchors that received content; keep only those that didn't
+      currentQuestion.pendingAnswerAnchors =
+        currentQuestion.pendingAnswerAnchors
+          .filter((anchor) => !anchorsWithContent.has(anchor))
+          .map((anchor) => ({
+            ...anchor,
+            y: line.y,
+          }));
       currentQuestion.currentAnswer = null;
       return true;
     }
 
     if (textFragments.length === 1 && imageFragments.length === 0) {
       this.appendAnswerText(anchors[0].answer, textFragments[0].content);
-      currentQuestion.pendingAnswerAnchors = anchors.slice(1);
-      currentQuestion.pendingAnswerLastY = line.y;
+      currentQuestion.pendingAnswerAnchors = anchors.slice(1).map((anchor) => ({
+        ...anchor,
+        y: line.y,
+      }));
       currentQuestion.currentAnswer = null;
       return true;
     }
 
     if (textFragments.length > 0 && imageFragments.length === 0) {
+      // Track which anchors received fragments
+      const anchorsWithContent = new Set<PendingAnswerAnchor>();
       assignFragmentsToAnchors(textFragments, (anchor, fragment) => {
         this.appendAnswerText(anchor.answer, fragment.content);
+        anchorsWithContent.add(anchor);
       });
-      currentQuestion.pendingAnswerLastY = line.y;
+      // Remove anchors that received content; keep only those that didn't
+      currentQuestion.pendingAnswerAnchors =
+        currentQuestion.pendingAnswerAnchors
+          .filter((anchor) => !anchorsWithContent.has(anchor))
+          .map((anchor) => ({
+            ...anchor,
+            y: line.y,
+          }));
       currentQuestion.currentAnswer = null;
       return true;
     }
 
     if (imageFragments.length > 0 && textFragments.length === 0) {
+      // Track which anchors received fragments
+      const anchorsWithContent = new Set<PendingAnswerAnchor>();
       assignFragmentsToAnchors(imageFragments, (anchor, fragment) => {
         this.appendAnswerImage(anchor.answer, fragment.content);
+        anchorsWithContent.add(anchor);
       });
-      currentQuestion.pendingAnswerLastY = line.y;
+      // Remove anchors that received content; keep only those that didn't
+      currentQuestion.pendingAnswerAnchors =
+        currentQuestion.pendingAnswerAnchors
+          .filter((anchor) => !anchorsWithContent.has(anchor))
+          .map((anchor) => ({
+            ...anchor,
+            y: line.y,
+          }));
       currentQuestion.currentAnswer = null;
       return true;
     }
