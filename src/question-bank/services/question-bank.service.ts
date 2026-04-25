@@ -226,7 +226,7 @@ export class QuestionBankService {
       questionBankId,
       questionId: dto.questionId,
       orderNo: dto.orderNo ?? totalInBank + 1,
-      points: dto.points ?? 0,
+      points: dto.points ?? 1,
     });
 
     return this.questionBankQuestionRepo.save(record);

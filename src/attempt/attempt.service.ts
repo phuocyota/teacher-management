@@ -753,7 +753,7 @@ export class AttemptService {
         contentType: rootQuestion.contentType,
         content: rootQuestion.content,
         nextContent: rootQuestion.nextContent ?? questionChain[1]?.id ?? null,
-        chain: this.mapQuestionChain(questionChain),
+        chain: this.mapQuestionChain(questionChain, { hideIsCorrect: true }),
         answers: mappedAnswers,
       });
     }
@@ -898,13 +898,14 @@ export class AttemptService {
 
   private mapQuestionChain(
     chain: QuestionEntity[],
+    options?: { hideIsCorrect?: boolean },
   ): AttemptQuestionChainItemDto[] {
     return chain.map((item, index) => ({
       id: item.id,
       type: item.type,
       contentType: item.contentType,
       content: item.content,
-      meta: item.meta ?? null,
+      meta: this.sanitizeAttemptMeta(item.meta, options?.hideIsCorrect),
       nextContent: item.nextContent ?? chain[index + 1]?.id ?? null,
     }));
   }
@@ -920,7 +921,7 @@ export class AttemptService {
     return Promise.all(
       answerOptions.map(async (answer) => {
         const chain = await this.loadAnswerChain(answer.id);
-        return this.mapAnswerChain(chain);
+        return this.mapAnswerChain(chain, { hideIsCorrect: true });
       }),
     );
   }
@@ -995,13 +996,16 @@ export class AttemptService {
     }
   }
 
-  private mapAnswerChain(chain: AnswerEntity[]): AttemptAnswerOptionDto {
+  private mapAnswerChain(
+    chain: AnswerEntity[],
+    options?: { hideIsCorrect?: boolean },
+  ): AttemptAnswerOptionDto {
     const root = chain[0];
     const mappedParts: AttemptAnswerChainItemDto[] = chain.map((item, index) => ({
       id: item.id,
       contentType: item.contentType,
       content: item.content,
-      meta: item.meta ?? null,
+      meta: this.sanitizeAttemptMeta(item.meta, options?.hideIsCorrect),
       nextContent: item.nextContent ?? chain[index + 1]?.id ?? null,
     }));
 
@@ -1009,9 +1013,25 @@ export class AttemptService {
       id: root.id,
       contentType: root.contentType,
       content: root.content,
-      meta: root.meta ?? null,
+      meta: this.sanitizeAttemptMeta(root.meta, options?.hideIsCorrect),
       nextContent: root.nextContent ?? chain[1]?.id ?? null,
       chain: mappedParts,
     };
+  }
+
+  private sanitizeAttemptMeta(
+    meta?: Record<string, unknown> | null,
+    hideIsCorrect = false,
+  ): Record<string, unknown> | null {
+    if (!meta) {
+      return null;
+    }
+
+    if (!hideIsCorrect || !Object.prototype.hasOwnProperty.call(meta, 'isCorrect')) {
+      return meta;
+    }
+
+    const { isCorrect: _isCorrect, ...sanitizedMeta } = meta;
+    return Object.keys(sanitizedMeta).length > 0 ? sanitizedMeta : null;
   }
 }

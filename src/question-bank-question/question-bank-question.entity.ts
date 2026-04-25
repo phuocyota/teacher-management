@@ -22,6 +22,6 @@ export class QuestionBankQuestionEntity extends BaseEntity {
   @Column({ name: 'order_no', type: 'int', nullable: false })
   orderNo!: number;
 
-  @Column({ name: 'points', type: 'float', nullable: false, default: 0 })
+  @Column({ name: 'points', type: 'float', nullable: false, default: 1 })
   points!: number;
 }

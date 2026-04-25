@@ -118,7 +118,7 @@ export class QuestionBankQuestionService {
       questionBankId,
       questionId,
       orderNo: existingCount + 1,
-      points: 0,
+      points: 1,
     });
 
     return this.questionBankQuestionRepo.save(record);

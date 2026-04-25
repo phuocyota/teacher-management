@@ -805,7 +805,7 @@ export class QuestionBankImportService {
     questionBankId: string,
     questionId: string,
     orderNo: number,
-    points = 0,
+    points = 1,
   ): Promise<void> {
     const link = this.questionBankQuestionRepo.create({
       questionBankId,
