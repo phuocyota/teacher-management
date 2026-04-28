@@ -234,19 +234,17 @@ export class QuestionBankService {
 
   async remove(id: string): Promise<void> {
     const record = await this.findOne(id);
-    const linkedQuestions = await this.questionBankQuestionRepo.find({
-      where: { questionBankId: id },
-      select: ['questionId'],
-    });
-    const uniqueQuestionIds = Array.from(
-      new Set(linkedQuestions.map((item) => item.questionId)),
-    );
-
-    for (const questionId of uniqueQuestionIds) {
-      await this.questionService.remove(questionId);
-    }
+    await this.removeLinkedQuestions(id);
 
     await this.questionBankRepo.remove(record);
+  }
+
+  async removeResource(id: string): Promise<void> {
+    const record = await this.findOne(id);
+    await this.removeLinkedQuestions(id);
+
+    record.totalQuestions = 0;
+    await this.questionBankRepo.save(record);
   }
 
   async importExamFromPdf(
@@ -330,5 +328,19 @@ export class QuestionBankService {
     );
 
     await examSetQuestionBankRepo.save(entities);
+  }
+
+  private async removeLinkedQuestions(questionBankId: string): Promise<void> {
+    const linkedQuestions = await this.questionBankQuestionRepo.find({
+      where: { questionBankId },
+      select: ['questionId'],
+    });
+    const uniqueQuestionIds = Array.from(
+      new Set(linkedQuestions.map((item) => item.questionId)),
+    );
+
+    for (const questionId of uniqueQuestionIds) {
+      await this.questionService.remove(questionId);
+    }
   }
 }

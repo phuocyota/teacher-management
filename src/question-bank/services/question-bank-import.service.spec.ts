@@ -116,6 +116,95 @@ describe('QuestionBankImportService', () => {
     ]);
   });
 
+  it('assigns one point to every question imported from PDF', async () => {
+    const deps = createServiceDependencies();
+    deps.questionService.createBulk.mockResolvedValue([
+      {
+        id: 'question-1',
+        content: 'Question root',
+        contentType: ContentTypes.TEXT,
+        type: QuestionType.SINGLE_CHOICE,
+      },
+    ]);
+    deps.answerService.createBulk.mockResolvedValue([{ id: 'answer-1' }]);
+    const service = createService(deps);
+
+    await (service as any).persistQuestionBlock(
+      'question-bank-1',
+      createParsedQuestionBlock(),
+      [],
+      {},
+    );
+
+    expect(deps.questionBankQuestionRepo.save).toHaveBeenCalledWith(
+      expect.objectContaining({
+        questionBankId: 'question-bank-1',
+        questionId: 'question-1',
+        orderNo: 1,
+        points: 1,
+      }),
+    );
+  });
+
+  it('sets totalScore to the total number of imported questions', async () => {
+    const deps = createServiceDependencies();
+    const questionBank = {
+      id: 'question-bank-1',
+      totalQuestions: 0,
+      totalScore: 0,
+    };
+    deps.questionBankRepo.findOne.mockResolvedValue(questionBank);
+    deps.questionBankQuestionRepo.count.mockResolvedValue(2);
+    deps.questionService.createBulk
+      .mockResolvedValueOnce([
+        {
+          id: 'question-1',
+          content: 'Question 1',
+          contentType: ContentTypes.TEXT,
+          type: QuestionType.SINGLE_CHOICE,
+        },
+      ])
+      .mockResolvedValueOnce([
+        {
+          id: 'question-2',
+          content: 'Question 2',
+          contentType: ContentTypes.TEXT,
+          type: QuestionType.SINGLE_CHOICE,
+        },
+      ]);
+    deps.answerService.createBulk.mockResolvedValue([{ id: 'answer-1' }]);
+    deps.questionParser.parsePages.mockResolvedValue({
+      questions: [
+        createParsedQuestionBlock({
+          number: 1,
+          stemParts: [
+            { content: 'Question 1', contentType: ContentTypes.TEXT },
+          ],
+        }),
+        createParsedQuestionBlock({
+          number: 2,
+          stemParts: [
+            { content: 'Question 2', contentType: ContentTypes.TEXT },
+          ],
+        }),
+      ],
+      answerKey: {},
+    } satisfies ParsedDocumentResult);
+    const service = createService(deps);
+    jest
+      .spyOn(service as any, 'readPdfPages')
+      .mockResolvedValue([createPage(1, ['Cau 1. Question 1'])]);
+
+    await service.importExamFromPdf('question-bank-1', Buffer.from('pdf'));
+
+    expect(deps.questionBankRepo.save).toHaveBeenCalledWith(
+      expect.objectContaining({
+        totalQuestions: 2,
+        totalScore: 2,
+      }),
+    );
+  });
+
   it('filters repeated headers and footers without removing unique content', () => {
     const service = createService(createServiceDependencies());
     const filtered = (service as any).filterPageArtifacts([
