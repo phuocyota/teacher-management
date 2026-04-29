@@ -4,11 +4,11 @@ import { BaseEntity } from 'src/common/sql/base.entity';
 @Entity('school')
 export class SchoolEntity extends BaseEntity {
   @Column({ unique: true })
-  code: string;
+  code!: string;
 
   @Column()
-  name: string;
+  name!: string;
 
-  @Column()
-  address: string;
+  @Column({ nullable: true })
+  address?: string;
 }

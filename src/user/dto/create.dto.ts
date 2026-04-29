@@ -220,6 +220,14 @@ export class CreateUserDto {
   studentGroupId?: string;
 
   @ApiPropertyOptional({
+    example: '2233abe3-1961-4af5-a482-542f1227d844',
+    description: 'ID truong hoc, dung khi tao user loai STUDENT',
+  })
+  @IsOptional()
+  @IsUUID('4')
+  schoolId?: string;
+
+  @ApiPropertyOptional({
     example: 'HS001',
     description: 'Code, dung khi tao user loai STUDENT',
   })

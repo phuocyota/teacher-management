@@ -12,7 +12,7 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import { UserService } from './user.service';
-import { ChangePasswordDto, UserQueryDto } from './dto/user.dto';
+import { ChangePasswordDto, MeResponseDto, UserQueryDto } from './dto/user.dto';
 import { CreateUserDto } from './dto/create.dto.js';
 import { UpdateUserDto } from './dto/update.dto.js';
 import {
@@ -49,6 +49,17 @@ export class UserController {
   @ApiResponse({ status: 200, description: 'Danh sách người dùng' })
   findAll(@Query() query: UserQueryDto) {
     return this.userService.findAllWithQuery(query);
+  }
+
+  @Get('me')
+  @ApiOperation({ summary: 'Lay thong tin user hien tai thong qua token' })
+  @ApiResponse({
+    status: 200,
+    description: 'Thong tin user',
+    type: MeResponseDto,
+  })
+  getMe(@User() user: JwtPayload) {
+    return this.userService.getMe(user.userId);
   }
 
   @Get(':id')

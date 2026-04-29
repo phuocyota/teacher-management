@@ -11,6 +11,15 @@ export class CreateStudentDto {
   })
   studentGroupId?: string;
 
+  @IsOptional()
+  @IsUUID()
+  @ApiPropertyOptional({
+    description: 'ID cua truong hoc',
+    example: '2233abe3-1961-4af5-a482-542f1227d844',
+    nullable: true,
+  })
+  schoolId?: string;
+
   @IsString()
   @IsNotEmpty()
   @ApiProperty({

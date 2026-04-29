@@ -1,5 +1,5 @@
-import { IsNotEmpty, IsString } from 'class-validator';
-import { ApiProperty, PartialType } from '@nestjs/swagger';
+import { IsNotEmpty, IsOptional, IsString } from 'class-validator';
+import { ApiProperty, ApiPropertyOptional, PartialType } from '@nestjs/swagger';
 
 export class CreateSchoolDto {
   @IsString()
@@ -18,13 +18,13 @@ export class CreateSchoolDto {
   })
   name!: string;
 
+  @IsOptional()
   @IsString()
-  @IsNotEmpty()
-  @ApiProperty({
+  @ApiPropertyOptional({
     description: 'Địa chỉ trường học',
     example: '123 Đường ABC, Quận 1, TP.HCM',
   })
-  address!: string;
+  address?: string;
 }
 
 export class UpdateSchoolDto extends PartialType(CreateSchoolDto) {}

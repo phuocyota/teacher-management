@@ -1,4 +1,4 @@
-import { ApiProperty } from '@nestjs/swagger';
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { BaseDto } from 'src/common/dto/base.dto';
 import { PaginationResponseDto } from 'src/common/dto/pagination.dto';
 
@@ -13,11 +13,11 @@ export class SchoolResponseDto extends BaseDto {
     example: 'Trường THPT Nguyễn Huệ',
   })
   name!: string;
-  @ApiProperty({
+  @ApiPropertyOptional({
     description: 'Địa chỉ trường học',
     example: '123 Đường ABC, Quận 1, TP.HCM',
   })
-  address!: string;
+  address?: string;
 }
 
 export class SchoolListResponseDto extends PaginationResponseDto<SchoolResponseDto> {
