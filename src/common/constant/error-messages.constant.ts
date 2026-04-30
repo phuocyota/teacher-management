@@ -16,8 +16,7 @@ export const ERROR_MESSAGES = {
   NOT_FOUND: (entity: string) => `${entity} không tồn tại`,
   NOT_FOUND_WITH_ID: (entity: string, id: string) =>
     `${entity} với ID ${id} không tồn tại`,
-  SOME_ENTITY_NOT_FOUND: (entity: string) =>
-    `Một số ${entity} không tồn tại`,
+  SOME_ENTITY_NOT_FOUND: (entity: string) => `Một số ${entity} không tồn tại`,
 
   // Device errors
   DEVICE_REQUEST_ALREADY_PROCESSED: (status: string) =>
@@ -78,4 +77,5 @@ export const ENTITY_NAMES = {
   SUBJECT: 'Môn học',
   EXAM_SET: 'Bộ đề thi',
   EXAM_SET_QUESTION_BANK: 'Liên kết bộ đề thi và ngân hàng câu hỏi',
+  ZONE: 'Khu vực',
 };

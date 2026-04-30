@@ -9,6 +9,7 @@ import {
 import { BaseEntity } from 'src/common/sql/base.entity';
 import { SchoolEntity } from 'src/school/school.entity';
 import { StudentEntity } from 'src/student/student.entity';
+import { GroupMemberRole } from 'src/user-group/enum/group-member-role.enum';
 
 @Entity('student_group')
 @Unique(['code', 'schoolId'])
@@ -18,6 +19,14 @@ export class StudentGroupEntity extends BaseEntity {
 
   @Column()
   name: string;
+
+  @Column({
+    name: 'role',
+    type: 'enum',
+    enum: GroupMemberRole,
+    default: GroupMemberRole.MEMBER,
+  })
+  role: GroupMemberRole;
 
   @ManyToOne(() => SchoolEntity, { onDelete: 'CASCADE' })
   @JoinColumn({ name: 'schoolId' })

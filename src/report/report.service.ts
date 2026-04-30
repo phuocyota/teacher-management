@@ -5,6 +5,13 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
+import {
+  PDFDocument,
+  StandardFonts,
+  rgb,
+  type PDFFont,
+  type PDFPage,
+} from 'pdf-lib';
 import { Repository } from 'typeorm';
 import { AttemptEntity } from 'src/attempt/attempt.entity';
 import { GroupEntity } from 'src/group/entity/group.entity';
@@ -19,6 +26,7 @@ import { UserEntity } from 'src/user/user.entity';
 import { UserType } from 'src/common/enum/user-type.enum';
 import { StudentEntity } from 'src/student/student.entity';
 import { StudentGroupEntity } from 'src/student-group/student-group.entity';
+import { SchoolEntity } from 'src/school/school.entity';
 import {
   ReportStudentOptionDto,
   StudentAttemptDto,
@@ -37,6 +45,26 @@ type ReportStudentRow = {
   studentGroupName: string | null;
 };
 
+type SchoolAttemptReportFilters = {
+  examSetId?: string;
+  questionBankId?: string;
+  fromDate?: string;
+  toDate?: string;
+};
+
+type SchoolAttemptReportRow = {
+  studentId: string;
+  fullName: string | null;
+  userName: string;
+  studentCode: string;
+  studentGroupId: string;
+  studentGroupName: string;
+  totalAttempts: string;
+  averageScore: string | null;
+  highestScore: string | null;
+  latestAttemptAt: Date | null;
+};
+
 @Injectable()
 export class ReportService {
   constructor(
@@ -50,6 +78,8 @@ export class ReportService {
     private readonly userRepo: Repository<UserEntity>,
     @InjectRepository(StudentEntity)
     private readonly studentRepo: Repository<StudentEntity>,
+    @InjectRepository(SchoolEntity)
+    private readonly schoolRepo: Repository<SchoolEntity>,
   ) {}
 
   async getLeaderGroups(user: JwtPayload): Promise<TeacherLeaderGroupDto[]> {
@@ -208,6 +238,32 @@ export class ReportService {
     };
   }
 
+  async exportSchoolAttemptReportPdf(
+    schoolId: string,
+    filters: SchoolAttemptReportFilters,
+  ): Promise<{ buffer: Buffer; fileName: string }> {
+    this.validateDateRange(filters.fromDate, filters.toDate);
+
+    const school = await this.schoolRepo.findOne({ where: { id: schoolId } });
+    if (!school) {
+      throw new NotFoundException(
+        ERROR_MESSAGES.NOT_FOUND_WITH_ID(ENTITY_NAMES.SCHOOL, schoolId),
+      );
+    }
+
+    const rows = await this.getSchoolAttemptReportRows(schoolId, filters);
+    const buffer = await this.buildSchoolAttemptReportPdf(
+      school,
+      rows,
+      filters,
+    );
+
+    return {
+      buffer,
+      fileName: `school-attempt-report-${this.toSafeFileName(school.code)}.pdf`,
+    };
+  }
+
   private ensureAuthenticatedUser(user: JwtPayload): void {
     if (!user?.userId) {
       throw new ForbiddenException(ERROR_MESSAGES.INVALID_TOKEN_STRUCTURE);
@@ -246,7 +302,9 @@ export class ReportService {
 
     if (!row) {
       const user = await this.userRepo.findOne({ where: { id: studentId } });
-      const student = await this.studentRepo.findOne({ where: { id: studentId } });
+      const student = await this.studentRepo.findOne({
+        where: { id: studentId },
+      });
 
       if (!user || !student || user.userType !== UserType.STUDENT) {
         throw new NotFoundException(
@@ -260,7 +318,9 @@ export class ReportService {
     return row;
   }
 
-  private async getStudentRowsInGroup(groupId: string): Promise<ReportStudentRow[]> {
+  private async getStudentRowsInGroup(
+    groupId: string,
+  ): Promise<ReportStudentRow[]> {
     return this.userGroupRepo
       .createQueryBuilder('userGroup')
       .innerJoin(UserEntity, 'user', 'user.id = userGroup.userId')
@@ -320,6 +380,72 @@ export class ReportService {
     };
   }
 
+  private async getSchoolAttemptReportRows(
+    schoolId: string,
+    filters: SchoolAttemptReportFilters,
+  ): Promise<SchoolAttemptReportRow[]> {
+    const attemptJoinConditions = ['attempt.student_id = student.id'];
+    const params: Record<string, string> = {
+      schoolId,
+      userType: UserType.STUDENT,
+    };
+
+    if (filters.examSetId) {
+      attemptJoinConditions.push('attempt.exam_set_id = :examSetId');
+      params.examSetId = filters.examSetId;
+    }
+
+    if (filters.questionBankId) {
+      attemptJoinConditions.push('attempt.question_bank_id = :questionBankId');
+      params.questionBankId = filters.questionBankId;
+    }
+
+    if (filters.fromDate) {
+      attemptJoinConditions.push('DATE(attempt.started_at) >= :fromDate');
+      params.fromDate = filters.fromDate;
+    }
+
+    if (filters.toDate) {
+      attemptJoinConditions.push('DATE(attempt.started_at) <= :toDate');
+      params.toDate = filters.toDate;
+    }
+
+    return this.studentRepo
+      .createQueryBuilder('student')
+      .innerJoin(UserEntity, 'user', 'user.id = student.id')
+      .innerJoin(
+        StudentGroupEntity,
+        'studentGroup',
+        'studentGroup.id = student.student_group_id',
+      )
+      .leftJoin(AttemptEntity, 'attempt', attemptJoinConditions.join(' AND '))
+      .select('student.id', 'studentId')
+      .addSelect('user.full_name', 'fullName')
+      .addSelect('user.user_name', 'userName')
+      .addSelect('student.code', 'studentCode')
+      .addSelect('studentGroup.id', 'studentGroupId')
+      .addSelect('studentGroup.name', 'studentGroupName')
+      .addSelect('COUNT(attempt.id)', 'totalAttempts')
+      .addSelect('AVG(attempt.score)', 'averageScore')
+      .addSelect('MAX(attempt.score)', 'highestScore')
+      .addSelect(
+        'MAX(COALESCE(attempt.submitted_at, attempt.started_at))',
+        'latestAttemptAt',
+      )
+      .where('studentGroup.schoolId = :schoolId')
+      .andWhere('user.user_type = :userType')
+      .setParameters(params)
+      .groupBy('student.id')
+      .addGroupBy('user.full_name')
+      .addGroupBy('user.user_name')
+      .addGroupBy('student.code')
+      .addGroupBy('studentGroup.id')
+      .addGroupBy('studentGroup.name')
+      .orderBy('studentGroup.name', 'ASC')
+      .addOrderBy('COALESCE(user.full_name, user.user_name)', 'ASC')
+      .getRawMany<SchoolAttemptReportRow>();
+  }
+
   private buildAttemptScope(
     studentId: string,
     fromDate?: string,
@@ -372,5 +498,239 @@ export class ReportService {
 
     const parsed = Number(value);
     return Number.isNaN(parsed) ? null : parsed;
+  }
+
+  private async buildSchoolAttemptReportPdf(
+    school: SchoolEntity,
+    rows: SchoolAttemptReportRow[],
+    filters: SchoolAttemptReportFilters,
+  ): Promise<Buffer> {
+    const pdfDoc = await PDFDocument.create();
+    const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
+    const boldFont = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
+    const pageSize: [number, number] = [841.89, 595.28];
+    const margin = 36;
+    const rowHeight = 22;
+    const tableTopGap = 18;
+    const columns = [
+      { label: 'Lop', width: 105 },
+      { label: 'Ma HS', width: 70 },
+      { label: 'Hoc sinh', width: 160 },
+      { label: 'Tai khoan', width: 115 },
+      { label: 'Lan lam', width: 58 },
+      { label: 'TB', width: 55 },
+      { label: 'Cao nhat', width: 65 },
+      { label: 'Gan nhat', width: 95 },
+    ];
+    const tableWidth = columns.reduce((sum, col) => sum + col.width, 0);
+
+    let page = pdfDoc.addPage(pageSize);
+    let y = page.getHeight() - margin;
+
+    const drawText = (
+      targetPage: PDFPage,
+      text: string,
+      x: number,
+      textY: number,
+      size: number,
+      targetFont: PDFFont = font,
+      maxWidth?: number,
+    ) => {
+      targetPage.drawText(
+        this.truncateForWidth(targetFont, this.toPdfText(text), size, maxWidth),
+        {
+          x,
+          y: textY,
+          size,
+          font: targetFont,
+          color: rgb(0.12, 0.12, 0.12),
+        },
+      );
+    };
+
+    const addPage = () => {
+      page = pdfDoc.addPage(pageSize);
+      y = page.getHeight() - margin;
+      drawTableHeader();
+    };
+
+    const drawTableHeader = () => {
+      let x = margin;
+      page.drawRectangle({
+        x,
+        y: y - rowHeight + 5,
+        width: tableWidth,
+        height: rowHeight,
+        color: rgb(0.92, 0.94, 0.97),
+      });
+
+      for (const col of columns) {
+        drawText(page, col.label, x + 5, y - 12, 9, boldFont, col.width - 10);
+        x += col.width;
+      }
+      y -= rowHeight;
+    };
+
+    drawText(
+      page,
+      'BAO CAO DIEM TONG HOP THEO TRUONG',
+      margin,
+      y,
+      16,
+      boldFont,
+    );
+    y -= 24;
+    drawText(page, `Truong: ${school.name} (${school.code})`, margin, y, 11);
+    y -= 16;
+    drawText(
+      page,
+      `Ngay xuat: ${this.formatDateTime(new Date())}`,
+      margin,
+      y,
+      10,
+    );
+    y -= 16;
+    drawText(page, this.formatReportFilters(filters), margin, y, 10);
+    y -= tableTopGap;
+
+    drawTableHeader();
+
+    if (rows.length === 0) {
+      drawText(
+        page,
+        'Khong co du lieu hoc sinh trong truong nay.',
+        margin,
+        y - 12,
+        10,
+      );
+    }
+
+    for (const row of rows) {
+      if (y < margin + rowHeight) {
+        addPage();
+      }
+
+      let x = margin;
+      const values = [
+        row.studentGroupName,
+        row.studentCode,
+        row.fullName ?? row.userName,
+        row.userName,
+        String(Number(row.totalAttempts) || 0),
+        this.formatNullableScore(row.averageScore),
+        this.formatNullableScore(row.highestScore),
+        row.latestAttemptAt ? this.formatDate(row.latestAttemptAt) : '-',
+      ];
+
+      page.drawLine({
+        start: { x: margin, y: y + 4 },
+        end: { x: margin + tableWidth, y: y + 4 },
+        thickness: 0.5,
+        color: rgb(0.86, 0.86, 0.86),
+      });
+
+      for (let i = 0; i < columns.length; i += 1) {
+        drawText(
+          page,
+          values[i],
+          x + 5,
+          y - 11,
+          8.5,
+          font,
+          columns[i].width - 10,
+        );
+        x += columns[i].width;
+      }
+
+      y -= rowHeight;
+    }
+
+    const totalStudents = rows.length;
+    const studentsWithAttempts = rows.filter(
+      (row) => Number(row.totalAttempts) > 0,
+    ).length;
+    const totalAttempts = rows.reduce(
+      (sum, row) => sum + (Number(row.totalAttempts) || 0),
+      0,
+    );
+
+    if (y < margin + 54) {
+      page = pdfDoc.addPage(pageSize);
+      y = page.getHeight() - margin;
+    }
+
+    y -= 16;
+    drawText(
+      page,
+      `Tong ket: ${totalStudents} hoc sinh, ${studentsWithAttempts} hoc sinh co bai lam, ${totalAttempts} luot lam.`,
+      margin,
+      y,
+      10,
+      boldFont,
+    );
+
+    const pdfBytes = await pdfDoc.save();
+    return Buffer.from(pdfBytes);
+  }
+
+  private toPdfText(value: string): string {
+    return value
+      .replace(/đ/g, 'd')
+      .replace(/Đ/g, 'D')
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .replace(/[^\x20-\x7E]/g, '');
+  }
+
+  private truncateForWidth(
+    font: PDFFont,
+    value: string,
+    size: number,
+    maxWidth?: number,
+  ): string {
+    if (!maxWidth || font.widthOfTextAtSize(value, size) <= maxWidth) {
+      return value;
+    }
+
+    let truncated = value;
+    while (
+      truncated.length > 0 &&
+      font.widthOfTextAtSize(`${truncated}...`, size) > maxWidth
+    ) {
+      truncated = truncated.slice(0, -1);
+    }
+
+    return truncated ? `${truncated}...` : '';
+  }
+
+  private formatNullableScore(value: string | number | null): string {
+    const score = this.toNullableNumber(value);
+    return score === null ? '-' : score.toFixed(2);
+  }
+
+  private formatDate(value: Date): string {
+    return value.toISOString().slice(0, 10);
+  }
+
+  private formatDateTime(value: Date): string {
+    return value.toISOString().replace('T', ' ').slice(0, 19);
+  }
+
+  private formatReportFilters(filters: SchoolAttemptReportFilters): string {
+    const parts = [
+      filters.examSetId ? `Bo de: ${filters.examSetId}` : null,
+      filters.questionBankId ? `De thi: ${filters.questionBankId}` : null,
+      filters.fromDate ? `Tu ngay: ${filters.fromDate}` : null,
+      filters.toDate ? `Den ngay: ${filters.toDate}` : null,
+    ].filter(Boolean);
+
+    return parts.length ? parts.join(' | ') : 'Bo loc: Tat ca bai lam';
+  }
+
+  private toSafeFileName(value: string): string {
+    return this.toPdfText(value)
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-+|-+$/g, '');
   }
 }

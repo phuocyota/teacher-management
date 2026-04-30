@@ -66,6 +66,8 @@ import { ExamSetClassEntity } from './exam-set-class/exam-set-class.entity';
 import { ReportModule } from './report/report.module';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
+import { ZoneModule } from './zone/zone.module';
+import { ZoneEntity } from './zone/zone.entity';
 
 @Module({
   imports: [
@@ -118,6 +120,7 @@ import { AppService } from './app.service';
           ExamSetEntity,
           ExamSetQuestionBankEntity,
           ExamSetClassEntity,
+          ZoneEntity,
         ],
         synchronize: true,
       }),
@@ -148,6 +151,7 @@ import { AppService } from './app.service';
     ExamSetModule,
     ExamSetQuestionBankModule,
     ReportModule,
+    ZoneModule,
   ],
   providers: [
     AppService,

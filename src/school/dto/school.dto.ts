@@ -13,6 +13,21 @@ export class SchoolResponseDto extends BaseDto {
     example: 'Trường THPT Nguyễn Huệ',
   })
   name!: string;
+
+  @ApiPropertyOptional({
+    description: 'ID khu vuc',
+    example: '2233abe3-1961-4af5-a482-542f1227d844',
+    nullable: true,
+  })
+  zoneId!: string | null;
+
+  @ApiPropertyOptional({
+    description: 'Ten khu vuc',
+    example: 'Khu vuc 1',
+    nullable: true,
+  })
+  zoneName?: string | null;
+
   @ApiPropertyOptional({
     description: 'Địa chỉ trường học',
     example: '123 Đường ABC, Quận 1, TP.HCM',

@@ -14,12 +14,14 @@ import {
 import { PaginationResponseDto } from 'src/common/dto/pagination.dto';
 import { SchoolResponseDto } from './dto/school.dto';
 import { autoMapListToDto } from 'src/common/utils/auto-map.util';
+import { ZoneService } from 'src/zone/zone.service';
 
 @Injectable()
 export class SchoolService {
   constructor(
     @InjectRepository(SchoolEntity)
     private readonly schoolRepo: Repository<SchoolEntity>,
+    private readonly zoneService: ZoneService,
   ) {}
 
   async create(dto: CreateSchoolDto): Promise<SchoolEntity> {
@@ -31,9 +33,13 @@ export class SchoolService {
       throw new ConflictException('Mã trường học đã tồn tại');
     }
 
+    const zone = dto.zoneId ? await this.zoneService.findOne(dto.zoneId) : null;
+
     const record = this.schoolRepo.create({
       code: dto.code,
       name: dto.name,
+      zoneId: dto.zoneId ?? null,
+      zone,
       address: dto.address,
     });
     return this.schoolRepo.save(record);
@@ -44,10 +50,13 @@ export class SchoolService {
     size = 10,
     search?: string,
     code?: string,
+    zoneId?: string,
   ): Promise<PaginationResponseDto<SchoolResponseDto>> {
     const skip = (page - 1) * size;
 
-    const qb = this.schoolRepo.createQueryBuilder('school');
+    const qb = this.schoolRepo
+      .createQueryBuilder('school')
+      .leftJoinAndSelect('school.zone', 'zone');
 
     if (search) {
       qb.andWhere('(school.name ILIKE :search OR school.code ILIKE :search)', {
@@ -59,13 +68,17 @@ export class SchoolService {
       qb.andWhere('school.code = :code', { code });
     }
 
+    if (zoneId) {
+      qb.andWhere('school.zoneId = :zoneId', { zoneId });
+    }
+
     qb.orderBy('school.createdAt', 'DESC');
     qb.skip(skip).take(size);
 
     const [data, total] = await qb.getManyAndCount();
 
     return {
-      data: autoMapListToDto(SchoolResponseDto, data),
+      data: this.mapSchoolsToResponse(data),
       page,
       size,
       total,
@@ -73,7 +86,10 @@ export class SchoolService {
   }
 
   async findOne(id: string): Promise<SchoolEntity> {
-    const record = await this.schoolRepo.findOne({ where: { id } });
+    const record = await this.schoolRepo.findOne({
+      where: { id },
+      relations: ['zone'],
+    });
 
     if (!record) {
       throw new NotFoundException(
@@ -105,6 +121,13 @@ export class SchoolService {
       record.name = dto.name;
     }
 
+    if (dto.zoneId !== undefined) {
+      record.zone = dto.zoneId
+        ? await this.zoneService.findOne(dto.zoneId)
+        : null;
+      record.zoneId = dto.zoneId ?? null;
+    }
+
     if (dto.address !== undefined) {
       record.address = dto.address;
     }
@@ -115,5 +138,15 @@ export class SchoolService {
   async remove(id: string): Promise<void> {
     const record = await this.findOne(id);
     await this.schoolRepo.remove(record);
+  }
+
+  private mapSchoolsToResponse(schools: SchoolEntity[]): SchoolResponseDto[] {
+    return autoMapListToDto(
+      SchoolResponseDto,
+      schools.map((school) => ({
+        ...school,
+        zoneName: school.zone?.name ?? null,
+      })),
+    );
   }
 }

@@ -485,13 +485,11 @@ export class UserService extends BaseService<UserEntity> {
         relations: ['studentGroup', 'studentGroup.school', 'school'],
       });
 
-    const school = student?.school ?? student?.studentGroup?.school;
-
     return {
       ...safeUser,
       studentCode: student?.code,
       className: student?.studentGroup?.name,
-      schoolName: school?.name,
+      schoolName: student?.studentGroup?.school?.name,
     };
   }
 

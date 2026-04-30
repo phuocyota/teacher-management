@@ -18,6 +18,7 @@ import {
 import { PaginationResponseDto } from 'src/common/dto/pagination.dto';
 import { StudentGroupResponseDto } from './dto/student-group.dto';
 import { autoMapListToDto } from 'src/common/utils/auto-map.util';
+import { GroupMemberRole } from 'src/user-group/enum/group-member-role.enum';
 
 @Injectable()
 export class StudentGroupService {
@@ -48,6 +49,7 @@ export class StudentGroupService {
     const record = this.studentGroupRepo.create({
       code: dto.code,
       name: dto.name,
+      role: dto.role ?? GroupMemberRole.MEMBER,
       school: school,
     });
     return this.studentGroupRepo.save(record);
@@ -138,6 +140,10 @@ export class StudentGroupService {
 
     if (dto.name !== undefined) {
       record.name = dto.name;
+    }
+
+    if (dto.role !== undefined) {
+      record.role = dto.role;
     }
 
     return this.studentGroupRepo.save(record);

@@ -1,4 +1,4 @@
-import { IsNotEmpty, IsOptional, IsString } from 'class-validator';
+import { IsNotEmpty, IsOptional, IsString, IsUUID } from 'class-validator';
 import { ApiProperty, ApiPropertyOptional, PartialType } from '@nestjs/swagger';
 
 export class CreateSchoolDto {
@@ -17,6 +17,15 @@ export class CreateSchoolDto {
     example: 'Trường THPT Nguyễn Huệ',
   })
   name!: string;
+
+  @IsOptional()
+  @IsUUID()
+  @ApiPropertyOptional({
+    description: 'ID khu vuc',
+    example: '2233abe3-1961-4af5-a482-542f1227d844',
+    nullable: true,
+  })
+  zoneId?: string | null;
 
   @IsOptional()
   @IsString()

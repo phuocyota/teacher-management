@@ -9,7 +9,7 @@ export class CreateStudentDto {
     example: '3344abe3-1961-4af5-a482-542f1227d855',
     nullable: true,
   })
-  studentGroupId?: string;
+  studentGroupId?: string | null;
 
   @IsOptional()
   @IsUUID()
@@ -18,7 +18,7 @@ export class CreateStudentDto {
     example: '2233abe3-1961-4af5-a482-542f1227d844',
     nullable: true,
   })
-  schoolId?: string;
+  schoolId?: string | null;
 
   @IsString()
   @IsNotEmpty()

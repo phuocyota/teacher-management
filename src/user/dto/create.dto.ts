@@ -217,7 +217,7 @@ export class CreateUserDto {
   })
   @IsOptional()
   @IsUUID('4')
-  studentGroupId?: string;
+  studentGroupId?: string | null;
 
   @ApiPropertyOptional({
     example: '2233abe3-1961-4af5-a482-542f1227d844',
@@ -225,7 +225,7 @@ export class CreateUserDto {
   })
   @IsOptional()
   @IsUUID('4')
-  schoolId?: string;
+  schoolId?: string | null;
 
   @ApiPropertyOptional({
     example: 'HS001',

@@ -120,22 +120,34 @@ export class StudentService {
   async update(id: string, dto: UpdateStudentDto): Promise<StudentEntity> {
     const record = await this.findOne(id);
 
-    if (dto.studentGroupId) {
-      const studentGroup = await this.studentGroupService.findOne(
-        dto.studentGroupId,
-      );
-      const schoolId = dto.schoolId ?? studentGroup.schoolId;
+    if (dto.studentGroupId !== undefined) {
+      if (dto.studentGroupId === null) {
+        record.studentGroup = null;
+        record.studentGroupId = null;
 
-      if (dto.schoolId && dto.schoolId !== studentGroup.schoolId) {
-        throw new BadRequestException(
-          'schoolId phai trung voi truong cua nhom hoc sinh',
+        if (dto.schoolId !== undefined) {
+          record.school = dto.schoolId
+            ? await this.schoolService.findOne(dto.schoolId)
+            : null;
+          record.schoolId = dto.schoolId ?? null;
+        }
+      } else {
+        const studentGroup = await this.studentGroupService.findOne(
+          dto.studentGroupId,
         );
-      }
+        const schoolId = dto.schoolId ?? studentGroup.schoolId;
 
-      record.studentGroup = studentGroup;
-      record.studentGroupId = dto.studentGroupId;
-      record.schoolId = schoolId;
-      record.school = await this.schoolService.findOne(schoolId);
+        if (dto.schoolId && dto.schoolId !== studentGroup.schoolId) {
+          throw new BadRequestException(
+            'schoolId phai trung voi truong cua nhom hoc sinh',
+          );
+        }
+
+        record.studentGroup = studentGroup;
+        record.studentGroupId = dto.studentGroupId;
+        record.schoolId = schoolId;
+        record.school = await this.schoolService.findOne(schoolId);
+      }
     } else if (dto.schoolId !== undefined) {
       record.school = dto.schoolId
         ? await this.schoolService.findOne(dto.schoolId)

@@ -51,14 +51,21 @@ export class SchoolController {
     type: String,
     description: 'Lọc theo mã trường',
   })
+  @ApiQuery({
+    name: 'zoneId',
+    required: false,
+    type: String,
+    description: 'Lọc theo khu vực',
+  })
   @ApiOkResponse({ type: SchoolListResponseDto })
   findAll(
     @Query('page') page?: number,
     @Query('size') size?: number,
     @Query('search') search?: string,
     @Query('code') code?: string,
+    @Query('zoneId') zoneId?: string,
   ): Promise<PaginationResponseDto<SchoolResponseDto>> {
-    return this.schoolService.findAll(page, size, search, code);
+    return this.schoolService.findAll(page, size, search, code, zoneId);
   }
 
   @Get(':id')
