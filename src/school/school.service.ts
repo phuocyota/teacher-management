@@ -6,6 +6,7 @@ import {
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { SchoolEntity } from './school.entity';
+import { UserEntity } from 'src/user/user.entity';
 import { CreateSchoolDto, UpdateSchoolDto } from './dto/create-school.dto';
 import {
   ERROR_MESSAGES,
@@ -21,8 +22,33 @@ export class SchoolService {
   constructor(
     @InjectRepository(SchoolEntity)
     private readonly schoolRepo: Repository<SchoolEntity>,
+    @InjectRepository(UserEntity)
+    private readonly userRepo: Repository<UserEntity>,
     private readonly zoneService: ZoneService,
   ) {}
+
+  private async ensurePrincipalUserExists(
+    principalUserId?: string | null,
+  ): Promise<UserEntity | null> {
+    if (!principalUserId) {
+      return null;
+    }
+
+    const user = await this.userRepo.findOne({
+      where: { id: principalUserId },
+    });
+
+    if (!user) {
+      throw new NotFoundException(
+        ERROR_MESSAGES.NOT_FOUND_WITH_ID(
+          ENTITY_NAMES.USER ?? 'Người dùng',
+          principalUserId,
+        ),
+      );
+    }
+
+    return user;
+  }
 
   async create(dto: CreateSchoolDto): Promise<SchoolEntity> {
     const existingSchool = await this.schoolRepo.findOne({
@@ -34,12 +60,17 @@ export class SchoolService {
     }
 
     const zone = dto.zoneId ? await this.zoneService.findOne(dto.zoneId) : null;
+    const principalUser = await this.ensurePrincipalUserExists(
+      dto.principalUserId,
+    );
 
     const record = this.schoolRepo.create({
       code: dto.code,
       name: dto.name,
       zoneId: dto.zoneId ?? null,
       zone,
+      principalUserId: dto.principalUserId ?? null,
+      principalUser,
       address: dto.address,
     });
     return this.schoolRepo.save(record);
@@ -56,7 +87,8 @@ export class SchoolService {
 
     const qb = this.schoolRepo
       .createQueryBuilder('school')
-      .leftJoinAndSelect('school.zone', 'zone');
+      .leftJoinAndSelect('school.zone', 'zone')
+      .leftJoinAndSelect('school.principalUser', 'principalUser');
 
     if (search) {
       qb.andWhere('(school.name ILIKE :search OR school.code ILIKE :search)', {
@@ -88,7 +120,7 @@ export class SchoolService {
   async findOne(id: string): Promise<SchoolEntity> {
     const record = await this.schoolRepo.findOne({
       where: { id },
-      relations: ['zone'],
+      relations: ['zone', 'principalUser'],
     });
 
     if (!record) {
@@ -128,6 +160,13 @@ export class SchoolService {
       record.zoneId = dto.zoneId ?? null;
     }
 
+    if (dto.principalUserId !== undefined) {
+      record.principalUser = await this.ensurePrincipalUserExists(
+        dto.principalUserId,
+      );
+      record.principalUserId = dto.principalUserId ?? null;
+    }
+
     if (dto.address !== undefined) {
       record.address = dto.address;
     }
@@ -146,6 +185,7 @@ export class SchoolService {
       schools.map((school) => ({
         ...school,
         zoneName: school.zone?.name ?? null,
+        principalUserName: school.principalUser?.fullName ?? null,
       })),
     );
   }

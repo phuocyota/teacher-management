@@ -28,6 +28,15 @@ export class CreateSchoolDto {
   zoneId?: string | null;
 
   @IsOptional()
+  @IsUUID()
+  @ApiPropertyOptional({
+    description: 'ID user hiệu trưởng của trường',
+    example: '3233abe3-1961-4af5-a482-542f1227d844',
+    nullable: true,
+  })
+  principalUserId?: string | null;
+
+  @IsOptional()
   @IsString()
   @ApiPropertyOptional({
     description: 'Địa chỉ trường học',

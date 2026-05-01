@@ -29,6 +29,20 @@ export class SchoolResponseDto extends BaseDto {
   zoneName?: string | null;
 
   @ApiPropertyOptional({
+    description: 'ID user hiệu trưởng của trường',
+    example: '3233abe3-1961-4af5-a482-542f1227d844',
+    nullable: true,
+  })
+  principalUserId!: string | null;
+
+  @ApiPropertyOptional({
+    description: 'Tên hiệu trưởng',
+    example: 'Nguyễn Văn A',
+    nullable: true,
+  })
+  principalUserName?: string | null;
+
+  @ApiPropertyOptional({
     description: 'Địa chỉ trường học',
     example: '123 Đường ABC, Quận 1, TP.HCM',
   })

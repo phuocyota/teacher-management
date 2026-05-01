@@ -41,7 +41,7 @@ export class ReportController {
 
   @Get('groups')
   @ApiOperation({
-    summary: 'Lay danh sach group ma giao vien dang la truong nhom',
+    summary: 'Lay danh sach nhom hoc sinh de chon tren man bao cao',
   })
   @ApiOkResponse({ type: [TeacherLeaderGroupDto] })
   getLeaderGroups(@User() user: JwtPayload): Promise<TeacherLeaderGroupDto[]> {
@@ -50,7 +50,7 @@ export class ReportController {
 
   @Get('groups/:groupId/students')
   @ApiOperation({
-    summary: 'Lay danh sach hoc sinh thuoc group giao vien quan ly',
+    summary: 'Lay danh sach hoc sinh thuoc nhom hoc sinh da chon',
   })
   @ApiOkResponse({ type: [ReportStudentOptionDto] })
   getGroupStudents(
@@ -63,13 +63,13 @@ export class ReportController {
   @Get('student')
   @ApiOperation({
     summary:
-      'Lay bao cao hoc sinh theo group va khoang thoi gian, gom tong quan, xu huong diem va lich su lam bai',
+      'Lay bao cao hoc sinh theo nhom hoc sinh va khoang thoi gian, gom tong quan, xu huong diem va lich su lam bai',
   })
   @ApiQuery({
     name: 'groupId',
     required: true,
     type: String,
-    description: 'ID group ma giao vien dang la truong nhom',
+    description: 'ID nhom hoc sinh (student_group.id)',
   })
   @ApiQuery({
     name: 'studentId',

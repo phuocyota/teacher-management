@@ -14,19 +14,18 @@ import {
 } from 'pdf-lib';
 import { Repository } from 'typeorm';
 import { AttemptEntity } from 'src/attempt/attempt.entity';
-import { GroupEntity } from 'src/group/entity/group.entity';
 import {
   ERROR_MESSAGES,
   ENTITY_NAMES,
 } from 'src/common/constant/error-messages.constant';
 import { JwtPayload } from 'src/common/interface/jwt-payload.interface';
-import { UserGroupEntity } from 'src/user-group/entity/user-group.entity';
-import { GroupMemberRole } from 'src/user-group/enum/group-member-role.enum';
 import { UserEntity } from 'src/user/user.entity';
 import { UserType } from 'src/common/enum/user-type.enum';
 import { StudentEntity } from 'src/student/student.entity';
 import { StudentGroupEntity } from 'src/student-group/student-group.entity';
 import { SchoolEntity } from 'src/school/school.entity';
+import { GroupType } from 'src/group/enum/group-type.enum';
+import { GroupMemberRole } from 'src/user-group/enum/group-member-role.enum';
 import {
   ReportStudentOptionDto,
   StudentAttemptDto,
@@ -70,14 +69,12 @@ export class ReportService {
   constructor(
     @InjectRepository(AttemptEntity)
     private readonly attemptRepo: Repository<AttemptEntity>,
-    @InjectRepository(GroupEntity)
-    private readonly groupRepo: Repository<GroupEntity>,
-    @InjectRepository(UserGroupEntity)
-    private readonly userGroupRepo: Repository<UserGroupEntity>,
     @InjectRepository(UserEntity)
     private readonly userRepo: Repository<UserEntity>,
     @InjectRepository(StudentEntity)
     private readonly studentRepo: Repository<StudentEntity>,
+    @InjectRepository(StudentGroupEntity)
+    private readonly studentGroupRepo: Repository<StudentGroupEntity>,
     @InjectRepository(SchoolEntity)
     private readonly schoolRepo: Repository<SchoolEntity>,
   ) {}
@@ -85,18 +82,87 @@ export class ReportService {
   async getLeaderGroups(user: JwtPayload): Promise<TeacherLeaderGroupDto[]> {
     this.ensureAuthenticatedUser(user);
 
-    const rows = await this.userGroupRepo
-      .createQueryBuilder('userGroup')
-      .innerJoin('userGroup.group', 'group')
-      .select('group.id', 'id')
-      .addSelect('group.name', 'name')
-      .addSelect('group.type', 'type')
-      .where('userGroup.userId = :teacherId', { teacherId: user.userId })
-      .andWhere('userGroup.role = :role', { role: GroupMemberRole.LEADER })
-      .orderBy('group.name', 'ASC')
-      .getRawMany<TeacherLeaderGroupDto>();
+    const qb = this.studentGroupRepo
+      .createQueryBuilder('studentGroup')
+      .innerJoin('studentGroup.school', 'school')
+      .innerJoin(
+        StudentEntity,
+        'student',
+        'student.student_group_id = studentGroup.id',
+      )
+      .select('studentGroup.id', 'id')
+      .addSelect(
+        "CONCAT(COALESCE(school.code, ''), CASE WHEN school.code IS NULL THEN '' ELSE ' - ' END, studentGroup.name)",
+        'name',
+      )
+      .addSelect(':type', 'type')
+      .setParameter('type', GroupType.CLASS)
+      .groupBy('studentGroup.id')
+      .addGroupBy('studentGroup.name')
+      .addGroupBy('studentGroup.code')
+      .addGroupBy('school.code')
+      .where(
+        `(
+          school.principal_user_id = :userId
+          OR EXISTS (
+            SELECT 1
+            FROM user_group leaderLink
+            INNER JOIN user_group studentLink
+              ON studentLink.group_id = leaderLink.group_id
+            INNER JOIN student linkedStudent
+              ON linkedStudent.id = studentLink.user_id
+            INNER JOIN "user" linkedUser
+              ON linkedUser.id = linkedStudent.id
+            WHERE leaderLink.user_id = :userId
+              AND leaderLink.role = :leaderRole
+              AND linkedUser.user_type = :studentType
+              AND linkedStudent.student_group_id = "studentGroup".id
+          )
+        )`,
+        {
+          userId: user.userId,
+          leaderRole: GroupMemberRole.LEADER,
+          studentType: UserType.STUDENT,
+        },
+      )
+      .orderBy('school.code', 'ASC')
+      .addOrderBy('studentGroup.code', 'ASC');
+
+    const rows = await qb.getRawMany<TeacherLeaderGroupDto>();
 
     return rows;
+  }
+
+  private canAccessStudentGroupCondition(): string {
+    return `(
+      school.principal_user_id = :userId
+      OR EXISTS (
+        SELECT 1
+        FROM user_group leaderLink
+        INNER JOIN user_group studentLink
+          ON studentLink.group_id = leaderLink.group_id
+        INNER JOIN student linkedStudent
+          ON linkedStudent.id = studentLink.user_id
+        INNER JOIN "user" linkedUser
+          ON linkedUser.id = linkedStudent.id
+        WHERE leaderLink.user_id = :userId
+          AND leaderLink.role = :leaderRole
+          AND linkedUser.user_type = :studentType
+          AND linkedStudent.student_group_id = "studentGroup".id
+      )
+    )`;
+  }
+
+  private accessParams(userId: string): {
+    userId: string;
+    leaderRole: GroupMemberRole;
+    studentType: UserType;
+  } {
+    return {
+      userId,
+      leaderRole: GroupMemberRole.LEADER,
+      studentType: UserType.STUDENT,
+    };
   }
 
   async getGroupStudents(
@@ -104,7 +170,7 @@ export class ReportService {
     user: JwtPayload,
   ): Promise<ReportStudentOptionDto[]> {
     this.ensureAuthenticatedUser(user);
-    await this.ensureTeacherLeadsGroup(groupId, user.userId);
+    await this.ensureCanAccessStudentGroup(groupId, user.userId);
 
     const rows = await this.getStudentRowsInGroup(groupId);
     return rows.map((row) => ({
@@ -133,7 +199,7 @@ export class ReportService {
     const safeLimit = Number.isFinite(limit) && limit > 0 ? limit : 10;
     const skip = (safePage - 1) * safeLimit;
 
-    await this.ensureTeacherLeadsGroup(groupId, user.userId);
+    await this.ensureCanAccessStudentGroup(groupId, user.userId);
     const student = await this.ensureStudentBelongsToGroup(groupId, studentId);
 
     const summaryRaw = await this.buildAttemptScope(studentId, fromDate, toDate)
@@ -270,27 +336,30 @@ export class ReportService {
     }
   }
 
-  private async ensureTeacherLeadsGroup(
+  private async ensureCanAccessStudentGroup(
     groupId: string,
-    teacherId: string,
+    userId: string,
   ): Promise<void> {
-    const group = await this.groupRepo.findOne({ where: { id: groupId } });
-    if (!group) {
+    const studentGroup = await this.studentGroupRepo.findOne({
+      where: { id: groupId },
+    });
+    if (!studentGroup) {
       throw new NotFoundException(
-        ERROR_MESSAGES.NOT_FOUND_WITH_ID(ENTITY_NAMES.GROUP, groupId),
+        ERROR_MESSAGES.NOT_FOUND_WITH_ID(ENTITY_NAMES.STUDENT_GROUP, groupId),
       );
     }
 
-    const leaderLink = await this.userGroupRepo.findOne({
-      where: {
-        groupId,
-        userId: teacherId,
-        role: GroupMemberRole.LEADER,
-      },
-    });
+    const accessibleCount = await this.studentGroupRepo
+      .createQueryBuilder('studentGroup')
+      .innerJoin('studentGroup.school', 'school')
+      .where('studentGroup.id = :groupId', { groupId })
+      .andWhere(this.canAccessStudentGroupCondition(), this.accessParams(userId))
+      .getCount();
 
-    if (!leaderLink) {
-      throw new ForbiddenException(ERROR_MESSAGES.ACCESS_DENIED_TEACHER);
+    if (!accessibleCount) {
+      throw new ForbiddenException(
+        'Bạn không có quyền xem báo cáo của lớp thuộc trường này',
+      );
     }
   }
 
@@ -321,10 +390,9 @@ export class ReportService {
   private async getStudentRowsInGroup(
     groupId: string,
   ): Promise<ReportStudentRow[]> {
-    return this.userGroupRepo
-      .createQueryBuilder('userGroup')
-      .innerJoin(UserEntity, 'user', 'user.id = userGroup.userId')
-      .innerJoin(StudentEntity, 'student', 'student.id = user.id')
+    return this.studentRepo
+      .createQueryBuilder('student')
+      .innerJoin(UserEntity, 'user', 'user.id = student.id')
       .leftJoin(
         StudentGroupEntity,
         'studentGroup',
@@ -336,7 +404,7 @@ export class ReportService {
       .addSelect('student.code', 'code')
       .addSelect('student.student_group_id', 'studentGroupId')
       .addSelect('studentGroup.name', 'studentGroupName')
-      .where('userGroup.groupId = :groupId', { groupId })
+      .where('student.student_group_id = :groupId', { groupId })
       .andWhere('user.user_type = :userType', { userType: UserType.STUDENT })
       .orderBy('COALESCE(user.full_name, user.user_name)', 'ASC')
       .getRawMany<ReportStudentRow>();
@@ -346,10 +414,9 @@ export class ReportService {
     groupId: string,
     studentId: string,
   ): Promise<ReportStudentOptionDto | null> {
-    const row = await this.userGroupRepo
-      .createQueryBuilder('userGroup')
-      .innerJoin(UserEntity, 'user', 'user.id = userGroup.userId')
-      .innerJoin(StudentEntity, 'student', 'student.id = user.id')
+    const row = await this.studentRepo
+      .createQueryBuilder('student')
+      .innerJoin(UserEntity, 'user', 'user.id = student.id')
       .leftJoin(
         StudentGroupEntity,
         'studentGroup',
@@ -361,7 +428,7 @@ export class ReportService {
       .addSelect('student.code', 'code')
       .addSelect('student.student_group_id', 'studentGroupId')
       .addSelect('studentGroup.name', 'studentGroupName')
-      .where('userGroup.groupId = :groupId', { groupId })
+      .where('student.student_group_id = :groupId', { groupId })
       .andWhere('user.id = :studentId', { studentId })
       .andWhere('user.user_type = :userType', { userType: UserType.STUDENT })
       .getRawOne<ReportStudentRow>();
