@@ -97,48 +97,7 @@ export class UserResponseDto {
   @ApiProperty({ example: false })
   isDisabled: boolean;
 
-  @Expose()
-  @ApiPropertyOptional({ example: '2024-01-01' })
-  activatedDate?: Date;
-
-  @Expose()
-  @ApiPropertyOptional({ example: '2025-12-31' })
-  expiredDate?: Date;
-
-  // ===== Quyền =====
-  @Expose()
-  @ApiProperty({ example: false })
-  canCreateTeacherCode: boolean;
-
-  @Expose()
-  @ApiProperty({ example: false })
-  canCreateAdminCode: boolean;
-
-  @Expose()
-  @ApiProperty({ example: false })
-  canAddLesson: boolean;
-
-  @Expose()
-  @ApiProperty({ example: false })
-  canUpdateLesson: boolean;
-
-  @Expose()
-  @ApiProperty({ example: false })
-  canManageLesson: boolean;
-
-  @Expose()
-  @ApiProperty({ example: false })
-  canManageAccount: boolean;
-
-  @Expose()
-  @ApiProperty({ example: false })
-  isLinkedAccount: boolean;
-
   // ===== Thông tin sử dụng =====
-  @Expose()
-  @ApiPropertyOptional({ example: '2024-01-01T00:00:00.000Z' })
-  lastLoginAt?: Date;
-
   @Expose()
   @ApiProperty({ example: '2024-01-01T00:00:00.000Z' })
   createdAt: Date;
