@@ -151,6 +151,11 @@ export class QuestionBankImportService {
         `PDF import failed after ${duration}ms: ${errorMessage}`,
         error instanceof Error ? error.stack : undefined,
       );
+
+      if (error instanceof PdfParsingError) {
+        throw new BadRequestException(errorMessage);
+      }
+
       throw error;
     }
   }

@@ -1,3 +1,4 @@
+import { BadRequestException } from '@nestjs/common';
 import { ContentTypes } from 'src/common/enum/content-type.enum';
 import { QuestionType } from 'src/question/enum/question-type.enum';
 import {
@@ -305,8 +306,11 @@ describe('QuestionBankImportService', () => {
 
     await expect(
       service.importExamFromPdf('question-bank-1', Buffer.from('pdf')),
+    ).rejects.toThrow(BadRequestException);
+    await expect(
+      service.importExamFromPdf('question-bank-1', Buffer.from('pdf')),
     ).rejects.toThrow(
-      'Question type "matching" is recognized but not supported by this import flow',
+      'Question type "matching" is recognized but not supported by this import flow [Page 1] {questionNumber: 9}',
     );
     expect(deps.questionService.createBulk).not.toHaveBeenCalled();
     expect(deps.answerService.createBulk).not.toHaveBeenCalled();

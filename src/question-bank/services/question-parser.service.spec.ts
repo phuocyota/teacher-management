@@ -201,6 +201,41 @@ describe('QuestionParserService', () => {
     });
   });
 
+  it('treats ordering-style prompts with A-D answers as multiple choice instead of stem continuations', async () => {
+    const pageContent: PageContent = {
+      pageNumber: 4,
+      lines: [
+        createTextLine(4, 0, 10, 'Cau 5. Sap xep cac buoc theo thu tu dung'),
+        createTextLine(4, 1, 20, '1. Buoc mot'),
+        createTextLine(4, 2, 30, '2. Buoc hai'),
+        createTextLine(4, 3, 40, 'A. 1-2'),
+        createTextLine(4, 4, 50, 'B. 2-1'),
+      ],
+    };
+
+    const result = await service.parsePages([pageContent]);
+
+    expect(result.questions).toHaveLength(1);
+    expect(result.questions[0]).toMatchObject({
+      number: 5,
+      kind: 'single_choice',
+      questionType: QuestionType.SINGLE_CHOICE,
+    });
+    expect(result.questions[0].stemParts).toEqual([
+      { content: 'Sap xep cac buoc theo thu tu dung 1. Buoc mot 2. Buoc hai', contentType: ContentTypes.TEXT },
+    ]);
+    expect(result.questions[0].answers).toEqual([
+      {
+        label: 'A',
+        parts: [{ content: '1-2', contentType: ContentTypes.TEXT }],
+      },
+      {
+        label: 'B',
+        parts: [{ content: '2-1', contentType: ContentTypes.TEXT }],
+      },
+    ]);
+  });
+
   it('rejects questions that skip answer labels', async () => {
     const pageContent: PageContent = {
       pageNumber: 1,

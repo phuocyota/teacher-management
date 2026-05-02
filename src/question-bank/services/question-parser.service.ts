@@ -583,7 +583,7 @@ export class QuestionParserService {
       return false;
     }
 
-    return /^(\d+|[a-z])\s*[.):-]\s+/i.test(line);
+    return /^(?:\d+|[a-z])\s*[.):-]\s+/.test(line);
   }
 
   private detectBareAnswerAnchorLine(
