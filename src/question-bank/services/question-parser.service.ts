@@ -228,7 +228,9 @@ export class QuestionParserService {
 
       return {
         shouldEnterAnswerKey: true,
-        inlineAnswerKeyText: inlineAnswerKey.answerText,
+        inlineAnswerKeyText: inlineAnswerKey.hasEntries
+          ? inlineAnswerKey.answerText
+          : undefined,
       };
     }
 

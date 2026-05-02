@@ -22,6 +22,7 @@ import {
 export interface InlineAnswerKeySplit {
   questionText: string;
   answerText: string;
+  hasEntries: boolean;
 }
 
 export interface QuestionStartMatch {
@@ -34,8 +35,8 @@ export interface AnswerSegment {
   content: string;
 }
 
-const INLINE_ANSWER_KEY_PATTERN =
-  /(?:[\*\u2022]\s*)?(?:\u0110\u00e1p\s*\u00e1n|Dap\s*an|Answer\s*Key|\u0110A|DA)\s*:?\s*/iu;
+const INLINE_ANSWER_KEY_MARKER_PATTERN =
+  /(?:^|\s)(?:[\*\u2022]\s*)?(?<marker>(?:\u0110\u00e1p\s*\u00e1n|Dap\s*an|Answer\s*Key|\u0110A|DA))(?<suffix>\s*:?\s*.*)$/iu;
 
 export function isAnswerKeyStart(line: string): boolean {
   return matchesAnyPattern(line.trim(), ANSWER_KEY_START_PATTERNS);
@@ -125,27 +126,70 @@ export function sanitizeCommonPdfLine(
 export function splitInlineAnswerKeyLine(
   line: string,
 ): InlineAnswerKeySplit | null {
-  const match = line.match(INLINE_ANSWER_KEY_PATTERN);
+  const match = line.match(INLINE_ANSWER_KEY_MARKER_PATTERN);
 
   if (!match || typeof match.index !== 'number') {
     return null;
   }
 
-  const questionText = line.slice(0, match.index).trim();
-  const answerText = line.slice(match.index + match[0].length).trim();
+  const marker = match.groups?.marker ?? match[0].trim();
+  const markerOffset = match[0].indexOf(marker);
 
-  if (!answerText) {
+  if (markerOffset < 0) {
     return null;
   }
 
-  if (Object.keys(extractAnswerKeyEntries(answerText)).length === 0) {
+  const markerStartIndex = match.index + markerOffset;
+  const questionText = line.slice(0, markerStartIndex).trim();
+  const answerText = line.slice(markerStartIndex + marker.length).trim();
+
+  if (!isLikelyInlineAnswerKeyTail(answerText)) {
+    return null;
+  }
+
+  const hasEntries =
+    answerText.length > 0 &&
+    Object.keys(extractAnswerKeyEntries(answerText)).length > 0;
+
+  if (!questionText && !hasEntries) {
     return null;
   }
 
   return {
     questionText,
     answerText,
+    hasEntries,
   };
+}
+
+function isLikelyInlineAnswerKeyTail(answerText: string): boolean {
+  if (!answerText) {
+    return true;
+  }
+
+  const trimmed = answerText.trim();
+
+  if (!trimmed) {
+    return true;
+  }
+
+  if (Object.keys(extractAnswerKeyEntries(trimmed)).length > 0) {
+    return true;
+  }
+
+  if (/^:\s*$/.test(trimmed)) {
+    return true;
+  }
+
+  if (/^:\s*(?:C(?:\u00e2u|au)|Question|\d)/iu.test(trimmed)) {
+    return true;
+  }
+
+  if (/^(?:C(?:\u00e2u|au)|Question|\d)/iu.test(trimmed)) {
+    return true;
+  }
+
+  return false;
 }
 
 export function appendLineToParts(

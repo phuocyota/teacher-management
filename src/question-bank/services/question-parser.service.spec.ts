@@ -172,6 +172,31 @@ describe('QuestionParserService', () => {
     });
   });
 
+  it('stops the last answer before an inline answer-key heading without entries on the same line', async () => {
+    const pageContent: PageContent = {
+      pageNumber: 1,
+      lines: [
+        createTextLine(1, 0, 10, 'Cau 1. Chon dap an dung'),
+        createTextLine(1, 1, 20, 'A. Lua chon A'),
+        createTextLine(1, 2, 30, 'B. Lua chon B'),
+        createTextLine(1, 3, 40, 'C. Lua chon C'),
+        createTextLine(1, 4, 50, 'D. Lua chon D Dap an'),
+        createTextLine(1, 5, 60, '1. D'),
+      ],
+    };
+
+    const result = await service.parsePages([pageContent]);
+
+    expect(result.questions).toHaveLength(1);
+    expect(result.questions[0].answers[3]).toEqual({
+      label: 'D',
+      parts: [{ content: 'Lua chon D', contentType: ContentTypes.TEXT }],
+    });
+    expect(result.answerKey).toEqual({
+      1: 'D',
+    });
+  });
+
   it('classifies essay and matching prompts into different question kinds', async () => {
     const pages: PageContent[] = [
       {
