@@ -864,12 +864,26 @@ export class AttemptService {
       if (!item) {
         break;
       }
+
+      if (this.isAnswerKeyNode(item)) {
+        break;
+      }
+
       chain.push(item);
       currentId = item.nextContent;
       depth++;
     }
 
     return chain;
+  }
+
+  private isAnswerKeyNode(answer: AnswerEntity): boolean {
+    if (answer.contentType !== 'TEXT') {
+      return false;
+    }
+
+    const text = answer.content?.trim() ?? '';
+    return /^(\*|\u2022)?\s*(Đáp\s*án|Dap\s*an|Answer\s*Key)\b/iu.test(text);
   }
 
   private async normalizeSubmittedAnswers(

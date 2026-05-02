@@ -245,6 +245,66 @@ describe('QuestionBankImportService', () => {
     ]);
   });
 
+  it('removes compact inline answer key text from persisted answer content', async () => {
+    const deps = createServiceDependencies();
+    deps.questionService.createBulk.mockResolvedValue([
+      {
+        id: 'question-1',
+        content: 'Question root',
+        contentType: ContentTypes.TEXT,
+        type: QuestionType.SINGLE_CHOICE,
+      },
+    ]);
+    deps.answerService.createBulk.mockResolvedValue([{ id: 'answer-1' }]);
+    const service = createService(deps);
+    const answerKey: Record<number, 'A' | 'B' | 'C' | 'D'> = {};
+
+    await (service as any).persistQuestionBlock(
+      'question-bank-1',
+      createParsedQuestionBlock({
+        number: 10,
+        answers: [
+          {
+            label: 'A',
+            parts: [
+              {
+                content: 'Thiet ke theo trinh tu vi day la bai thuyet trinh nghiem tuc',
+                contentType: ContentTypes.TEXT,
+              },
+            ],
+          },
+          {
+            label: 'B',
+            parts: [
+              {
+                content: 'Lua chon B Dap an: 1C, 2B, 10A',
+                contentType: ContentTypes.TEXT,
+              },
+            ],
+          },
+        ],
+      }),
+      [],
+      answerKey,
+    );
+
+    expect(deps.answerService.createBulk).toHaveBeenNthCalledWith(
+      2,
+      [
+        expect.objectContaining({
+          content: 'Lua chon B',
+          contentType: ContentTypes.TEXT,
+          meta: { importOptionLabel: 'B' },
+        }),
+      ],
+    );
+    expect(answerKey).toEqual({
+      1: 'C',
+      2: 'B',
+      10: 'A',
+    });
+  });
+
   it('does not treat answer anchor lines above image-only answers as repeated footers', () => {
     const service = createService(createServiceDependencies());
     const filtered = (service as any).filterPageArtifacts([

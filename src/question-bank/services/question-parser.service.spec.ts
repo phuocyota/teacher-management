@@ -222,6 +222,31 @@ describe('QuestionParserService', () => {
     });
   });
 
+  it('extracts compact inline answer key entries like "1C, 2B" from an answer line', async () => {
+    const pageContent: PageContent = {
+      pageNumber: 1,
+      lines: [
+        createTextLine(1, 0, 10, 'Cau 10. Noi dung cau hoi'),
+        createTextLine(1, 1, 20, 'A. Lua chon A'),
+        createTextLine(1, 2, 30, 'B. Lua chon B Dap an: 1C, 2B, 10A'),
+        createTextLine(1, 3, 40, 'C. Lua chon C'),
+      ],
+    };
+
+    const result = await service.parsePages([pageContent]);
+
+    expect(result.questions).toHaveLength(1);
+    expect(result.questions[0].answers[1]).toEqual({
+      label: 'B',
+      parts: [{ content: 'Lua chon B', contentType: ContentTypes.TEXT }],
+    });
+    expect(result.answerKey).toEqual({
+      1: 'C',
+      2: 'B',
+      10: 'A',
+    });
+  });
+
   it('classifies essay and matching prompts into different question kinds', async () => {
     const pages: PageContent[] = [
       {

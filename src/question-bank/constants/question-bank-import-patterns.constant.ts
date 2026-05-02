@@ -30,6 +30,7 @@ export const ANSWER_KEY_START_PATTERNS: RegExp[] = [
 export const ANSWER_KEY_ENTRY_PATTERNS: RegExp[] = [
   /(?:C(?:\u00e2u|au)|Question)\s*(\d+)\s*[:.\-]?\s*([A-Da-d])(?:\b|$)/giu,
   /(?:^|[,\s])(\d+)\s*[\.\)\:\-]\s*([A-Da-d])(?:\b|$)/g,
+  /(?:^|[,\s])(\d+)\s*([A-Da-d])(?=[,\s]|$)/g,
 ];
 
 export const FIGURE_LABEL_PATTERNS: RegExp[] = [

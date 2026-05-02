@@ -44,7 +44,10 @@ import {
 } from '../utils/question-import-text.utils';
 import {
   extractAnswerSegments,
+  extractAnswerKeyEntries,
   extractQuestionStart,
+  isAnswerKeyStart,
+  splitInlineAnswerKeyLine,
 } from '../utils/question-parser.utils';
 
 interface ContentChainEntity {
@@ -459,18 +462,22 @@ export class QuestionBankImportService {
     );
     const rootQuestion = savedQuestions[0];
 
-    // Check which answer is correct based on answerKey
+    const sanitizedAnswerPartsList = question.answers.map((answer) =>
+      this.sanitizeAnswerParts(answer.parts, answerKey),
+    );
+
+    // Check which answer is correct based on answerKey after sanitization
     const correctAnswerLabel = answerKey[question.number];
 
     const persistedAnswers = await this.persistAnswerBlocks(
       questionBankId,
       question.number,
       rootQuestion,
-      question.answers.map((answer) =>
+      sanitizedAnswerPartsList.map((answerParts, index) =>
         this.attachAnswerLabelMeta(
-          answer.parts,
-          answer.label,
-          answer.label === correctAnswerLabel,
+          answerParts,
+          question.answers[index].label,
+          question.answers[index].label === correctAnswerLabel,
         ),
       ),
     );
@@ -507,6 +514,47 @@ export class QuestionBankImportService {
     );
   }
 
+  private sanitizeAnswerParts(
+    answerParts: ImportedContentPart[],
+    answerKey: Record<number, AnswerKeyOption>,
+  ): ImportedContentPart[] {
+    const sanitizedParts: ImportedContentPart[] = [];
+
+    for (const part of answerParts) {
+      if (part.contentType !== ContentTypes.TEXT) {
+        sanitizedParts.push(part);
+        continue;
+      }
+
+      const text = typeof part.content === 'string' ? part.content.trim() : '';
+      if (!text) {
+        continue;
+      }
+
+      const inlineAnswerKey = splitInlineAnswerKeyLine(text);
+      if (inlineAnswerKey) {
+        Object.assign(answerKey, extractAnswerKeyEntries(inlineAnswerKey.answerText));
+
+        if (inlineAnswerKey.questionText) {
+          sanitizedParts.push({
+            ...part,
+            content: inlineAnswerKey.questionText,
+          });
+        }
+        break;
+      }
+
+      if (isAnswerKeyStart(text)) {
+        Object.assign(answerKey, extractAnswerKeyEntries(text));
+        break;
+      }
+
+      sanitizedParts.push(part);
+    }
+
+    return sanitizedParts;
+  }
+
   private async createContentChain<T extends ContentChainEntity>(
     questionBankId: string,
     contentParts: ImportedContentPart[],
@@ -537,6 +585,10 @@ export class QuestionBankImportService {
 
     if (savedEntities.length > 1) {
       for (let index = 0; index < savedEntities.length - 1; index++) {
+        if (this.isAnswerKeyLikePart(contentParts[index + 1])) {
+          break;
+        }
+
         savedEntities[index].nextContent = savedEntities[index + 1].id;
       }
 
@@ -544,6 +596,23 @@ export class QuestionBankImportService {
     }
 
     return savedEntities;
+  }
+
+  private isAnswerKeyLikePart(part?: ImportedContentPart): boolean {
+    if (!part || part.contentType !== ContentTypes.TEXT) {
+      return false;
+    }
+
+    const text = typeof part.content === 'string' ? part.content.trim() : '';
+    if (!text) {
+      return false;
+    }
+
+    return (
+      isAnswerKeyStart(text) ||
+      Boolean(splitInlineAnswerKeyLine(text)) ||
+      /^(\*|\u2022)?\s*(Đáp\s*án|Dap\s*an|Answer\s*Key)\b/iu.test(text)
+    );
   }
 
   private async extractPageContent(

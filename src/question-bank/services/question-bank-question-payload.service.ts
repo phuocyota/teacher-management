@@ -56,12 +56,15 @@ export class QuestionBankQuestionPayloadService {
       where: { questionId: In(questionIds) },
       order: { createdAt: 'ASC' },
     });
-
-    const referencedAnswerIds = new Set(
-      allAnswers.map((answer) => answer.nextContent).filter(Boolean),
+    const filteredAnswers = allAnswers.filter(
+      (answer) => !this.isAnswerKeyNode(answer),
     );
 
-    for (const answer of allAnswers) {
+    const referencedAnswerIds = new Set(
+      filteredAnswers.map((answer) => answer.nextContent).filter(Boolean),
+    );
+
+    for (const answer of filteredAnswers) {
       if (referencedAnswerIds.has(answer.id)) {
         continue;
       }
@@ -72,5 +75,14 @@ export class QuestionBankQuestionPayloadService {
     }
 
     return answersByQuestionId;
+  }
+
+  private isAnswerKeyNode(answer: AnswerEntity): boolean {
+    if (answer.contentType !== 'TEXT') {
+      return false;
+    }
+
+    const text = answer.content?.trim() ?? '';
+    return /^(\*|\u2022)?\s*(Đáp\s*án|Dap\s*an|Answer\s*Key)\b/iu.test(text);
   }
 }
