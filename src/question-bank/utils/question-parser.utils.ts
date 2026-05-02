@@ -36,7 +36,7 @@ export interface AnswerSegment {
 }
 
 const INLINE_ANSWER_KEY_MARKER_PATTERN =
-  /(?:^|\s)(?:[\*\u2022]\s*)?(?<marker>(?:\u0110\u00e1p\s*\u00e1n|Dap\s*an|Answer\s*Key|\u0110A|DA))(?<suffix>\s*:?\s*.*)$/iu;
+  /(?:^|[\s.:;,\-\u2013\u2014])(?:[\*\u2022]\s*)?(?<marker>(?:\u0110\u00e1p\s*\u00e1n|Dap\s*an|Answer\s*Key|\u0110A|DA))\b(?<suffix>\s*:?\s*.*)$/iu;
 
 export function isAnswerKeyStart(line: string): boolean {
   return matchesAnyPattern(line.trim(), ANSWER_KEY_START_PATTERNS);
@@ -264,6 +264,24 @@ export function extractAnswerSegments(
       content: normalizedLine.slice(startIndex, endIndex).trim(),
     };
   });
+
+  if (segments.length >= 2) {
+    const lastSegment = segments[segments.length - 1];
+    const previousSegment = segments[segments.length - 2];
+    const lastMatch = matches[matches.length - 1];
+
+    if (
+      !lastSegment.content &&
+      previousSegment.label === lastSegment.label &&
+      lastMatch
+    ) {
+      previousSegment.content = mergeImportText(
+        previousSegment.content,
+        lastMatch[0].trim(),
+      );
+      segments.pop();
+    }
+  }
 
   return {
     leadingText,
