@@ -15,7 +15,7 @@ import {
   ERROR_MESSAGES,
 } from 'src/common/constant/error-messages.constant';
 import { PaginationResponseDto } from 'src/common/dto/pagination.dto';
-import { autoMapListToDto } from 'src/common/utils/auto-map.util';
+import { autoMapListToDto, autoMapToDto } from 'src/common/utils/auto-map.util';
 import {
   AttemptExamHistoryItemDto,
   AttemptResponseDto,
@@ -341,8 +341,17 @@ export class AttemptService {
 
     const [data, total] = await qb.getManyAndCount();
 
+    const mappedData = data.map((attempt) => {
+      const dto = autoMapToDto(AttemptResponseDto, attempt);
+      // Add fullScore from questionBank
+      if (attempt.questionBank?.totalScore) {
+        dto.fullScore = attempt.questionBank.totalScore;
+      }
+      return dto;
+    });
+
     return {
-      data: autoMapListToDto(AttemptResponseDto, data),
+      data: mappedData,
       page,
       size,
       total,

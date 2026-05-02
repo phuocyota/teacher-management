@@ -48,6 +48,13 @@ export class AttemptResponseDto extends BaseDto {
     required: false,
   })
   score?: number;
+
+  @ApiProperty({
+    description: 'Thang diem toi da cua de thi',
+    example: 10,
+    required: false,
+  })
+  fullScore?: number;
 }
 
 export class AttemptListResponseDto extends PaginationResponseDto<AttemptResponseDto> {
