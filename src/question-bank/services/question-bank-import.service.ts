@@ -42,6 +42,10 @@ import {
   normalizeImportSignature,
   normalizeImportText,
 } from '../utils/question-import-text.utils';
+import {
+  extractAnswerSegments,
+  extractQuestionStart,
+} from '../utils/question-parser.utils';
 
 interface ContentChainEntity {
   id: string;
@@ -273,7 +277,23 @@ export class QuestionBankImportService {
       return null;
     }
 
+    if (this.isQuestionOrAnswerLine(sanitized)) {
+      return null;
+    }
+
     return normalizeImportSignature(sanitized);
+  }
+
+  private isQuestionOrAnswerLine(text: string): boolean {
+    if (extractQuestionStart(text)) {
+      return true;
+    }
+
+    if (/^[A-Da-d]\s*[.)\:\-]?\s*$/.test(text.trim())) {
+      return true;
+    }
+
+    return extractAnswerSegments(text).segments.length > 0;
   }
 
   private isArtifactLine(

@@ -65,6 +65,14 @@ export class QuestionBankResponseDto extends BaseDto {
   classId?: string;
 
   @ApiProperty({
+    description: 'ID bo de thi ma ngan hang cau hoi dang duoc gan vao',
+    example: '3233abe3-1961-4af5-a482-542f1227d844',
+    required: false,
+    nullable: true,
+  })
+  examSetId?: string | null;
+
+  @ApiProperty({
     description: 'Hinh anh lien quan den ngan hang cau hoi',
     example: 'https://example.com/image.jpg',
     required: false,

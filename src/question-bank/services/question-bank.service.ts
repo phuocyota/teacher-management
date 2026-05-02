@@ -96,13 +96,43 @@ export class QuestionBankService {
     qb.skip(skip).take(size);
 
     const [data, total] = await qb.getManyAndCount();
+    const examSetIdMap = await this.getPrimaryExamSetIdByQuestionBankIds(
+      data.map((item) => item.id),
+    );
 
     return {
-      data: autoMapListToDto(QuestionBankResponseDto, data),
+      data: autoMapListToDto(QuestionBankResponseDto, data).map((item) => ({
+        ...item,
+        examSetId: examSetIdMap.get(item.id) ?? null,
+      })),
       page,
       size,
       total,
     };
+  }
+
+  private async getPrimaryExamSetIdByQuestionBankIds(
+    questionBankIds: string[],
+  ): Promise<Map<string, string>> {
+    if (questionBankIds.length === 0) {
+      return new Map();
+    }
+
+    const links = await this.entityManager
+      .getRepository(ExamSetQuestionBankEntity)
+      .find({
+        where: { questionBankId: In(questionBankIds) },
+        order: { order: 'ASC', createdAt: 'ASC' },
+      });
+
+    const examSetIdByQuestionBankId = new Map<string, string>();
+    for (const link of links) {
+      if (!examSetIdByQuestionBankId.has(link.questionBankId)) {
+        examSetIdByQuestionBankId.set(link.questionBankId, link.examSetId);
+      }
+    }
+
+    return examSetIdByQuestionBankId;
   }
 
   async getMaxCode(): Promise<number> {
