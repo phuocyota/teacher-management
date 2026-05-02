@@ -1,6 +1,8 @@
-﻿import { ApiProperty } from '@nestjs/swagger';
+import { ApiProperty } from '@nestjs/swagger';
 import { BaseDto } from 'src/common/dto/base.dto';
 import { PaginationResponseDto } from 'src/common/dto/pagination.dto';
+import { ContentTypes } from 'src/common/enum/content-type.enum';
+import { QuestionType } from 'src/question/enum/question-type.enum';
 
 export class QuestionBankResponseDto extends BaseDto {
   @ApiProperty({
@@ -76,4 +78,61 @@ export class QuestionBankListResponseDto extends PaginationResponseDto<QuestionB
     type: [QuestionBankResponseDto],
   })
   declare data: QuestionBankResponseDto[];
+}
+
+export class QuestionBankDetailAnswerDto {
+  @ApiProperty()
+  id!: string;
+
+  @ApiProperty()
+  questionId!: string;
+
+  @ApiProperty()
+  content!: string;
+
+  @ApiProperty({ enum: ContentTypes })
+  contentType!: ContentTypes;
+
+  @ApiProperty({ required: false, nullable: true })
+  isCorrect?: boolean | null;
+}
+
+export class QuestionBankDetailQuestionDto {
+  @ApiProperty()
+  id!: string;
+
+  @ApiProperty()
+  questionBankId!: string;
+
+  @ApiProperty()
+  content!: string;
+
+  @ApiProperty({ enum: ContentTypes })
+  contentType!: ContentTypes;
+
+  @ApiProperty()
+  orderNo!: number;
+
+  @ApiProperty()
+  point!: number;
+
+  @ApiProperty({ enum: QuestionType })
+  type!: QuestionType;
+
+  @ApiProperty({ type: [QuestionBankDetailAnswerDto] })
+  answers!: QuestionBankDetailAnswerDto[];
+}
+
+export class QuestionBankDetailResponseDto {
+  @ApiProperty()
+  id!: string;
+
+  @ApiProperty()
+  code!: string;
+
+  @ApiProperty()
+  name!: string;
+
+  @ApiProperty({ type: [QuestionBankDetailQuestionDto] })
+  questions!: QuestionBankDetailQuestionDto[];
 }

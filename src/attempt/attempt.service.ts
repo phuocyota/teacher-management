@@ -34,6 +34,7 @@ import { ExamSetQuestionBankService } from 'src/exam-set-question-bank/exam-set-
 import { StudentGroupEntity } from 'src/student-group/student-group.entity';
 import { SchoolEntity } from 'src/school/school.entity';
 import { QuestionType } from 'src/question/enum/question-type.enum';
+import { QuestionBankQuestionPayloadService } from 'src/question-bank/services/question-bank-question-payload.service';
 import {
   AttemptAnswerChainItemDto,
   AttemptAnswerOptionDto,
@@ -72,6 +73,7 @@ export class AttemptService {
     private readonly studentAnswerRepo: Repository<StudentAnswerEntity>,
     private readonly studentService: StudentService,
     private readonly questionBankService: QuestionBankService,
+    private readonly questionBankQuestionPayloadService: QuestionBankQuestionPayloadService,
     private readonly examSetService: ExamSetService,
     private readonly examSetQuestionBankService: ExamSetQuestionBankService,
   ) {}
@@ -392,9 +394,10 @@ export class AttemptService {
       : [];
     const questionMap = new Map(rootQuestions.map((item) => [item.id, item]));
 
-    const answersByQuestionId = await this.loadRootAnswersByQuestionIds(
-      questionIds,
-    );
+    const { answersByQuestionId } =
+      await this.questionBankQuestionPayloadService.buildQuestionBankQuestionPayload(
+        attempt.questionBankId,
+      );
 
     const questions: AttemptReviewQuestionItemDto[] = [];
 
@@ -715,20 +718,11 @@ export class AttemptService {
   private async getExamQuestions(
     questionBankId: string,
   ): Promise<AttemptQuestionItemDto[]> {
-    const links = await this.questionBankQuestionRepo.find({
-      where: { questionBankId },
-      order: { orderNo: 'ASC' },
-    });
-
-    const rootQuestionIds = links.map((item) => item.questionId);
-    const rootQuestions = rootQuestionIds.length
-      ? await this.questionRepo.find({ where: { id: In(rootQuestionIds) } })
-      : [];
+    const { links, rootQuestions, answersByQuestionId } =
+      await this.questionBankQuestionPayloadService.buildQuestionBankQuestionPayload(
+        questionBankId,
+      );
     const questionMap = new Map(rootQuestions.map((item) => [item.id, item]));
-
-    const answersByQuestionId = await this.loadRootAnswersByQuestionIds(
-      rootQuestionIds,
-    );
 
     const result: AttemptQuestionItemDto[] = [];
 
@@ -799,37 +793,6 @@ export class AttemptService {
     return chain;
   }
 
-  private async loadRootAnswersByQuestionIds(
-    questionIds: string[],
-  ): Promise<Map<string, AnswerEntity[]>> {
-    const answersByQuestionId = new Map<string, AnswerEntity[]>();
-
-    if (questionIds.length === 0) {
-      return answersByQuestionId;
-    }
-
-    const allAnswers = await this.answerRepo.find({
-      where: { questionId: In(questionIds) },
-      order: { createdAt: 'ASC' },
-    });
-
-    const referencedAnswerIds = new Set(
-      allAnswers.map((answer) => answer.nextContent).filter(Boolean),
-    );
-
-    for (const answer of allAnswers) {
-      if (referencedAnswerIds.has(answer.id)) {
-        continue;
-      }
-
-      const items = answersByQuestionId.get(answer.questionId) ?? [];
-      items.push(answer);
-      answersByQuestionId.set(answer.questionId, items);
-    }
-
-    return answersByQuestionId;
-  }
-
   private async normalizeSubmittedAnswers(
     answers: Array<EndAttemptAnswerDto | string>,
     questionLinks: QuestionBankQuestionEntity[],
@@ -846,10 +809,10 @@ export class AttemptService {
       questionLinks.map((item) => [item.orderNo, item.questionId]),
     );
     const questionIdByPosition = questionLinks.map((item) => item.questionId);
-    const questionIds = questionLinks.map((item) => item.questionId);
-    const answersByQuestionId = await this.loadRootAnswersByQuestionIds(
-      questionIds,
-    );
+    const { answersByQuestionId } =
+      await this.questionBankQuestionPayloadService.buildQuestionBankQuestionPayload(
+        questionLinks[0]?.questionBankId ?? '',
+      );
 
     return answers.map((item) => {
       if (typeof item !== 'string') {

@@ -12,6 +12,9 @@ import { PdfImageExtractorService } from './services/pdf-image-extractor.service
 import { QuestionParserService } from './services/question-parser.service';
 import { ExamSetEntity } from 'src/exam-set/exam-set.entity';
 import { UploadModule } from 'src/upload/upload.module';
+import { QuestionEntity } from 'src/question/question.entity';
+import { AnswerEntity } from 'src/answer/answer.entity';
+import { QuestionBankQuestionPayloadService } from './services/question-bank-question-payload.service';
 
 @Module({
   imports: [
@@ -19,6 +22,8 @@ import { UploadModule } from 'src/upload/upload.module';
       QuestionBankEntity,
       QuestionBankQuestionEntity,
       ExamSetEntity,
+      QuestionEntity,
+      AnswerEntity,
     ]),
     ClassModule,
     forwardRef(() => QuestionModule),
@@ -27,11 +32,12 @@ import { UploadModule } from 'src/upload/upload.module';
   ],
   providers: [
     QuestionBankService,
+    QuestionBankQuestionPayloadService,
     QuestionBankImportService,
     PdfImageExtractorService,
     QuestionParserService,
   ],
   controllers: [QuestionBankController],
-  exports: [QuestionBankService],
+  exports: [QuestionBankService, QuestionBankQuestionPayloadService],
 })
 export class QuestionBankModule {}
