@@ -845,7 +845,9 @@ export class AttemptService {
 
       const questionAnswers = [...(answersByQuestionId.get(questionId) ?? [])];
       questionAnswers.sort(
-        (a, b) => (a.orderNo ?? Number.MAX_SAFE_INTEGER) - (b.orderNo ?? Number.MAX_SAFE_INTEGER),
+        (a, b) =>
+          (a.orderNo ?? Number.MAX_SAFE_INTEGER) -
+          (b.orderNo ?? Number.MAX_SAFE_INTEGER),
       );
       const selectedAnswerIds = choiceCodes.map((choiceCode) => {
         const answerOrderNo = choiceCode.charCodeAt(0) - 64;
@@ -973,13 +975,15 @@ export class AttemptService {
     options?: { hideIsCorrect?: boolean },
   ): AttemptAnswerOptionDto {
     const root = chain[0];
-    const mappedParts: AttemptAnswerChainItemDto[] = chain.map((item, index) => ({
-      id: item.id,
-      contentType: item.contentType,
-      content: item.content,
-      meta: this.sanitizeAttemptMeta(item.meta, options?.hideIsCorrect),
-      nextContent: item.nextContent ?? chain[index + 1]?.id ?? null,
-    }));
+    const mappedParts: AttemptAnswerChainItemDto[] = chain.map(
+      (item, index) => ({
+        id: item.id,
+        contentType: item.contentType,
+        content: item.content,
+        meta: this.sanitizeAttemptMeta(item.meta, options?.hideIsCorrect),
+        nextContent: item.nextContent ?? chain[index + 1]?.id ?? null,
+      }),
+    );
 
     return {
       id: root.id,
@@ -999,7 +1003,10 @@ export class AttemptService {
       return null;
     }
 
-    if (!hideIsCorrect || !Object.prototype.hasOwnProperty.call(meta, 'isCorrect')) {
+    if (
+      !hideIsCorrect ||
+      !Object.prototype.hasOwnProperty.call(meta, 'isCorrect')
+    ) {
       return meta;
     }
 
