@@ -96,3 +96,35 @@ export class AttemptExamHistoryItemDto {
   })
   attemptCount!: number;
 }
+
+export class AttemptStatisticsDto {
+  @ApiProperty({
+    description: 'Tong so de da lam',
+    example: 52,
+  })
+  totalAttempts!: number;
+
+  @ApiProperty({
+    description: 'Diem trung binh',
+    example: 8.5,
+    type: Number,
+    nullable: true,
+  })
+  averageScore?: number | null;
+
+  @ApiProperty({
+    description: 'Diem cao nhat',
+    example: 10.0,
+    type: Number,
+    nullable: true,
+  })
+  highestScore?: number | null;
+
+  @ApiProperty({
+    description: 'Xep hang theo percentile (0-100)',
+    example: 90,
+    type: Number,
+    nullable: true,
+  })
+  percentileRank?: number | null;
+}

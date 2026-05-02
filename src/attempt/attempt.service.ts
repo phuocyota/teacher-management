@@ -358,6 +358,76 @@ export class AttemptService {
     };
   }
 
+  async getMyStatistics(userId: string) {
+    // Get total submitted attempts and calculate average, highest score
+    const attempts = await this.attemptRepo
+      .createQueryBuilder('attempt')
+      .where('attempt.studentId = :studentId', { studentId: userId })
+      .andWhere('attempt.status = :status', { status: AttemptStatus.SUBMITTED })
+      .getMany();
+
+    const totalAttempts = attempts.length;
+
+    if (totalAttempts === 0) {
+      return {
+        totalAttempts: 0,
+        averageScore: null,
+        highestScore: null,
+        percentileRank: null,
+      };
+    }
+
+    // Calculate average and highest score
+    const scores = attempts
+      .map((a) => a.score)
+      .filter((s) => s !== null && s !== undefined) as number[];
+
+    const averageScore =
+      scores.length > 0
+        ? parseFloat(
+            (scores.reduce((a, b) => a + b, 0) / scores.length).toFixed(2),
+          )
+        : null;
+
+    const highestScore = scores.length > 0 ? Math.max(...scores) : null;
+
+    // Calculate percentile rank
+    let percentileRank: number | null = null;
+
+    if (highestScore !== null) {
+      // Count how many students have highest score >= this student's highest score
+      const betterOrEqualCount = await this.attemptRepo
+        .createQueryBuilder('attempt')
+        .select('COUNT(DISTINCT attempt.studentId)', 'count')
+        .leftJoin('attempt.student', 'student')
+        .where('attempt.status = :status', { status: AttemptStatus.SUBMITTED })
+        .andWhere('attempt.score >= :score', { score: highestScore })
+        .getRawOne();
+
+      // Get total unique students
+      const totalStudents = await this.attemptRepo
+        .createQueryBuilder('attempt')
+        .select('COUNT(DISTINCT attempt.studentId)', 'count')
+        .where('attempt.status = :status', { status: AttemptStatus.SUBMITTED })
+        .getRawOne();
+
+      if (totalStudents?.count > 0) {
+        percentileRank = Math.round(
+          ((totalStudents.count - (betterOrEqualCount?.count || 0)) /
+            totalStudents.count) *
+            100,
+        );
+      }
+    }
+
+    return {
+      totalAttempts,
+      averageScore,
+      highestScore,
+      percentileRank,
+    };
+  }
+
   async review(
     id: string,
     user: JwtPayload,

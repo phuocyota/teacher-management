@@ -25,6 +25,7 @@ import {
   AttemptExamHistoryItemDto,
   AttemptListResponseDto,
   AttemptResponseDto,
+  AttemptStatisticsDto,
 } from './dto/attempt.dto';
 import { AttemptStatus } from './enum/attempt-status.enum';
 import {
@@ -131,6 +132,23 @@ export class AttemptController {
     );
   }
 
+  @Get('my-statistics')
+  @UseGuards(RolesGuard)
+  @Roles(UserType.STUDENT)
+  @ApiOperation({
+    summary:
+      'Get learning statistics of current student (total attempts, average score, highest score, percentile rank)',
+  })
+  @ApiOkResponse({
+    type: () => {
+      const { AttemptStatisticsDto } = require('./dto/attempt.dto');
+      return AttemptStatisticsDto;
+    },
+  })
+  async getMyStatistics(@User() user: JwtPayload) {
+    return this.attemptService.getMyStatistics(user.userId);
+  }
+
   @Get('exam-history')
   @UseGuards(RolesGuard)
   @Roles(UserType.STUDENT)
@@ -203,8 +221,7 @@ export class AttemptController {
   @UseGuards(RolesGuard)
   @Roles(UserType.STUDENT)
   @ApiOperation({
-    summary:
-      'List attempts of current student by questionBankId and examSetId',
+    summary: 'List attempts of current student by questionBankId and examSetId',
   })
   @ApiQuery({
     name: 'questionBankId',
@@ -230,7 +247,9 @@ export class AttemptController {
   @Get(':id/review')
   @UseGuards(RolesGuard)
   @Roles(UserType.STUDENT)
-  @ApiOperation({ summary: 'Review submitted attempt with correct and wrong answers' })
+  @ApiOperation({
+    summary: 'Review submitted attempt with correct and wrong answers',
+  })
   @ApiOkResponse({ type: AttemptReviewResponseDto })
   review(@Param('id', ParseUUIDPipe) id: string, @User() user: JwtPayload) {
     return this.attemptService.review(id, user);
