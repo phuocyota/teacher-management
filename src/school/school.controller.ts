@@ -21,6 +21,9 @@ import { SchoolService } from './school.service';
 import { CreateSchoolDto, UpdateSchoolDto } from './dto/create-school.dto';
 import { SchoolResponseDto, SchoolListResponseDto } from './dto/school.dto';
 import { PaginationResponseDto } from 'src/common/dto/pagination.dto';
+import { StudentGroupResponseDto } from 'src/student-group/dto/student-group.dto';
+import { User } from 'src/common/decorator/user.decorator';
+import type { JwtPayload } from 'src/common/interface/jwt-payload.interface';
 
 @ApiTags('School')
 @ApiBearerAuth('access-token')
@@ -66,6 +69,16 @@ export class SchoolController {
     @Query('zoneId') zoneId?: string,
   ): Promise<PaginationResponseDto<SchoolResponseDto>> {
     return this.schoolService.findAll(page, size, search, code, zoneId);
+  }
+
+  @Get(':id/student-groups')
+  @ApiOperation({ summary: 'Lay danh sach khoi/nhom hoc sinh theo truong' })
+  @ApiOkResponse({ type: [StudentGroupResponseDto] })
+  findStudentGroupsBySchool(
+    @Param('id', ParseUUIDPipe) id: string,
+    @User() user: JwtPayload,
+  ): Promise<StudentGroupResponseDto[]> {
+    return this.schoolService.findStudentGroupsBySchool(id, user.userId);
   }
 
   @Get(':id')

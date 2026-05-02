@@ -12,6 +12,7 @@ import {
   type PDFFont,
   type PDFPage,
 } from 'pdf-lib';
+import { Workbook } from 'exceljs';
 import { Repository } from 'typeorm';
 import { AttemptEntity } from 'src/attempt/attempt.entity';
 import {
@@ -64,6 +65,22 @@ type SchoolAttemptReportRow = {
   latestAttemptAt: Date | null;
 };
 
+type ClassAttemptScoreExportRow = {
+  studentId: string;
+  studentCode: string;
+  fullName: string | null;
+  userName: string;
+  attemptId: string | null;
+  examSetId: string | null;
+  examSetName: string | null;
+  questionBankId: string | null;
+  questionBankName: string | null;
+  status: string | null;
+  startedAt: Date | null;
+  submittedAt: Date | null;
+  score: string | number | null;
+};
+
 @Injectable()
 export class ReportService {
   constructor(
@@ -106,23 +123,15 @@ export class ReportService {
           school.principal_user_id = :userId
           OR EXISTS (
             SELECT 1
-            FROM user_group leaderLink
-            INNER JOIN user_group studentLink
-              ON studentLink.group_id = leaderLink.group_id
-            INNER JOIN student linkedStudent
-              ON linkedStudent.id = studentLink.user_id
-            INNER JOIN "user" linkedUser
-              ON linkedUser.id = linkedStudent.id
-            WHERE leaderLink.user_id = :userId
-              AND leaderLink.role = :leaderRole
-              AND linkedUser.user_type = :studentType
-              AND linkedStudent.student_group_id = "studentGroup".id
+            FROM student_group_member studentGroupMember
+            WHERE studentGroupMember.user_id = :userId
+              AND studentGroupMember.role = :leaderRole
+              AND studentGroupMember.student_group_id = "studentGroup".id
           )
         )`,
         {
           userId: user.userId,
           leaderRole: GroupMemberRole.LEADER,
-          studentType: UserType.STUDENT,
         },
       )
       .orderBy('school.code', 'ASC')
@@ -138,17 +147,10 @@ export class ReportService {
       school.principal_user_id = :userId
       OR EXISTS (
         SELECT 1
-        FROM user_group leaderLink
-        INNER JOIN user_group studentLink
-          ON studentLink.group_id = leaderLink.group_id
-        INNER JOIN student linkedStudent
-          ON linkedStudent.id = studentLink.user_id
-        INNER JOIN "user" linkedUser
-          ON linkedUser.id = linkedStudent.id
-        WHERE leaderLink.user_id = :userId
-          AND leaderLink.role = :leaderRole
-          AND linkedUser.user_type = :studentType
-          AND linkedStudent.student_group_id = "studentGroup".id
+        FROM student_group_member studentGroupMember
+        WHERE studentGroupMember.user_id = :userId
+          AND studentGroupMember.role = :leaderRole
+          AND studentGroupMember.student_group_id = "studentGroup".id
       )
     )`;
   }
@@ -156,12 +158,10 @@ export class ReportService {
   private accessParams(userId: string): {
     userId: string;
     leaderRole: GroupMemberRole;
-    studentType: UserType;
   } {
     return {
       userId,
       leaderRole: GroupMemberRole.LEADER,
-      studentType: UserType.STUDENT,
     };
   }
 
@@ -170,7 +170,7 @@ export class ReportService {
     user: JwtPayload,
   ): Promise<ReportStudentOptionDto[]> {
     this.ensureAuthenticatedUser(user);
-    await this.ensureCanAccessStudentGroup(groupId, user.userId);
+    await this.ensureCanAccessStudentGroup(groupId, user);
 
     const rows = await this.getStudentRowsInGroup(groupId);
     return rows.map((row) => ({
@@ -199,7 +199,7 @@ export class ReportService {
     const safeLimit = Number.isFinite(limit) && limit > 0 ? limit : 10;
     const skip = (safePage - 1) * safeLimit;
 
-    await this.ensureCanAccessStudentGroup(groupId, user.userId);
+    await this.ensureCanAccessStudentGroup(groupId, user);
     const student = await this.ensureStudentBelongsToGroup(groupId, studentId);
 
     const summaryRaw = await this.buildAttemptScope(studentId, fromDate, toDate)
@@ -260,8 +260,8 @@ export class ReportService {
       .addSelect('attempt.submitted_at', 'submittedAt')
       .addSelect('attempt.score', 'score')
       .orderBy('attempt.started_at', 'DESC')
-      .skip(skip)
-      .take(safeLimit);
+      .offset(skip)
+      .limit(safeLimit);
 
     const [historyRows, total] = await Promise.all([
       historyQb.getRawMany<{
@@ -305,9 +305,11 @@ export class ReportService {
   }
 
   async exportSchoolAttemptReportPdf(
+    user: JwtPayload,
     schoolId: string,
     filters: SchoolAttemptReportFilters,
   ): Promise<{ buffer: Buffer; fileName: string }> {
+    this.ensureAuthenticatedUser(user);
     this.validateDateRange(filters.fromDate, filters.toDate);
 
     const school = await this.schoolRepo.findOne({ where: { id: schoolId } });
@@ -316,6 +318,8 @@ export class ReportService {
         ERROR_MESSAGES.NOT_FOUND_WITH_ID(ENTITY_NAMES.SCHOOL, schoolId),
       );
     }
+
+    this.ensureCanAccessSchoolReport(school, user);
 
     const rows = await this.getSchoolAttemptReportRows(schoolId, filters);
     const buffer = await this.buildSchoolAttemptReportPdf(
@@ -330,15 +334,81 @@ export class ReportService {
     };
   }
 
+  async exportClassAttemptScoresExcel(
+    user: JwtPayload,
+    groupIds: string[],
+    filters: SchoolAttemptReportFilters,
+  ): Promise<{ buffer: Buffer; fileName: string }> {
+    this.ensureAuthenticatedUser(user);
+    this.validateDateRange(filters.fromDate, filters.toDate);
+
+    const normalizedGroupIds = [...new Set(groupIds.map((id) => id.trim()))]
+      .filter(Boolean);
+
+    if (normalizedGroupIds.length === 0) {
+      throw new BadRequestException('groupIds la bat buoc');
+    }
+
+    const invalidGroupId = normalizedGroupIds.find((id) => !this.isUuid(id));
+    if (invalidGroupId) {
+      throw new BadRequestException(`groupId khong hop le: ${invalidGroupId}`);
+    }
+
+    const workbook = new Workbook();
+    workbook.creator = 'teacher-management';
+    workbook.created = new Date();
+
+    for (const groupId of normalizedGroupIds) {
+      await this.ensureCanAccessStudentGroup(groupId, user);
+      const studentGroup = await this.studentGroupRepo.findOne({
+        where: { id: groupId },
+        relations: ['school'],
+      });
+
+      if (!studentGroup) {
+        throw new NotFoundException(
+          ERROR_MESSAGES.NOT_FOUND_WITH_ID(ENTITY_NAMES.STUDENT_GROUP, groupId),
+        );
+      }
+
+      const rows = await this.getClassAttemptScoreRows(groupId, filters);
+      this.addClassAttemptScoreWorksheet(workbook, studentGroup, rows);
+    }
+
+    const xlsx = await workbook.xlsx.writeBuffer();
+
+    return {
+      buffer: Buffer.from(xlsx),
+      fileName: `class-attempt-scores-${this.formatDate(new Date())}.xlsx`,
+    };
+  }
+
   private ensureAuthenticatedUser(user: JwtPayload): void {
     if (!user?.userId) {
       throw new ForbiddenException(ERROR_MESSAGES.INVALID_TOKEN_STRUCTURE);
     }
   }
 
+  private ensureCanAccessSchoolReport(
+    school: SchoolEntity,
+    user: JwtPayload,
+  ): void {
+    if (user.userType === UserType.ADMIN) {
+      return;
+    }
+
+    if (school.principalUserId === user.userId) {
+      return;
+    }
+
+    throw new ForbiddenException(
+      'Ban khong co quyen xem bao cao cua truong nay',
+    );
+  }
+
   private async ensureCanAccessStudentGroup(
     groupId: string,
-    userId: string,
+    user: JwtPayload,
   ): Promise<void> {
     const studentGroup = await this.studentGroupRepo.findOne({
       where: { id: groupId },
@@ -349,11 +419,18 @@ export class ReportService {
       );
     }
 
+    if (user.userType === UserType.ADMIN) {
+      return;
+    }
+
     const accessibleCount = await this.studentGroupRepo
       .createQueryBuilder('studentGroup')
       .innerJoin('studentGroup.school', 'school')
       .where('studentGroup.id = :groupId', { groupId })
-      .andWhere(this.canAccessStudentGroupCondition(), this.accessParams(userId))
+      .andWhere(
+        this.canAccessStudentGroupCondition(),
+        this.accessParams(user.userId),
+      )
       .getCount();
 
     if (!accessibleCount) {
@@ -511,6 +588,125 @@ export class ReportService {
       .orderBy('studentGroup.name', 'ASC')
       .addOrderBy('COALESCE(user.full_name, user.user_name)', 'ASC')
       .getRawMany<SchoolAttemptReportRow>();
+  }
+
+  private async getClassAttemptScoreRows(
+    groupId: string,
+    filters: SchoolAttemptReportFilters,
+  ): Promise<ClassAttemptScoreExportRow[]> {
+    const attemptJoinConditions = ['attempt.student_id = student.id'];
+    const params: Record<string, string> = {
+      groupId,
+      userType: UserType.STUDENT,
+    };
+
+    if (filters.examSetId) {
+      attemptJoinConditions.push('attempt.exam_set_id = :examSetId');
+      params.examSetId = filters.examSetId;
+    }
+
+    if (filters.questionBankId) {
+      attemptJoinConditions.push('attempt.question_bank_id = :questionBankId');
+      params.questionBankId = filters.questionBankId;
+    }
+
+    if (filters.fromDate) {
+      attemptJoinConditions.push('DATE(attempt.started_at) >= :fromDate');
+      params.fromDate = filters.fromDate;
+    }
+
+    if (filters.toDate) {
+      attemptJoinConditions.push('DATE(attempt.started_at) <= :toDate');
+      params.toDate = filters.toDate;
+    }
+
+    return this.studentRepo
+      .createQueryBuilder('student')
+      .innerJoin(UserEntity, 'user', 'user.id = student.id')
+      .leftJoin(AttemptEntity, 'attempt', attemptJoinConditions.join(' AND '))
+      .leftJoin('attempt.examSet', 'examSet')
+      .leftJoin('attempt.questionBank', 'questionBank')
+      .select('student.id', 'studentId')
+      .addSelect('student.code', 'studentCode')
+      .addSelect('user.full_name', 'fullName')
+      .addSelect('user.user_name', 'userName')
+      .addSelect('attempt.id', 'attemptId')
+      .addSelect('attempt.examSetId', 'examSetId')
+      .addSelect('examSet.name', 'examSetName')
+      .addSelect('attempt.questionBankId', 'questionBankId')
+      .addSelect('questionBank.name', 'questionBankName')
+      .addSelect('attempt.status', 'status')
+      .addSelect('attempt.started_at', 'startedAt')
+      .addSelect('attempt.submitted_at', 'submittedAt')
+      .addSelect('attempt.score', 'score')
+      .where('student.student_group_id = :groupId')
+      .andWhere('user.user_type = :userType')
+      .setParameters(params)
+      .orderBy('COALESCE(user.full_name, user.user_name)', 'ASC')
+      .addOrderBy('attempt.started_at', 'DESC')
+      .getRawMany<ClassAttemptScoreExportRow>();
+  }
+
+  private addClassAttemptScoreWorksheet(
+    workbook: Workbook,
+    studentGroup: StudentGroupEntity,
+    rows: ClassAttemptScoreExportRow[],
+  ): void {
+    const worksheet = workbook.addWorksheet(
+      this.toWorksheetName(studentGroup.name),
+    );
+
+    worksheet.columns = [
+      { header: 'STT', key: 'index', width: 8 },
+      { header: 'Ma hoc sinh', key: 'studentCode', width: 16 },
+      { header: 'Ho ten', key: 'fullName', width: 28 },
+      { header: 'Tai khoan', key: 'userName', width: 22 },
+      { header: 'Bo de', key: 'examSetName', width: 28 },
+      { header: 'De thi', key: 'questionBankName', width: 32 },
+      { header: 'Trang thai', key: 'status', width: 16 },
+      { header: 'Bat dau', key: 'startedAt', width: 22 },
+      { header: 'Nop bai', key: 'submittedAt', width: 22 },
+      { header: 'Diem', key: 'score', width: 12 },
+    ];
+
+    worksheet.insertRows(1, [
+      [`Lop: ${studentGroup.name}`],
+      [`Truong: ${studentGroup.school?.name ?? ''}`],
+      [`Ngay xuat: ${this.formatDateTime(new Date())}`],
+      [],
+    ]);
+
+    const headerRow = worksheet.getRow(5);
+    headerRow.font = { bold: true };
+    headerRow.alignment = { vertical: 'middle', horizontal: 'center' };
+
+    rows.forEach((row, index) => {
+      worksheet.addRow({
+        index: index + 1,
+        studentCode: row.studentCode,
+        fullName: row.fullName ?? '',
+        userName: row.userName,
+        examSetName: row.examSetName ?? '',
+        questionBankName: row.questionBankName ?? '',
+        status: this.formatAttemptStatusForExport(row.status),
+        startedAt: row.startedAt ? this.formatDateTime(row.startedAt) : '',
+        submittedAt: row.submittedAt
+          ? this.formatDateTime(row.submittedAt)
+          : '',
+        score: this.toNullableNumber(row.score) ?? '',
+      });
+    });
+
+    worksheet.eachRow((row) => {
+      row.eachCell((cell) => {
+        cell.border = {
+          top: { style: 'thin' },
+          left: { style: 'thin' },
+          bottom: { style: 'thin' },
+          right: { style: 'thin' },
+        };
+      });
+    });
   }
 
   private buildAttemptScope(
@@ -794,10 +990,35 @@ export class ReportService {
     return parts.length ? parts.join(' | ') : 'Bo loc: Tat ca bai lam';
   }
 
+  private formatAttemptStatusForExport(status: string | null): string {
+    switch (status) {
+      case 'DOING':
+        return 'Dang lam';
+      case 'SUBMITTED':
+        return 'Hoan thanh';
+      default:
+        return status ?? '';
+    }
+  }
+
   private toSafeFileName(value: string): string {
     return this.toPdfText(value)
       .toLowerCase()
       .replace(/[^a-z0-9]+/g, '-')
       .replace(/^-+|-+$/g, '');
+  }
+
+  private toWorksheetName(value: string): string {
+    const sanitized = this.toPdfText(value)
+      .replace(/[:\\/?*\[\]]/g, ' ')
+      .trim();
+
+    return (sanitized || 'Sheet').slice(0, 31);
+  }
+
+  private isUuid(value: string): boolean {
+    return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
+      value,
+    );
   }
 }

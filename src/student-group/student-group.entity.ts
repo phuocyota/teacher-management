@@ -10,6 +10,7 @@ import { BaseEntity } from 'src/common/sql/base.entity';
 import { SchoolEntity } from 'src/school/school.entity';
 import { StudentEntity } from 'src/student/student.entity';
 import { GroupMemberRole } from 'src/user-group/enum/group-member-role.enum';
+import { StudentGroupMemberEntity } from './student-group-member.entity';
 
 @Entity('student_group')
 @Unique(['code', 'schoolId'])
@@ -38,4 +39,7 @@ export class StudentGroupEntity extends BaseEntity {
   // Thêm mối quan hệ với StudentEntity nếu cần
   @OneToMany(() => StudentEntity, (student) => student.studentGroup)
   students: StudentEntity[];
+
+  @OneToMany(() => StudentGroupMemberEntity, (member) => member.studentGroup)
+  members: StudentGroupMemberEntity[];
 }

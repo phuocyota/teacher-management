@@ -16,6 +16,9 @@ import { PaginationResponseDto } from 'src/common/dto/pagination.dto';
 import { SchoolResponseDto } from './dto/school.dto';
 import { autoMapListToDto } from 'src/common/utils/auto-map.util';
 import { ZoneService } from 'src/zone/zone.service';
+import { StudentGroupEntity } from 'src/student-group/student-group.entity';
+import { StudentGroupResponseDto } from 'src/student-group/dto/student-group.dto';
+import { GroupMemberRole } from 'src/user-group/enum/group-member-role.enum';
 
 @Injectable()
 export class SchoolService {
@@ -24,6 +27,8 @@ export class SchoolService {
     private readonly schoolRepo: Repository<SchoolEntity>,
     @InjectRepository(UserEntity)
     private readonly userRepo: Repository<UserEntity>,
+    @InjectRepository(StudentGroupEntity)
+    private readonly studentGroupRepo: Repository<StudentGroupEntity>,
     private readonly zoneService: ZoneService,
   ) {}
 
@@ -133,6 +138,39 @@ export class SchoolService {
     }
 
     return record;
+  }
+
+  async findStudentGroupsBySchool(
+    schoolId: string,
+    userId: string,
+  ): Promise<StudentGroupResponseDto[]> {
+    await this.findOne(schoolId);
+
+    const studentGroups = await this.studentGroupRepo
+      .createQueryBuilder('studentGroup')
+      .innerJoin('studentGroup.school', 'school')
+      .where('studentGroup.schoolId = :schoolId', { schoolId })
+      .andWhere(
+        `(
+          school.principal_user_id = :userId
+          OR EXISTS (
+            SELECT 1
+            FROM student_group_member studentGroupMember
+            WHERE studentGroupMember.user_id = :userId
+              AND studentGroupMember.role = :leaderRole
+              AND studentGroupMember.student_group_id = "studentGroup".id
+          )
+        )`,
+        {
+          userId,
+          leaderRole: GroupMemberRole.LEADER,
+        },
+      )
+      .orderBy('studentGroup.code', 'ASC')
+      .addOrderBy('studentGroup.name', 'ASC')
+      .getMany();
+
+    return autoMapListToDto(StudentGroupResponseDto, studentGroups);
   }
 
   async update(id: string, dto: UpdateSchoolDto): Promise<SchoolEntity> {

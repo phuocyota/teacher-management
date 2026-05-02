@@ -162,6 +162,7 @@ export class ReportController {
     description: 'Ngay ket thuc loc attempt (YYYY-MM-DD)',
   })
   async exportSchoolAttemptReportPdf(
+    @User() user: JwtPayload,
     @Param('schoolId', ParseUUIDPipe) schoolId: string,
     @Query('examSetId') examSetId: string | undefined,
     @Query('questionBankId') questionBankId: string | undefined,
@@ -170,6 +171,7 @@ export class ReportController {
     @Res() res: Response,
   ): Promise<void> {
     const file = await this.reportService.exportSchoolAttemptReportPdf(
+      user,
       schoolId,
       {
         examSetId,
@@ -180,6 +182,77 @@ export class ReportController {
     );
 
     res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader(
+      'Content-Disposition',
+      `attachment; filename="${file.fileName}"`,
+    );
+    res.send(file.buffer);
+  }
+
+  @Get('classes/export-excel')
+  @Roles(UserType.ADMIN, UserType.TEACHER)
+  @ApiOperation({
+    summary:
+      'Xuat file Excel danh sach diem bai thi cua mot hoac nhieu lop',
+  })
+  @ApiProduces(
+    'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  )
+  @ApiQuery({
+    name: 'groupIds',
+    required: true,
+    type: String,
+    description:
+      'Danh sach ID lop/student_group, cach nhau boi dau phay. Moi lop la mot sheet.',
+  })
+  @ApiQuery({
+    name: 'examSetId',
+    required: false,
+    type: String,
+    description: 'Loc theo bo de',
+  })
+  @ApiQuery({
+    name: 'questionBankId',
+    required: false,
+    type: String,
+    description: 'Loc theo de thi/ngan hang cau hoi',
+  })
+  @ApiQuery({
+    name: 'fromDate',
+    required: false,
+    type: String,
+    description: 'Ngay bat dau loc attempt (YYYY-MM-DD)',
+  })
+  @ApiQuery({
+    name: 'toDate',
+    required: false,
+    type: String,
+    description: 'Ngay ket thuc loc attempt (YYYY-MM-DD)',
+  })
+  async exportClassAttemptScoresExcel(
+    @User() user: JwtPayload,
+    @Query('groupIds') groupIds: string,
+    @Query('examSetId') examSetId: string | undefined,
+    @Query('questionBankId') questionBankId: string | undefined,
+    @Query('fromDate') fromDate: string | undefined,
+    @Query('toDate') toDate: string | undefined,
+    @Res() res: Response,
+  ): Promise<void> {
+    const file = await this.reportService.exportClassAttemptScoresExcel(
+      user,
+      groupIds?.split(',') ?? [],
+      {
+        examSetId,
+        questionBankId,
+        fromDate,
+        toDate,
+      },
+    );
+
+    res.setHeader(
+      'Content-Type',
+      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    );
     res.setHeader(
       'Content-Disposition',
       `attachment; filename="${file.fileName}"`,

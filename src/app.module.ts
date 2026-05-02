@@ -42,6 +42,7 @@ import { SchoolModule } from './school/school.module';
 import { StudentGroupModule } from './student-group/student-group.module';
 import { SchoolEntity } from './school/school.entity';
 import { StudentGroupEntity } from './student-group/student-group.entity';
+import { StudentGroupMemberEntity } from './student-group/student-group-member.entity';
 import { StudentEntity } from './student/student.entity';
 import { QuestionBankEntity } from './question-bank/question-bank.entity';
 import { QuestionEntity } from './question/question.entity';
@@ -107,6 +108,7 @@ import { ZoneEntity } from './zone/zone.entity';
           LectureDownloadLogEntity,
           SchoolEntity,
           StudentGroupEntity,
+          StudentGroupMemberEntity,
           StudentEntity,
           QuestionBankEntity,
           QuestionEntity,

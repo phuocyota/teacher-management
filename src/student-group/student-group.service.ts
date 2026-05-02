@@ -68,7 +68,7 @@ export class StudentGroupService {
       .leftJoinAndSelect('sg.school', 'school');
 
     if (schoolId) {
-      qb.andWhere('sg.school_id = :schoolId', { schoolId });
+      qb.andWhere('sg.schoolId = :schoolId', { schoolId });
     }
 
     if (search) {
