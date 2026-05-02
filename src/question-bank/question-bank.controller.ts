@@ -118,6 +118,14 @@ export class QuestionBankController {
     return this.questionBankService.remove(id);
   }
 
+  @Delete(':id/resource')
+  @ApiOperation({
+    summary: 'Xóa toàn bộ câu hỏi và đáp án của ngân hàng câu hỏi',
+  })
+  removeResource(@Param('id', ParseUUIDPipe) id: string) {
+    return this.questionBankService.removeResource(id);
+  }
+
   @Post(':id/import-pdf')
   @ApiOperation({ summary: 'Import đề thi từ file PDF' })
   @ApiConsumes('multipart/form-data')

@@ -1,5 +1,13 @@
-import { IsString, IsNotEmpty, IsNumber, IsUUID } from 'class-validator';
+import {
+  IsString,
+  IsNotEmpty,
+  IsNumber,
+  IsUUID,
+  IsEnum,
+  IsOptional,
+} from 'class-validator';
 import { ApiProperty, PartialType } from '@nestjs/swagger';
+import { GroupMemberRole } from 'src/user-group/enum/group-member-role.enum';
 
 export class CreateStudentGroupDto {
   @IsNumber()
@@ -17,6 +25,17 @@ export class CreateStudentGroupDto {
     example: 'Nhóm A1',
   })
   name!: string;
+
+  @IsEnum(GroupMemberRole)
+  @IsOptional()
+  @ApiProperty({
+    description: 'Vai trò của nhóm học sinh',
+    enum: GroupMemberRole,
+    example: GroupMemberRole.MEMBER,
+    default: GroupMemberRole.MEMBER,
+    required: false,
+  })
+  role?: GroupMemberRole;
 
   @IsUUID()
   @IsNotEmpty()

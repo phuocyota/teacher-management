@@ -1,6 +1,7 @@
 import { ApiProperty } from '@nestjs/swagger';
 import { BaseDto } from 'src/common/dto/base.dto';
 import { PaginationResponseDto } from 'src/common/dto/pagination.dto';
+import { GroupMemberRole } from 'src/user-group/enum/group-member-role.enum';
 
 export class StudentGroupResponseDto extends BaseDto {
   @ApiProperty({
@@ -14,6 +15,13 @@ export class StudentGroupResponseDto extends BaseDto {
     example: 'Nhóm A1',
   })
   name!: string;
+
+  @ApiProperty({
+    description: 'Vai trò của nhóm học sinh',
+    enum: GroupMemberRole,
+    example: GroupMemberRole.MEMBER,
+  })
+  role!: GroupMemberRole;
 
   @ApiProperty({
     description: 'ID của trường học',

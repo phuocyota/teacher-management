@@ -148,6 +148,26 @@ export class UserResponseDto {
   updatedAt: Date;
 }
 
+export class MeResponseDto extends UserResponseDto {
+  @Expose()
+  @ApiPropertyOptional({ example: 'HS001' })
+  studentCode?: string;
+
+  @Expose()
+  @ApiPropertyOptional({
+    example: 'Lop 1A',
+    description: 'Ten lop/nhom hoc sinh, chi co voi user STUDENT',
+  })
+  className?: string;
+
+  @Expose()
+  @ApiPropertyOptional({
+    example: 'Truong Tieu hoc Nguyen Hue',
+    description: 'Ten truong hoc, chi co voi user STUDENT',
+  })
+  schoolName?: string;
+}
+
 // ===== USER LIST QUERY DTO (cho filter & pagination) =====
 export class UserQueryDto {
   @ApiPropertyOptional({

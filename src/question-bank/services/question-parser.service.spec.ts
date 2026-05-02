@@ -77,6 +77,67 @@ describe('QuestionParserService', () => {
     });
   });
 
+  it('does not split answer text ending with Vietnamese words like khac.', async () => {
+    const pageContent: PageContent = {
+      pageNumber: 1,
+      lines: [
+        createTextLine(
+          1,
+          0,
+          10,
+          'Câu 1: Khi làm việc nhóm, để công việc đạt hiệu quả cao nhất, em nên làm gì?',
+        ),
+        createTextLine(
+          1,
+          1,
+          20,
+          'A. Chia sẻ ý kiến, lắng nghe và phối hợp cùng các bạn.',
+        ),
+        createTextLine(1, 2, 30, 'B. Chờ bạn khác phân công rồi mới làm.'),
+        createTextLine(1, 3, 40, 'C. Chỉ làm theo ý kiến của nhóm trưởng.'),
+        createTextLine(
+          1,
+          4,
+          50,
+          'D. Làm phần việc mình thích, không cần quan tâm người khác.',
+        ),
+        createTextLine(
+          1,
+          5,
+          60,
+          'Câu 2: Trong mùa dịch bệnh, việc làm nào giúp phòng chống dịch hiệu quả nhất?',
+        ),
+        createTextLine(1, 6, 70, 'A. Tránh tiếp xúc với tất cả mọi người.'),
+        createTextLine(
+          1,
+          7,
+          80,
+          'B. Giữ vệ sinh cá nhân, rửa tay và đeo khẩu trang khi cần.',
+        ),
+        createTextLine(1, 8, 90, 'C. Không cần chú ý nếu thấy khỏe.'),
+        createTextLine(1, 9, 100, 'D. Chỉ uống thuốc bổ.'),
+      ],
+    };
+
+    const result = await service.parsePages([pageContent]);
+
+    expect(result.questions).toHaveLength(2);
+    expect(result.questions[0].answers).toHaveLength(4);
+    expect(result.questions[0].answers[3]).toEqual({
+      label: 'D',
+      parts: [
+        {
+          content: 'Làm phần việc mình thích, không cần quan tâm người khác.',
+          contentType: ContentTypes.TEXT,
+        },
+      ],
+    });
+    expect(result.questions[1]).toMatchObject({
+      number: 2,
+      questionType: QuestionType.SINGLE_CHOICE,
+    });
+  });
+
   it('splits inline answer key content from the question line', async () => {
     const pageContent: PageContent = {
       pageNumber: 1,

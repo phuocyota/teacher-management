@@ -64,6 +64,10 @@ import { ExamSetQuestionBankModule } from './exam-set-question-bank/exam-set-que
 import { ExamSetQuestionBankEntity } from './exam-set-question-bank/exam-set-question-bank.entity';
 import { ExamSetClassEntity } from './exam-set-class/exam-set-class.entity';
 import { ReportModule } from './report/report.module';
+import { AppController } from './app.controller';
+import { AppService } from './app.service';
+import { ZoneModule } from './zone/zone.module';
+import { ZoneEntity } from './zone/zone.entity';
 
 @Module({
   imports: [
@@ -116,6 +120,7 @@ import { ReportModule } from './report/report.module';
           ExamSetEntity,
           ExamSetQuestionBankEntity,
           ExamSetClassEntity,
+          ZoneEntity,
         ],
         synchronize: true,
       }),
@@ -146,8 +151,10 @@ import { ReportModule } from './report/report.module';
     ExamSetModule,
     ExamSetQuestionBankModule,
     ReportModule,
+    ZoneModule,
   ],
   providers: [
+    AppService,
     {
       provide: APP_FILTER,
       useClass: AllExceptionsFilter,
@@ -157,6 +164,7 @@ import { ReportModule } from './report/report.module';
       useClass: AuthGuard,
     },
   ],
+  controllers: [AppController],
 })
 export class AppModule {
   configure(consumer: MiddlewareConsumer) {

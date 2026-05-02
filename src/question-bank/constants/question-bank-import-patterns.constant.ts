@@ -21,7 +21,7 @@ export const QUESTION_START_PATTERNS: QuestionStartPatternDefinition[] = [
 export const ANSWER_OPTION_LABELS: AnswerOptionLabel[] = ['A', 'B', 'C', 'D'];
 
 export const ANSWER_SEGMENT_PATTERN =
-  /(?:^|[^A-Za-z0-9_])([A-Da-d])\s*[\.\)\:\-]\s*/g;
+  /(?:^|\s)([A-Da-d])\s*[\.\)\:\-]\s*/g;
 
 export const ANSWER_KEY_START_PATTERNS: RegExp[] = [
   /^(?:[\*\u2022]\s*)?(?:\u0110\u00e1p\s*\u00e1n|Dap\s*an|Answer\s*Key|\u0110A|DA)\s*:?\s*$/iu,

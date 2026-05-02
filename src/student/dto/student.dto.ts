@@ -10,6 +10,13 @@ export class StudentResponseDto extends BaseDto {
   })
   studentGroupId!: string | null;
 
+  @ApiPropertyOptional({
+    description: 'ID cua truong hoc',
+    example: '2233abe3-1961-4af5-a482-542f1227d844',
+    nullable: true,
+  })
+  schoolId!: string | null;
+
   @ApiProperty({
     description: 'Ma hoc sinh',
     example: 'HS001',

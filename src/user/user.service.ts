@@ -22,6 +22,8 @@ import { runInTransaction } from 'src/common/database/transaction.utils';
 import { UserType } from 'src/common/enum/user-type.enum';
 import { StudentEntity } from 'src/student/student.entity';
 import { TeacherEntity } from 'src/teacher/teacher.entity';
+import { StudentGroupEntity } from 'src/student-group/student-group.entity';
+import { SchoolEntity } from 'src/school/school.entity';
 
 @Injectable()
 export class UserService extends BaseService<UserEntity> {
@@ -124,6 +126,7 @@ export class UserService extends BaseService<UserEntity> {
       const {
         groupIds,
         studentGroupId,
+        schoolId,
         code,
         studentCode,
         deviceId,
@@ -159,10 +162,47 @@ export class UserService extends BaseService<UserEntity> {
           throw new ConflictException('Ma hoc sinh da ton tai');
         }
 
+        const studentGroup = studentGroupId
+          ? await manager
+              .getRepository(StudentGroupEntity)
+              .findOne({ where: { id: studentGroupId } })
+          : null;
+
+        if (studentGroupId && !studentGroup) {
+          throw new NotFoundException(
+            ERROR_MESSAGES.NOT_FOUND(ENTITY_NAMES.STUDENT_GROUP),
+          );
+        }
+
+        const resolvedSchoolId = schoolId ?? studentGroup?.schoolId ?? null;
+
+        if (
+          schoolId &&
+          studentGroup?.schoolId &&
+          schoolId !== studentGroup.schoolId
+        ) {
+          throw new BadRequestException(
+            'schoolId phai trung voi truong cua nhom hoc sinh',
+          );
+        }
+
+        if (resolvedSchoolId) {
+          const school = await manager
+            .getRepository(SchoolEntity)
+            .findOne({ where: { id: resolvedSchoolId } });
+
+          if (!school) {
+            throw new NotFoundException(
+              ERROR_MESSAGES.NOT_FOUND(ENTITY_NAMES.SCHOOL),
+            );
+          }
+        }
+
         await studentRepo.save(
           studentRepo.create({
             id: savedUser.id,
             studentGroupId: studentGroupId ?? null,
+            schoolId: resolvedSchoolId,
             code: studentCodeValue,
             createdBy: user?.userId,
           }),
@@ -421,6 +461,35 @@ export class UserService extends BaseService<UserEntity> {
       page,
       limit,
       totalPages: Math.ceil(total / limit),
+    };
+  }
+
+  async getMe(userId: string) {
+    const user = await this.repo.findOne({ where: { id: userId } });
+
+    if (!user) {
+      throw new NotFoundException(ERROR_MESSAGES.NOT_FOUND(ENTITY_NAMES.USER));
+    }
+
+    const safeUser: Partial<UserEntity> = { ...user };
+    delete safeUser.hashPassword;
+
+    if (user.userType !== UserType.STUDENT) {
+      return safeUser;
+    }
+
+    const student = await this.entityManager
+      .getRepository(StudentEntity)
+      .findOne({
+        where: { id: user.id },
+        relations: ['studentGroup', 'studentGroup.school', 'school'],
+      });
+
+    return {
+      ...safeUser,
+      studentCode: student?.code,
+      className: student?.studentGroup?.name,
+      schoolName: student?.studentGroup?.school?.name,
     };
   }
 

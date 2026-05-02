@@ -7,15 +7,18 @@ import {
   ParseIntPipe,
   ParseUUIDPipe,
   Query,
+  Res,
   UseGuards,
 } from '@nestjs/common';
 import {
   ApiBearerAuth,
   ApiOkResponse,
   ApiOperation,
+  ApiProduces,
   ApiQuery,
   ApiTags,
 } from '@nestjs/swagger';
+import type { Response } from 'express';
 import { Roles } from 'src/common/decorator/roles.decorator';
 import { User } from 'src/common/decorator/user.decorator';
 import { UserType } from 'src/common/enum/user-type.enum';
@@ -37,14 +40,18 @@ export class ReportController {
   constructor(private readonly reportService: ReportService) {}
 
   @Get('groups')
-  @ApiOperation({ summary: 'Lay danh sach group ma giao vien dang la truong nhom' })
+  @ApiOperation({
+    summary: 'Lay danh sach nhom hoc sinh de chon tren man bao cao',
+  })
   @ApiOkResponse({ type: [TeacherLeaderGroupDto] })
   getLeaderGroups(@User() user: JwtPayload): Promise<TeacherLeaderGroupDto[]> {
     return this.reportService.getLeaderGroups(user);
   }
 
   @Get('groups/:groupId/students')
-  @ApiOperation({ summary: 'Lay danh sach hoc sinh thuoc group giao vien quan ly' })
+  @ApiOperation({
+    summary: 'Lay danh sach hoc sinh thuoc nhom hoc sinh da chon',
+  })
   @ApiOkResponse({ type: [ReportStudentOptionDto] })
   getGroupStudents(
     @Param('groupId', ParseUUIDPipe) groupId: string,
@@ -56,13 +63,13 @@ export class ReportController {
   @Get('student')
   @ApiOperation({
     summary:
-      'Lay bao cao hoc sinh theo group va khoang thoi gian, gom tong quan, xu huong diem va lich su lam bai',
+      'Lay bao cao hoc sinh theo nhom hoc sinh va khoang thoi gian, gom tong quan, xu huong diem va lich su lam bai',
   })
   @ApiQuery({
     name: 'groupId',
     required: true,
     type: String,
-    description: 'ID group ma giao vien dang la truong nhom',
+    description: 'ID nhom hoc sinh (student_group.id)',
   })
   @ApiQuery({
     name: 'studentId',
@@ -121,5 +128,62 @@ export class ReportController {
       page,
       limit,
     );
+  }
+
+  @Get('schools/:schoolId/export-pdf')
+  @Roles(UserType.ADMIN, UserType.TEACHER)
+  @ApiOperation({
+    summary:
+      'Xuat file PDF bao cao diem tong hop cua tat ca lop trong mot truong',
+  })
+  @ApiProduces('application/pdf')
+  @ApiQuery({
+    name: 'examSetId',
+    required: false,
+    type: String,
+    description: 'Loc theo bo de',
+  })
+  @ApiQuery({
+    name: 'questionBankId',
+    required: false,
+    type: String,
+    description: 'Loc theo de thi/ngan hang cau hoi',
+  })
+  @ApiQuery({
+    name: 'fromDate',
+    required: false,
+    type: String,
+    description: 'Ngay bat dau loc attempt (YYYY-MM-DD)',
+  })
+  @ApiQuery({
+    name: 'toDate',
+    required: false,
+    type: String,
+    description: 'Ngay ket thuc loc attempt (YYYY-MM-DD)',
+  })
+  async exportSchoolAttemptReportPdf(
+    @Param('schoolId', ParseUUIDPipe) schoolId: string,
+    @Query('examSetId') examSetId: string | undefined,
+    @Query('questionBankId') questionBankId: string | undefined,
+    @Query('fromDate') fromDate: string | undefined,
+    @Query('toDate') toDate: string | undefined,
+    @Res() res: Response,
+  ): Promise<void> {
+    const file = await this.reportService.exportSchoolAttemptReportPdf(
+      schoolId,
+      {
+        examSetId,
+        questionBankId,
+        fromDate,
+        toDate,
+      },
+    );
+
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader(
+      'Content-Disposition',
+      `attachment; filename="${file.fileName}"`,
+    );
+    res.send(file.buffer);
   }
 }
