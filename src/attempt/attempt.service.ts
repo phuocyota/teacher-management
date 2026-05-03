@@ -5,6 +5,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
+import { PDFDocument, StandardFonts, rgb, type PDFFont } from 'pdf-lib';
 import { In, Repository } from 'typeorm';
 import { AttemptEntity } from './attempt.entity';
 import { StudentService } from 'src/student/student.service';
@@ -535,6 +536,39 @@ export class AttemptService {
     };
   }
 
+  async exportAttemptReviewPdf(
+    id: string,
+    user: JwtPayload,
+  ): Promise<{ buffer: Buffer; fileName: string }> {
+    const review = await this.review(id, user);
+    const attempt = await this.attemptRepo.findOne({
+      where: { id: review.attemptId, studentId: user.userId },
+      relations: ['questionBank', 'examSet'],
+    });
+
+    if (!attempt) {
+      throw new ForbiddenException(ERROR_MESSAGES.NO_PERMISSION_SUBMIT_ATTEMPT);
+    }
+
+    const student = await this.userRepo.findOne({
+      where: { id: review.studentId },
+    });
+
+    const buffer = await this.buildAttemptReviewPdf(review, {
+      studentName: student?.fullName ?? student?.userName ?? user.userId,
+      studentUserName: student?.userName ?? '',
+      examSetName: attempt.examSet?.name ?? '',
+      questionBankName: attempt.questionBank?.name ?? '',
+      startedAt: attempt.startedAt,
+      submittedAt: attempt.submittedAt ?? null,
+    });
+
+    return {
+      buffer,
+      fileName: `attempt-review-${this.toSafeFileName(review.attemptId)}.pdf`,
+    };
+  }
+
   async findExamHistory(
     user: JwtPayload,
     fromDate?: string,
@@ -649,6 +683,218 @@ export class AttemptService {
         'fromDate must be less than or equal to toDate',
       );
     }
+  }
+
+  private async buildAttemptReviewPdf(
+    review: AttemptReviewResponseDto,
+    meta: {
+      studentName: string;
+      studentUserName: string;
+      examSetName: string;
+      questionBankName: string;
+      startedAt: Date;
+      submittedAt: Date | null;
+    },
+  ): Promise<Buffer> {
+    const pdfDoc = await PDFDocument.create();
+    const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
+    const boldFont = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
+    const pageSize: [number, number] = [595.28, 841.89];
+    const margin = 40;
+    const contentWidth = pageSize[0] - margin * 2;
+
+    let page = pdfDoc.addPage(pageSize);
+    let y = page.getHeight() - margin;
+
+    const ensureSpace = (heightNeeded: number) => {
+      if (y - heightNeeded < margin) {
+        page = pdfDoc.addPage(pageSize);
+        y = page.getHeight() - margin;
+      }
+    };
+
+    const drawWrappedText = (
+      text: string,
+      options?: {
+        size?: number;
+        bold?: boolean;
+        indent?: number;
+        color?: ReturnType<typeof rgb>;
+        gapAfter?: number;
+      },
+    ) => {
+      const size = options?.size ?? 11;
+      const lineHeight = size + 4;
+      const indent = options?.indent ?? 0;
+      const targetFont = options?.bold ? boldFont : font;
+      const lines = this.wrapPdfText(
+        this.toPdfText(text),
+        targetFont,
+        size,
+        contentWidth - indent,
+      );
+
+      ensureSpace(lines.length * lineHeight + 4);
+
+      for (const line of lines) {
+        page.drawText(line, {
+          x: margin + indent,
+          y,
+          size,
+          font: targetFont,
+          color: options?.color ?? rgb(0.12, 0.12, 0.12),
+        });
+        y -= lineHeight;
+      }
+
+      y -= options?.gapAfter ?? 2;
+    };
+
+    drawWrappedText('PHIEU XUAT BAI LAM', {
+      size: 16,
+      bold: true,
+      gapAfter: 8,
+    });
+    drawWrappedText(`Hoc sinh: ${meta.studentName}`, { bold: true });
+    drawWrappedText(`Tai khoan: ${meta.studentUserName || '-'}`);
+    drawWrappedText(`Bo de: ${meta.examSetName || '-'}`);
+    drawWrappedText(`De thi: ${meta.questionBankName || '-'}`);
+    drawWrappedText(`Bat dau: ${this.formatDateTime(meta.startedAt)}`);
+    drawWrappedText(
+      `Nop bai: ${
+        meta.submittedAt ? this.formatDateTime(meta.submittedAt) : '-'
+      }`,
+    );
+    drawWrappedText(
+      `Tong diem: ${review.score ?? 0} | So cau: ${review.totalQuestions} | Da tra loi: ${review.answeredQuestions}`,
+      { gapAfter: 10 },
+    );
+
+    for (const question of review.questions) {
+      drawWrappedText(
+        `Cau ${question.orderNo} - ${question.pointsEarned ?? 0}/${question.points} diem - ${
+          question.isCorrect === true
+            ? 'Dung'
+            : question.isCorrect === false
+              ? 'Sai'
+              : 'Chua cham'
+        }`,
+        {
+          bold: true,
+          color:
+            question.isCorrect === true
+              ? rgb(0, 0.45, 0.2)
+              : question.isCorrect === false
+                ? rgb(0.7, 0.1, 0.1)
+                : rgb(0.2, 0.2, 0.2),
+        },
+      );
+
+      const questionTextParts = [
+        question.content,
+        ...question.chain.slice(1).map((item) => item.content),
+      ];
+      for (const part of questionTextParts) {
+        drawWrappedText(this.toDisplayContent(part), { indent: 12 });
+      }
+
+      if (question.textValue) {
+        drawWrappedText(`Tra loi tu luan: ${question.textValue}`, {
+          indent: 12,
+        });
+      }
+
+      for (const answer of question.answers) {
+        const isSelected = answer.isSelected;
+        const label = isSelected ? '[x]' : '[ ]';
+        const correctness = answer.isCorrect ? ' (dap an dung)' : '';
+        const answerTextParts = [
+          answer.content,
+          ...answer.chain.slice(1).map((item) => item.content),
+        ];
+        drawWrappedText(
+          `${label} ${this.toDisplayContent(answerTextParts[0])}${correctness}`,
+          { indent: 18 },
+        );
+        for (const extraPart of answerTextParts.slice(1)) {
+          drawWrappedText(this.toDisplayContent(extraPart), { indent: 36 });
+        }
+      }
+
+      if (question.description) {
+        drawWrappedText(`Ghi chu: ${question.description}`, { indent: 12 });
+      }
+
+      y -= 4;
+    }
+
+    const pdfBytes = await pdfDoc.save();
+    return Buffer.from(pdfBytes);
+  }
+
+  private wrapPdfText(
+    text: string,
+    font: PDFFont,
+    size: number,
+    maxWidth: number,
+  ): string[] {
+    const words = text.split(/\s+/).filter(Boolean);
+    if (!words.length) {
+      return [''];
+    }
+
+    const lines: string[] = [];
+    let current = '';
+
+    for (const word of words) {
+      const candidate = current ? `${current} ${word}` : word;
+      if (font.widthOfTextAtSize(candidate, size) <= maxWidth) {
+        current = candidate;
+        continue;
+      }
+
+      if (current) {
+        lines.push(current);
+      }
+      current = word;
+    }
+
+    if (current) {
+      lines.push(current);
+    }
+
+    return lines;
+  }
+
+  private toPdfText(value: string): string {
+    return (value ?? '')
+      .replace(/đ/g, 'd')
+      .replace(/Đ/g, 'D')
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .replace(/[^\x20-\x7E]/g, '');
+  }
+
+  private toDisplayContent(value: string): string {
+    const trimmed = (value ?? '').trim();
+    if (!trimmed) {
+      return '';
+    }
+    if (/^\/?uploads\/|^https?:\/\//i.test(trimmed)) {
+      return `[Hinh anh] ${trimmed}`;
+    }
+    return trimmed;
+  }
+
+  private toSafeFileName(value: string): string {
+    return this.toPdfText(value)
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-+|-+$/g, '');
+  }
+
+  private formatDateTime(value: Date): string {
+    return value.toISOString().replace('T', ' ').slice(0, 19);
   }
 
   private validateDate(value: string, fieldName: string): void {

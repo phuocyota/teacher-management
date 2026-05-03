@@ -259,4 +259,159 @@ export class ReportController {
     );
     res.send(file.buffer);
   }
+
+  @Get('attempts/:attemptId/export-student-sheet')
+  @Roles(UserType.ADMIN, UserType.TEACHER)
+  @ApiOperation({
+    summary: 'Xuat sheet CHI TIET HS cho mot lan lam bai',
+  })
+  @ApiProduces(
+    'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  )
+  async exportStudentAttemptDetailExcel(
+    @User() user: JwtPayload,
+    @Param('attemptId', ParseUUIDPipe) attemptId: string,
+    @Res() res: Response,
+  ): Promise<void> {
+    const file = await this.reportService.exportStudentAttemptDetailExcel(
+      user,
+      attemptId,
+    );
+
+    res.setHeader(
+      'Content-Type',
+      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    );
+    res.setHeader(
+      'Content-Disposition',
+      `attachment; filename="${file.fileName}"`,
+    );
+    res.send(file.buffer);
+  }
+
+  @Get('groups/:groupId/export-class-sheet')
+  @Roles(UserType.ADMIN, UserType.TEACHER)
+  @ApiOperation({
+    summary: 'Xuat sheet KET QUA LOP cho mot lop hoc sinh',
+  })
+  @ApiProduces(
+    'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  )
+  @ApiQuery({
+    name: 'examSetId',
+    required: false,
+    type: String,
+    description: 'Loc theo bo de',
+  })
+  @ApiQuery({
+    name: 'questionBankId',
+    required: false,
+    type: String,
+    description: 'Loc theo de thi/ngan hang cau hoi',
+  })
+  @ApiQuery({
+    name: 'fromDate',
+    required: false,
+    type: String,
+    description: 'Ngay bat dau loc attempt (YYYY-MM-DD)',
+  })
+  @ApiQuery({
+    name: 'toDate',
+    required: false,
+    type: String,
+    description: 'Ngay ket thuc loc attempt (YYYY-MM-DD)',
+  })
+  async exportGroupResultSheetExcel(
+    @User() user: JwtPayload,
+    @Param('groupId', ParseUUIDPipe) groupId: string,
+    @Query('examSetId') examSetId: string | undefined,
+    @Query('questionBankId') questionBankId: string | undefined,
+    @Query('fromDate') fromDate: string | undefined,
+    @Query('toDate') toDate: string | undefined,
+    @Res() res: Response,
+  ): Promise<void> {
+    const file = await this.reportService.exportGroupResultSheetExcel(
+      user,
+      groupId,
+      {
+        examSetId,
+        questionBankId,
+        fromDate,
+        toDate,
+      },
+    );
+
+    res.setHeader(
+      'Content-Type',
+      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    );
+    res.setHeader(
+      'Content-Disposition',
+      `attachment; filename="${file.fileName}"`,
+    );
+    res.send(file.buffer);
+  }
+
+  @Get('schools/:schoolId/export-school-stat-sheet')
+  @Roles(UserType.ADMIN, UserType.TEACHER)
+  @ApiOperation({
+    summary: 'Xuat sheet THONG KE TRUONG.KHU VUC cho mot truong',
+  })
+  @ApiProduces(
+    'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  )
+  @ApiQuery({
+    name: 'examSetId',
+    required: false,
+    type: String,
+    description: 'Loc theo bo de',
+  })
+  @ApiQuery({
+    name: 'questionBankId',
+    required: false,
+    type: String,
+    description: 'Loc theo de thi/ngan hang cau hoi',
+  })
+  @ApiQuery({
+    name: 'fromDate',
+    required: false,
+    type: String,
+    description: 'Ngay bat dau loc attempt (YYYY-MM-DD)',
+  })
+  @ApiQuery({
+    name: 'toDate',
+    required: false,
+    type: String,
+    description: 'Ngay ket thuc loc attempt (YYYY-MM-DD)',
+  })
+  async exportSchoolStatSheetExcel(
+    @User() user: JwtPayload,
+    @Param('schoolId', ParseUUIDPipe) schoolId: string,
+    @Query('examSetId') examSetId: string | undefined,
+    @Query('questionBankId') questionBankId: string | undefined,
+    @Query('fromDate') fromDate: string | undefined,
+    @Query('toDate') toDate: string | undefined,
+    @Res() res: Response,
+  ): Promise<void> {
+    const file = await this.reportService.exportSchoolStatSheetExcel(
+      user,
+      schoolId,
+      {
+        examSetId,
+        questionBankId,
+        fromDate,
+        toDate,
+      },
+    );
+
+    res.setHeader(
+      'Content-Type',
+      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    );
+    res.setHeader(
+      'Content-Disposition',
+      `attachment; filename="${file.fileName}"`,
+    );
+    res.send(file.buffer);
+  }
 }

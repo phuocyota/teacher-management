@@ -8,6 +8,7 @@ import {
   Patch,
   Post,
   Query,
+  Res,
   UseGuards,
 } from '@nestjs/common';
 import {
@@ -15,9 +16,11 @@ import {
   ApiCreatedResponse,
   ApiOkResponse,
   ApiOperation,
+  ApiProduces,
   ApiQuery,
   ApiTags,
 } from '@nestjs/swagger';
+import type { Response } from 'express';
 import { AttemptService } from './attempt.service';
 import { CreateAttemptDto, UpdateAttemptDto } from './dto/create-attempt.dto';
 import { PaginationResponseDto } from 'src/common/dto/pagination.dto';
@@ -253,6 +256,28 @@ export class AttemptController {
   @ApiOkResponse({ type: AttemptReviewResponseDto })
   review(@Param('id', ParseUUIDPipe) id: string, @User() user: JwtPayload) {
     return this.attemptService.review(id, user);
+  }
+
+  @Get(':id/export-pdf')
+  @UseGuards(RolesGuard)
+  @Roles(UserType.STUDENT)
+  @ApiOperation({
+    summary: 'Export submitted attempt review to PDF',
+  })
+  @ApiProduces('application/pdf')
+  async exportAttemptPdf(
+    @Param('id', ParseUUIDPipe) id: string,
+    @User() user: JwtPayload,
+    @Res() res: Response,
+  ): Promise<void> {
+    const file = await this.attemptService.exportAttemptReviewPdf(id, user);
+
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader(
+      'Content-Disposition',
+      `attachment; filename="${file.fileName}"`,
+    );
+    res.send(file.buffer);
   }
 
   @Get(':id')
