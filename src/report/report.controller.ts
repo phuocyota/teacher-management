@@ -192,8 +192,7 @@ export class ReportController {
   @Get('classes/export-excel')
   @Roles(UserType.ADMIN, UserType.TEACHER)
   @ApiOperation({
-    summary:
-      'Xuat file Excel danh sach diem bai thi cua mot hoac nhieu lop',
+    summary: 'Xuat file Excel danh sach diem bai thi cua mot hoac nhieu lop',
   })
   @ApiProduces(
     'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
@@ -277,6 +276,51 @@ export class ReportController {
       user,
       attemptId,
     );
+
+    res.setHeader(
+      'Content-Type',
+      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    );
+    res.setHeader(
+      'Content-Disposition',
+      `attachment; filename="${file.fileName}"`,
+    );
+    res.send(file.buffer);
+  }
+
+  @Get('student/export-detail')
+  @Roles(UserType.ADMIN, UserType.TEACHER, UserType.STUDENT)
+  @ApiOperation({
+    summary:
+      'Xuat sheet CHI TIET HS theo userId va questionBankId, lay lan lam bai co diem cao nhat',
+  })
+  @ApiProduces(
+    'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  )
+  @ApiQuery({
+    name: 'userId',
+    required: true,
+    type: String,
+    description: 'ID hoc sinh',
+  })
+  @ApiQuery({
+    name: 'questionBankId',
+    required: true,
+    type: String,
+    description: 'ID de thi/ngan hang cau hoi',
+  })
+  async exportCurrentStudentBestAttemptDetailExcel(
+    @User() user: JwtPayload,
+    @Query('userId', ParseUUIDPipe) userId: string,
+    @Query('questionBankId', ParseUUIDPipe) questionBankId: string,
+    @Res() res: Response,
+  ): Promise<void> {
+    const file =
+      await this.reportService.exportCurrentStudentBestAttemptDetailExcel(
+        user,
+        userId,
+        questionBankId,
+      );
 
     res.setHeader(
       'Content-Type',

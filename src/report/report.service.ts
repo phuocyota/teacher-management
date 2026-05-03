@@ -13,6 +13,8 @@ import {
   type PDFPage,
 } from 'pdf-lib';
 import { Workbook, type Row, type Worksheet } from 'exceljs';
+import { existsSync } from 'fs';
+import { join } from 'path';
 import { Repository } from 'typeorm';
 import { AttemptEntity } from 'src/attempt/attempt.entity';
 import {
@@ -37,6 +39,12 @@ import {
   StudentScoreTrendPointDto,
   TeacherLeaderGroupDto,
 } from './dto/report.dto';
+
+const STUDENT_ATTEMPT_DETAIL_TEMPLATE_PATH = join(
+  process.cwd(),
+  'templates',
+  'student-attempt-detail.xlsx',
+);
 
 type ReportStudentRow = {
   id: string;
@@ -87,6 +95,13 @@ type StudentAttemptDetailRow = {
   orderNo: number;
   isCorrect: boolean | null;
   pointsEarned: string | number | null;
+};
+
+type StudentAttemptScoreStats = {
+  attemptCount: number;
+  highestScore: number | null;
+  lowestScore: number | null;
+  averageScore: number | null;
 };
 
 type StudentAttemptDetailContext = {
@@ -423,8 +438,9 @@ export class ReportService {
     this.ensureAuthenticatedUser(user);
     this.validateDateRange(filters.fromDate, filters.toDate);
 
-    const normalizedGroupIds = [...new Set(groupIds.map((id) => id.trim()))]
-      .filter(Boolean);
+    const normalizedGroupIds = [
+      ...new Set(groupIds.map((id) => id.trim())),
+    ].filter(Boolean);
 
     if (normalizedGroupIds.length === 0) {
       throw new BadRequestException('groupIds la bat buoc');
@@ -481,23 +497,74 @@ export class ReportService {
       throw new NotFoundException('Hoc sinh chua duoc gan vao lop');
     }
 
-    await this.ensureCanAccessStudentGroup(context.groupId, user);
+    if (user.userType === UserType.STUDENT) {
+      if (context.studentId !== user.userId) {
+        throw new ForbiddenException('Ban khong co quyen xuat phieu diem nay');
+      }
+    } else {
+      await this.ensureCanAccessStudentGroup(context.groupId, user);
+    }
 
     const rows = await this.getStudentAttemptDetailRows(
       context.questionBankId,
       attemptId,
     );
-    const workbook = new Workbook();
-    workbook.creator = 'teacher-management';
-    workbook.created = new Date();
+    const stats = await this.getStudentAttemptScoreStats(
+      context.studentId,
+      context.questionBankId,
+    );
+    const workbook = await this.createStudentDetailWorkbook();
 
-    this.addStudentDetailWorksheet(workbook, context, rows);
+    this.addStudentDetailWorksheet(workbook, context, rows, stats);
 
     const xlsx = await workbook.xlsx.writeBuffer();
     return {
       buffer: Buffer.from(xlsx),
       fileName: `chi-tiet-hs-${this.toSafeFileName(context.studentCode)}.xlsx`,
     };
+  }
+
+  private async createStudentDetailWorkbook(): Promise<Workbook> {
+    const workbook = new Workbook();
+    workbook.creator = 'teacher-management';
+    workbook.created = new Date();
+
+    if (existsSync(STUDENT_ATTEMPT_DETAIL_TEMPLATE_PATH)) {
+      await workbook.xlsx.readFile(STUDENT_ATTEMPT_DETAIL_TEMPLATE_PATH);
+    }
+
+    return workbook;
+  }
+
+  async exportCurrentStudentBestAttemptDetailExcel(
+    user: JwtPayload,
+    studentId: string,
+    questionBankId: string,
+  ): Promise<{ buffer: Buffer; fileName: string }> {
+    this.ensureAuthenticatedUser(user);
+
+    if (user.userType === UserType.STUDENT && user.userId !== studentId) {
+      throw new ForbiddenException('Ban khong co quyen xuat phieu diem nay');
+    }
+
+    const bestAttempt = await this.attemptRepo
+      .createQueryBuilder('attempt')
+      .where('attempt.student_id = :studentId', { studentId })
+      .andWhere('attempt.question_bank_id = :questionBankId', {
+        questionBankId,
+      })
+      .andWhere('attempt.submitted_at IS NOT NULL')
+      .orderBy('attempt.score', 'DESC', 'NULLS LAST')
+      .addOrderBy('attempt.submitted_at', 'DESC')
+      .getOne();
+
+    if (!bestAttempt) {
+      throw new NotFoundException(
+        'Khong tim thay lan lam bai da nop cua hoc sinh voi questionBankId nay',
+      );
+    }
+
+    return this.exportStudentAttemptDetailExcel(user, bestAttempt.id);
   }
 
   async exportGroupResultSheetExcel(
@@ -950,6 +1017,36 @@ export class ReportService {
     }));
   }
 
+  private async getStudentAttemptScoreStats(
+    studentId: string,
+    questionBankId: string,
+  ): Promise<StudentAttemptScoreStats> {
+    const row = await this.attemptRepo
+      .createQueryBuilder('attempt')
+      .select('COUNT(attempt.id)', 'attemptCount')
+      .addSelect('MAX(attempt.score)', 'highestScore')
+      .addSelect('MIN(attempt.score)', 'lowestScore')
+      .addSelect('AVG(attempt.score)', 'averageScore')
+      .where('attempt.student_id = :studentId', { studentId })
+      .andWhere('attempt.question_bank_id = :questionBankId', {
+        questionBankId,
+      })
+      .andWhere('attempt.submitted_at IS NOT NULL')
+      .getRawOne<{
+        attemptCount: string;
+        highestScore: string | null;
+        lowestScore: string | null;
+        averageScore: string | null;
+      }>();
+
+    return {
+      attemptCount: Number(row?.attemptCount ?? 0),
+      highestScore: this.toNullableNumber(row?.highestScore ?? null),
+      lowestScore: this.toNullableNumber(row?.lowestScore ?? null),
+      averageScore: this.toNullableNumber(row?.averageScore ?? null),
+    };
+  }
+
   private async getClassResultSheetRows(
     groupId: string,
     filters: SchoolAttemptReportFilters,
@@ -976,7 +1073,9 @@ export class ReportService {
         studentCode: row.studentCode,
         fullName: row.fullName ?? row.userName,
         subjectName: row.subjectName ?? row.questionBankName ?? '',
-        correctCount: row.attemptId ? correctCounts.get(row.attemptId) ?? 0 : 0,
+        correctCount: row.attemptId
+          ? (correctCounts.get(row.attemptId) ?? 0)
+          : 0,
         score,
         resultLabel:
           score === null ? 'Chua thi' : score >= 5 ? 'Dat' : 'Chua dat',
@@ -1022,7 +1121,11 @@ export class ReportService {
       .leftJoin('attempt.examSet', 'examSet')
       .leftJoin('attempt.questionBank', 'questionBank')
       .leftJoin('questionBank.class', 'questionBankClass')
-      .leftJoin('subject', 'subject', 'subject.id = questionBankClass.subject_id')
+      .leftJoin(
+        'subject',
+        'subject',
+        'subject.id = questionBankClass.subject_id',
+      )
       .select('student.id', 'studentId')
       .addSelect('student.code', 'studentCode')
       .addSelect('user.full_name', 'fullName')
@@ -1112,9 +1215,7 @@ export class ReportService {
           current.underFiveCount += 1;
         }
         current.averageScore =
-          current.averageScore === null
-            ? score
-            : current.averageScore + score;
+          current.averageScore === null ? score : current.averageScore + score;
       }
 
       statsByGroup.set(row.studentGroupId, current);
@@ -1220,34 +1321,62 @@ export class ReportService {
     workbook: Workbook,
     context: StudentAttemptDetailContext,
     rows: StudentAttemptDetailRow[],
+    stats: StudentAttemptScoreStats,
   ): void {
-    const worksheet = workbook.addWorksheet('CHI TIẾT HS');
-    this.setupSheetColumns(worksheet, [14, 14, 14, 22, 22, 22]);
+    const worksheet =
+      workbook.getWorksheet('CHI TIẾT HS') ??
+      workbook.addWorksheet('CHI TIẾT HS');
 
-    worksheet.mergeCells('A1:C1');
-    worksheet.mergeCells('F1:F1');
-    worksheet.getCell('A1').value = '    CÔNG TY CỔ PHẦN GIÁO DỤC';
-    worksheet.getCell('A2').value = 'KHOA HỌC CÔNG NGHỆ ICHI SKILL';
-    worksheet.getCell('F1').value = 'CỘNG HÒA XÃ HỘI CHỦ NGHĨA VIỆT NAM';
-    worksheet.getCell('F2').value = 'Độc lập - Tự do - Hạnh Phúc';
+    if (!worksheet.columns.length) {
+      this.setupSheetColumns(worksheet, [14, 14, 14, 22, 22, 22]);
+    }
 
-    worksheet.mergeCells('D3:E3');
-    worksheet.getCell('D3').value = 'KỲ THI ĐÁNH GIÁ HỌC KỲ II';
-    worksheet.getCell('F3').value = `NĂM HỌC: ${new Date().getFullYear()} - ${new Date().getFullYear() + 1}`;
+    worksheet.getCell('A1').value =
+      worksheet.getCell('A1').value ?? '    CÔNG TY CỔ PHẦN GIÁO DỤC';
+    worksheet.getCell('A2').value =
+      worksheet.getCell('A2').value ?? 'KHOA HỌC CÔNG NGHỆ ICHI SKILL';
+    worksheet.getCell('F1').value =
+      worksheet.getCell('F1').value ?? 'CỘNG HÒA XÃ HỘI CHỦ NGHĨA VIỆT NAM';
+    worksheet.getCell('F2').value =
+      worksheet.getCell('F2').value ?? 'Độc lập - Tự do - Hạnh Phúc';
 
-    worksheet.mergeCells('C4:D4');
-    worksheet.getCell('C4').value = 'PHIẾU ĐIỂM HỌC SINH';
+    worksheet.getCell('D3').value =
+      worksheet.getCell('D3').value ?? 'KỲ THI ĐÁNH GIÁ HỌC KỲ II';
+    worksheet.getCell('E3').value =
+      `NĂM HỌC: ${new Date().getFullYear()} - ${new Date().getFullYear() + 1}`;
+
+    worksheet.getCell('C4').value =
+      worksheet.getCell('C4').value ?? 'PHIẾU ĐIỂM HỌC SINH';
     worksheet.getCell('C5').value = `TRƯỜNG: ${context.schoolName ?? ''}`;
     worksheet.getCell('C6').value = `LỚP: ${context.groupName ?? ''}`;
-    worksheet.getCell('C7').value = `HỌC SINH: ${context.studentFullName ?? context.studentUserName}`;
-    worksheet.getCell('E5').value = `BỘ ĐỀ: ${context.examSetName ?? ''}`;
-    worksheet.getCell('E6').value = `ĐỀ THI: ${context.questionBankName ?? ''}`;
-    worksheet.getCell('E7').value = `ĐIỂM: ${this.formatNullableScore(context.score)}`;
+    worksheet.getCell('C7').value =
+      `HỌC SINH: ${context.studentFullName ?? context.studentUserName}`;
 
     worksheet.getCell('A9').value = 'CÂU';
     worksheet.getCell('B9').value = 'ĐÚNG';
     worksheet.getCell('C9').value = 'SAI';
-    this.styleTableHeader(worksheet.getRow(9));
+
+    const templateQuestionCapacity = 6;
+    if (rows.length > templateQuestionCapacity) {
+      worksheet.spliceRows(
+        16,
+        0,
+        ...Array.from(
+          { length: rows.length - templateQuestionCapacity },
+          () => [],
+        ),
+      );
+    }
+
+    for (
+      let rowIndex = 10;
+      rowIndex <= 9 + Math.max(rows.length, templateQuestionCapacity);
+      rowIndex += 1
+    ) {
+      for (let columnIndex = 1; columnIndex <= 3; columnIndex += 1) {
+        worksheet.getRow(rowIndex).getCell(columnIndex).value = null;
+      }
+    }
 
     let correctCount = 0;
     let wrongCount = 0;
@@ -1262,15 +1391,56 @@ export class ReportService {
       } else if (row.isCorrect === false) {
         wrongCount += 1;
       }
-      this.styleDataRow(excelRow);
+      this.styleStudentDetailRow(excelRow);
     });
 
-    const summaryRowIndex = 11 + rows.length;
-    worksheet.getCell(`A${summaryRowIndex}`).value = 'Tổng';
+    const summaryRowIndex =
+      17 + Math.max(0, rows.length - templateQuestionCapacity);
+    const scoreRowIndex = summaryRowIndex + 1;
+    const dateRowIndex = summaryRowIndex + 2;
+    const noteRowIndex = summaryRowIndex + 4;
+    const highestScoreRowIndex = summaryRowIndex + 5;
+    const lowestScoreRowIndex = summaryRowIndex + 6;
+    const averageScoreRowIndex = summaryRowIndex + 7;
+
+    worksheet.getCell(`A${summaryRowIndex}`).value = 'TỔNG';
     worksheet.getCell(`B${summaryRowIndex}`).value = correctCount;
     worksheet.getCell(`C${summaryRowIndex}`).value = wrongCount;
-    this.styleTableHeader(worksheet.getRow(summaryRowIndex));
-    this.applyTableBorder(worksheet, 9, summaryRowIndex, 3);
+    this.styleStudentDetailRow(worksheet.getRow(summaryRowIndex), true);
+    this.clearBorders(worksheet, 9, summaryRowIndex, 3);
+    this.clearFill(worksheet, 1, Math.max(35, averageScoreRowIndex), 8);
+    this.clearUnusedBorders(
+      worksheet,
+      1,
+      Math.max(35, averageScoreRowIndex),
+      8,
+    );
+
+    worksheet.getCell(`B${scoreRowIndex}`).value =
+      `ĐIỂM: ${this.formatNullableScore(context.score)}`;
+    worksheet.getCell(`B${dateRowIndex}`).value = `Ngày kiểm tra: ${
+      context.submittedAt
+        ? this.formatDate(new Date(context.submittedAt))
+        : this.formatDate(context.startedAt)
+    }`;
+    worksheet.getCell(`D${scoreRowIndex}`).value =
+      this.formatCompletionDuration(context.startedAt, context.submittedAt);
+    worksheet.getCell(`A${noteRowIndex}`).value = 'Ghi chú:';
+    worksheet.getCell(`B${noteRowIndex}`).value =
+      `Số lần làm bài: ${stats.attemptCount}`;
+    worksheet.getCell(`B${highestScoreRowIndex}`).value =
+      `Điểm số cao nhất: ${this.formatNullableScore(stats.highestScore)}`;
+    worksheet.getCell(`B${lowestScoreRowIndex}`).value =
+      `Điểm số thấp nhất: ${this.formatNullableScore(stats.lowestScore)}`;
+    worksheet.getCell(`B${averageScoreRowIndex}`).value =
+      `Trung bình điểm thi: ${this.formatNullableScore(stats.averageScore)}`;
+    this.clearFill(worksheet, 1, Math.max(35, averageScoreRowIndex), 8);
+    this.clearUnusedBorders(
+      worksheet,
+      1,
+      Math.max(35, averageScoreRowIndex),
+      8,
+    );
   }
 
   private addClassResultWorksheet(
@@ -1287,11 +1457,11 @@ export class ReportService {
     worksheet.getCell('H1').value = 'CỘNG HÒA XÃ HỘI CHỦ NGHĨA VIỆT NAM';
     worksheet.getCell('H2').value = 'Độc lập - Tự do - Hạnh Phúc';
     worksheet.mergeCells('D3:F3');
-    worksheet.getCell('D3').value =
-      'KỲ THI ĐÁNH GIÁ HỌC KỲ II - NĂM HỌC';
+    worksheet.getCell('D3').value = 'KỲ THI ĐÁNH GIÁ HỌC KỲ II - NĂM HỌC';
     worksheet.mergeCells('C4:F4');
     worksheet.getCell('C4').value = 'BẢNG ĐIỂM HỌC SINH';
-    worksheet.getCell('C5').value = `TRƯỜNG: ${studentGroup.school?.name ?? ''}`;
+    worksheet.getCell('C5').value =
+      `TRƯỜNG: ${studentGroup.school?.name ?? ''}`;
     worksheet.getCell('C6').value = `LỚP: ${studentGroup.name}`;
     worksheet.getCell('G6').value = this.formatReportFilters(filters);
 
@@ -1338,7 +1508,10 @@ export class ReportService {
     filters: SchoolAttemptReportFilters,
   ): void {
     const worksheet = workbook.addWorksheet('Thống kê TRƯỜNG.KHU VỰC');
-    this.setupSheetColumns(worksheet, [22, 12, 12, 12, 12, 12, 16, 12, 14, 10, 16, 16]);
+    this.setupSheetColumns(
+      worksheet,
+      [22, 12, 12, 12, 12, 12, 16, 12, 14, 10, 16, 16],
+    );
 
     worksheet.getCell('A1').value = '    CÔNG TY CỔ PHẦN GIÁO DỤC';
     worksheet.getCell('A2').value = 'KHOA HỌC CÔNG NGHỆ ICHI SKILL';
@@ -1391,10 +1564,7 @@ export class ReportService {
     this.applyTableBorder(worksheet, 8, Math.max(8, 8 + rows.length), 12);
   }
 
-  private setupSheetColumns(
-    worksheet: Worksheet,
-    widths: number[],
-  ): void {
+  private setupSheetColumns(worksheet: Worksheet, widths: number[]): void {
     worksheet.columns = widths.map((width) => ({ width }));
   }
 
@@ -1420,6 +1590,67 @@ export class ReportService {
       horizontal: 'center',
       wrapText: true,
     };
+  }
+
+  private styleStudentDetailRow(row: Row, bold = false): void {
+    if (bold) {
+      row.font = { bold: true };
+    }
+    row.alignment = {
+      vertical: 'middle',
+      horizontal: 'center',
+      wrapText: true,
+    };
+  }
+
+  private clearFill(
+    worksheet: Worksheet,
+    fromRow: number,
+    toRow: number,
+    totalColumns: number,
+  ): void {
+    for (let rowIndex = fromRow; rowIndex <= toRow; rowIndex += 1) {
+      const row = worksheet.getRow(rowIndex);
+      for (let col = 1; col <= totalColumns; col += 1) {
+        row.getCell(col).fill = {
+          type: 'pattern',
+          pattern: 'none',
+        };
+      }
+    }
+  }
+
+  private clearUnusedBorders(
+    worksheet: Worksheet,
+    fromRow: number,
+    toRow: number,
+    totalColumns: number,
+  ): void {
+    for (let rowIndex = fromRow; rowIndex <= toRow; rowIndex += 1) {
+      const row = worksheet.getRow(rowIndex);
+      for (let col = 1; col <= totalColumns; col += 1) {
+        const cell = row.getCell(col);
+        const hasValue =
+          cell.value !== null && cell.value !== undefined && cell.value !== '';
+        if (!hasValue) {
+          cell.border = {};
+        }
+      }
+    }
+  }
+
+  private clearBorders(
+    worksheet: Worksheet,
+    fromRow: number,
+    toRow: number,
+    totalColumns: number,
+  ): void {
+    for (let rowIndex = fromRow; rowIndex <= toRow; rowIndex += 1) {
+      const row = worksheet.getRow(rowIndex);
+      for (let col = 1; col <= totalColumns; col += 1) {
+        row.getCell(col).border = {};
+      }
+    }
   }
 
   private applyTableBorder(
@@ -1726,6 +1957,36 @@ export class ReportService {
 
   private formatDateTime(value: Date): string {
     return value.toISOString().replace('T', ' ').slice(0, 19);
+  }
+
+  private formatCompletionDuration(
+    startedAt: Date,
+    submittedAt: Date | null,
+  ): string {
+    if (!submittedAt) {
+      return '-';
+    }
+
+    const durationInSeconds = Math.max(
+      0,
+      Math.floor(
+        (new Date(submittedAt).getTime() - new Date(startedAt).getTime()) /
+          1000,
+      ),
+    );
+    const hours = Math.floor(durationInSeconds / 3600);
+    const minutes = Math.floor((durationInSeconds % 3600) / 60);
+    const seconds = durationInSeconds % 60;
+
+    if (hours > 0) {
+      return `${hours} giờ ${minutes} phút ${seconds} giây`;
+    }
+
+    if (minutes > 0) {
+      return `${minutes} phút ${seconds} giây`;
+    }
+
+    return `${seconds} giây`;
   }
 
   private formatReportFilters(filters: SchoolAttemptReportFilters): string {
