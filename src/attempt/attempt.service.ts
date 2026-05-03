@@ -109,8 +109,10 @@ export class AttemptService {
       throw new ForbiddenException(ERROR_MESSAGES.INVALID_TOKEN_STRUCTURE);
     }
 
-    await this.questionBankService.findOne(dto.questionBankId);
-    await this.examSetService.findOne(dto.examSetId);
+    const questionBank = await this.questionBankService.findOne(
+      dto.questionBankId,
+    );
+    const examSet = await this.examSetService.findOne(dto.examSetId);
     await this.validateExamSetQuestionBank(dto.examSetId, dto.questionBankId);
     await this.ensureStudentProfile(user.userId);
 
@@ -131,7 +133,10 @@ export class AttemptService {
       startedAt: savedAttempt.startedAt,
       studentId: savedAttempt.studentId,
       questionBankId: savedAttempt.questionBankId,
+      questionBankName: questionBank.name,
       examSetId: savedAttempt.examSetId,
+      examSetName: examSet.name,
+      examName: questionBank.name,
       questions,
     };
   }

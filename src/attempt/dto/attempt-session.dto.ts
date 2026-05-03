@@ -174,7 +174,16 @@ export class StartAttemptResponseDto {
   questionBankId!: string;
 
   @ApiProperty()
+  questionBankName!: string;
+
+  @ApiProperty()
   examSetId!: string;
+
+  @ApiProperty()
+  examSetName!: string;
+
+  @ApiProperty()
+  examName!: string;
 
   @ApiProperty({ type: [AttemptQuestionItemDto] })
   questions!: AttemptQuestionItemDto[];
