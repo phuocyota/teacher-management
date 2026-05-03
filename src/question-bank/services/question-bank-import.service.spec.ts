@@ -117,7 +117,7 @@ describe('QuestionBankImportService', () => {
     ]);
   });
 
-  it('assigns one point to every question imported from PDF', async () => {
+  it('uses the provided per-question score when linking imported questions', async () => {
     const deps = createServiceDependencies();
     deps.questionService.createBulk.mockResolvedValue([
       {
@@ -135,6 +135,7 @@ describe('QuestionBankImportService', () => {
       createParsedQuestionBlock(),
       [],
       {},
+      0.5,
     );
 
     expect(deps.questionBankQuestionRepo.save).toHaveBeenCalledWith(
@@ -142,17 +143,18 @@ describe('QuestionBankImportService', () => {
         questionBankId: 'question-bank-1',
         questionId: 'question-1',
         orderNo: 1,
-        points: 1,
+        points: 0.5,
       }),
     );
   });
 
-  it('sets totalScore to the total number of imported questions', async () => {
+  it('sets totalScore from totalMarks divided across imported questions', async () => {
     const deps = createServiceDependencies();
     const questionBank = {
       id: 'question-bank-1',
       totalQuestions: 0,
       totalScore: 0,
+      totalMarks: 10,
     };
     deps.questionBankRepo.findOne.mockResolvedValue(questionBank);
     deps.questionBankQuestionRepo.count.mockResolvedValue(2);
@@ -201,7 +203,7 @@ describe('QuestionBankImportService', () => {
     expect(deps.questionBankRepo.save).toHaveBeenCalledWith(
       expect.objectContaining({
         totalQuestions: 2,
-        totalScore: 2,
+        totalScore: 10,
       }),
     );
   });

@@ -113,16 +113,22 @@ export class QuestionBankImportService {
       const filteredPages = this.filterPageArtifacts(pages);
       const parsedDocument =
         await this.parseStrictMultipleChoicePages(filteredPages);
+      const pointsPerQuestion = this.calculatePointsPerQuestion(
+        questionBank.totalMarks,
+        parsedDocument.questions.length,
+      );
       const importResult = await this.persistParsedQuestions(
         questionBank.id,
         parsedDocument,
+        pointsPerQuestion,
       );
       const totalQuestions = await this.questionBankQuestionRepo.count({
         where: { questionBankId: questionBank.id },
       });
 
       questionBank.totalQuestions = totalQuestions;
-      questionBank.totalScore = totalQuestions;
+      questionBank.totalScore =
+        totalQuestions > 0 ? pointsPerQuestion * totalQuestions : 0;
       await this.questionBankRepo.save(questionBank);
 
       const duration = Date.now() - startTime;
@@ -420,6 +426,7 @@ export class QuestionBankImportService {
   private async persistParsedQuestions(
     questionBankId: string,
     parsedDocument: ParsedDocumentResult,
+    pointsPerQuestion: number,
   ): Promise<PdfImportProcessingResult> {
     const createdQuestions: CreatedQuestionSummary[] = [];
     let totalAnswers = 0;
@@ -430,6 +437,7 @@ export class QuestionBankImportService {
         question,
         createdQuestions,
         parsedDocument.answerKey,
+        pointsPerQuestion,
       );
 
       totalAnswers += persistResult.totalAnswers;
@@ -448,6 +456,7 @@ export class QuestionBankImportService {
     question: ParsedQuestionBlock,
     createdQuestions: CreatedQuestionSummary[],
     answerKey: Record<number, AnswerKeyOption>,
+    pointsPerQuestion: number,
   ): Promise<{ totalAnswers: number }> {
     this.logger.debug(
       `Persisting question ${question.number}: ${question.stemParts.length} question parts, ${question.answers.length} answers`,
@@ -486,6 +495,7 @@ export class QuestionBankImportService {
       questionBankId,
       rootQuestion.id,
       question.number,
+      pointsPerQuestion,
     );
 
     createdQuestions.push(
@@ -909,6 +919,22 @@ export class QuestionBankImportService {
     });
 
     await this.questionBankQuestionRepo.save(link);
+  }
+
+  private calculatePointsPerQuestion(
+    totalMarks: number | undefined,
+    totalQuestions: number,
+  ): number {
+    if (!totalQuestions || totalQuestions <= 0) {
+      return 1;
+    }
+
+    const normalizedTotalMarks = Number(totalMarks ?? 0);
+    if (!Number.isFinite(normalizedTotalMarks) || normalizedTotalMarks <= 0) {
+      return 1;
+    }
+
+    return normalizedTotalMarks / totalQuestions;
   }
 
   private serializeAnswerKey(

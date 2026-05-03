@@ -260,7 +260,7 @@ export class AttemptController {
 
   @Get(':id/export-pdf')
   @UseGuards(RolesGuard)
-  @Roles(UserType.STUDENT)
+  @Roles(UserType.STUDENT, UserType.TEACHER, UserType.ADMIN)
   @ApiOperation({
     summary: 'Export submitted attempt review to PDF',
   })

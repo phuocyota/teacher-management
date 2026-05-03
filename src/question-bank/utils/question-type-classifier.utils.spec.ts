@@ -76,6 +76,45 @@ describe('classifyQuestionType', () => {
     });
   });
 
+  it('treats matching-style prompts with answer options as single choice', () => {
+    expect(
+      classifyQuestionType({
+        stemParts: [
+          {
+            content: 'Noi cot A voi cot B cho phu hop nhat?',
+            contentType: ContentTypes.TEXT,
+          },
+          {
+            content: 'matching-table-image',
+            contentType: ContentTypes.IMAGE,
+          },
+        ],
+        answers: [
+          {
+            label: 'A',
+            parts: [{ content: '1-B, 2-C, 3-A', contentType: ContentTypes.TEXT }],
+          },
+          {
+            label: 'B',
+            parts: [{ content: '1-C, 2-B, 3-A', contentType: ContentTypes.TEXT }],
+          },
+          {
+            label: 'C',
+            parts: [{ content: '1-A, 2-C, 3-B', contentType: ContentTypes.TEXT }],
+          },
+          {
+            label: 'D',
+            parts: [{ content: '1-B, 2-A, 3-C', contentType: ContentTypes.TEXT }],
+          },
+        ],
+      }),
+    ).toEqual({
+      kind: 'single_choice',
+      questionType: QuestionType.SINGLE_CHOICE,
+      layoutKey: 'text_with_image_stem_text_only_answers',
+    });
+  });
+
   it('does not classify generic "noi" text as matching', () => {
     expect(
       classifyQuestionType({

@@ -6,6 +6,8 @@ import {
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { PDFDocument, StandardFonts, rgb, type PDFFont } from 'pdf-lib';
+import { promises as fs } from 'fs';
+import * as path from 'path';
 import { In, Repository } from 'typeorm';
 import { AttemptEntity } from './attempt.entity';
 import { StudentService } from 'src/student/student.service';
@@ -36,6 +38,7 @@ import { StudentGroupEntity } from 'src/student-group/student-group.entity';
 import { SchoolEntity } from 'src/school/school.entity';
 import { QuestionType } from 'src/question/enum/question-type.enum';
 import { QuestionBankQuestionPayloadService } from 'src/question-bank/services/question-bank-question-payload.service';
+import { GroupMemberRole } from 'src/user-group/enum/group-member-role.enum';
 import {
   AttemptAnswerChainItemDto,
   AttemptAnswerOptionDto,
@@ -50,6 +53,7 @@ import {
   StartAttemptDto,
   StartAttemptResponseDto,
 } from './dto/attempt-session.dto';
+import { ContentTypes } from 'src/common/enum/content-type.enum';
 
 @Injectable()
 export class AttemptService {
@@ -540,15 +544,20 @@ export class AttemptService {
     id: string,
     user: JwtPayload,
   ): Promise<{ buffer: Buffer; fileName: string }> {
-    const review = await this.review(id, user);
     const attempt = await this.attemptRepo.findOne({
-      where: { id: review.attemptId, studentId: user.userId },
-      relations: ['questionBank', 'examSet'],
+      where: { id },
+      relations: ['questionBank', 'examSet', 'student'],
     });
 
-    if (!attempt) {
-      throw new ForbiddenException(ERROR_MESSAGES.NO_PERMISSION_SUBMIT_ATTEMPT);
+    if (!attempt || !user?.userId) {
+      throw new NotFoundException(
+        ERROR_MESSAGES.NOT_FOUND_WITH_ID(ENTITY_NAMES.ATTEMPT, id),
+      );
     }
+
+    await this.ensureCanExportAttempt(attempt, user);
+
+    const review = await this.buildAttemptReviewForExport(attempt);
 
     const student = await this.userRepo.findOne({
       where: { id: review.studentId },
@@ -566,6 +575,151 @@ export class AttemptService {
     return {
       buffer,
       fileName: `attempt-review-${this.toSafeFileName(review.attemptId)}.pdf`,
+    };
+  }
+
+  private async ensureCanExportAttempt(
+    attempt: AttemptEntity,
+    user: JwtPayload,
+  ): Promise<void> {
+    if (user.userType === UserType.ADMIN) {
+      return;
+    }
+
+    if (user.userType === UserType.STUDENT) {
+      if (attempt.studentId !== user.userId) {
+        throw new ForbiddenException(
+          ERROR_MESSAGES.NO_PERMISSION_SUBMIT_ATTEMPT,
+        );
+      }
+      return;
+    }
+
+    const student = await this.studentRepo.findOne({
+      where: { id: attempt.studentId },
+    });
+
+    if (!student?.studentGroupId) {
+      throw new ForbiddenException('Khong tim thay lop cua hoc sinh');
+    }
+
+    const accessibleCount = await this.studentGroupRepo
+      .createQueryBuilder('studentGroup')
+      .innerJoin('studentGroup.school', 'school')
+      .where('studentGroup.id = :groupId', { groupId: student.studentGroupId })
+      .andWhere(
+        `(
+          school.principal_user_id = :userId
+          OR EXISTS (
+            SELECT 1
+            FROM student_group_member studentGroupMember
+            WHERE studentGroupMember.user_id = :userId
+              AND studentGroupMember.role = :leaderRole
+              AND studentGroupMember.student_group_id = "studentGroup".id
+          )
+        )`,
+        {
+          userId: user.userId,
+          leaderRole: GroupMemberRole.LEADER,
+        },
+      )
+      .getCount();
+
+    if (!accessibleCount) {
+      throw new ForbiddenException(
+        'Ban khong co quyen xuat bai lam cua hoc sinh nay',
+      );
+    }
+  }
+
+  private async buildAttemptReviewForExport(
+    attempt: AttemptEntity,
+  ): Promise<AttemptReviewResponseDto> {
+    if (attempt.status === AttemptStatus.DOING) {
+      throw new BadRequestException(
+        'Attempt has not been submitted yet, review is unavailable',
+      );
+    }
+
+    const questionLinks = await this.questionBankQuestionRepo.find({
+      where: { questionBankId: attempt.questionBankId },
+      order: { orderNo: 'ASC' },
+    });
+    const questionIds = questionLinks.map((item) => item.questionId);
+
+    const studentAnswers = questionIds.length
+      ? await this.studentAnswerRepo.find({
+          where: { attemptId: attempt.id, questionId: In(questionIds) },
+        })
+      : [];
+    const studentAnswerMap = new Map(
+      studentAnswers.map((item) => [item.questionId, item]),
+    );
+
+    const rootQuestions = questionIds.length
+      ? await this.questionRepo.find({ where: { id: In(questionIds) } })
+      : [];
+    const questionMap = new Map(rootQuestions.map((item) => [item.id, item]));
+
+    const { answersByQuestionId } =
+      await this.questionBankQuestionPayloadService.buildQuestionBankQuestionPayload(
+        attempt.questionBankId,
+      );
+
+    const questions: AttemptReviewQuestionItemDto[] = [];
+
+    for (const link of questionLinks) {
+      const rootQuestion = questionMap.get(link.questionId);
+      if (!rootQuestion) {
+        continue;
+      }
+
+      const studentAnswer = studentAnswerMap.get(link.questionId);
+      const selectedIds = [
+        ...(studentAnswer?.answerId ? [studentAnswer.answerId] : []),
+        ...(studentAnswer?.selectedAnswerIds ?? []),
+      ];
+      const selectedIdSet = new Set(selectedIds);
+      const questionChain = await this.loadQuestionChain(rootQuestion.id);
+      const answerOptions = answersByQuestionId.get(rootQuestion.id) ?? [];
+      const mappedAnswers = await this.mapAttemptReviewAnswerOptions(
+        rootQuestion,
+        answerOptions,
+        selectedIdSet,
+      );
+
+      questions.push({
+        id: rootQuestion.id,
+        orderNo: link.orderNo,
+        points: link.points,
+        type: rootQuestion.type,
+        contentType: rootQuestion.contentType,
+        content: rootQuestion.content,
+        nextContent: rootQuestion.nextContent ?? questionChain[1]?.id ?? null,
+        chain: this.mapQuestionChain(questionChain),
+        answers: mappedAnswers,
+        studentAnswerId: studentAnswer?.id ?? null,
+        answerId: studentAnswer?.answerId ?? null,
+        selectedAnswerIds: selectedIds,
+        textValue: studentAnswer?.textValue ?? null,
+        description: studentAnswer?.description ?? null,
+        isCorrect: studentAnswer?.isCorrect ?? null,
+        pointsEarned: studentAnswer?.pointsEarned ?? null,
+        timeSpentSec: studentAnswer?.timeSpentSec ?? null,
+      });
+    }
+
+    return {
+      attemptId: attempt.id,
+      status: attempt.status,
+      studentId: attempt.studentId,
+      questionBankId: attempt.questionBankId,
+      examSetId: attempt.examSetId,
+      submittedAt: attempt.submittedAt ?? null,
+      score: attempt.score ?? null,
+      totalQuestions: questionLinks.length,
+      answeredQuestions: studentAnswers.length,
+      questions,
     };
   }
 
@@ -750,6 +904,49 @@ export class AttemptService {
       y -= options?.gapAfter ?? 2;
     };
 
+    const drawContentItem = async (
+      item: {
+        contentType: string;
+        content: string;
+      },
+      options?: {
+        size?: number;
+        bold?: boolean;
+        indent?: number;
+        color?: ReturnType<typeof rgb>;
+        gapAfter?: number;
+      },
+    ) => {
+      if (this.shouldTreatAsImage(item)) {
+        const imageRendered = await this.tryDrawPdfImage(
+          pdfDoc,
+          item.content,
+          {
+            ensureSpace,
+            getPage: () => page,
+            setPage: (nextPage) => {
+              page = nextPage;
+            },
+            getY: () => y,
+            setY: (nextY) => {
+              y = nextY;
+            },
+            margin,
+            pageSize,
+            maxWidth: contentWidth - (options?.indent ?? 0),
+            indent: options?.indent ?? 0,
+          },
+        );
+
+        if (imageRendered) {
+          y -= options?.gapAfter ?? 4;
+          return;
+        }
+      }
+
+      drawWrappedText(this.toDisplayContent(item.content), options);
+    };
+
     drawWrappedText('PHIEU XUAT BAI LAM', {
       size: 16,
       bold: true,
@@ -790,12 +987,15 @@ export class AttemptService {
         },
       );
 
-      const questionTextParts = [
-        question.content,
-        ...question.chain.slice(1).map((item) => item.content),
+      const questionItems = [
+        { contentType: question.contentType, content: question.content },
+        ...question.chain.slice(1).map((item) => ({
+          contentType: item.contentType,
+          content: item.content,
+        })),
       ];
-      for (const part of questionTextParts) {
-        drawWrappedText(this.toDisplayContent(part), { indent: 12 });
+      for (const item of questionItems) {
+        await drawContentItem(item, { indent: 12 });
       }
 
       if (question.textValue) {
@@ -808,16 +1008,23 @@ export class AttemptService {
         const isSelected = answer.isSelected;
         const label = isSelected ? '[x]' : '[ ]';
         const correctness = answer.isCorrect ? ' (dap an dung)' : '';
-        const answerTextParts = [
-          answer.content,
-          ...answer.chain.slice(1).map((item) => item.content),
+        const optionLabel = this.getAttemptAnswerOptionLabel(answer, question);
+        const answerItems = [
+          { contentType: answer.contentType, content: answer.content },
+          ...answer.chain.slice(1).map((item) => ({
+            contentType: item.contentType,
+            content: item.content,
+          })),
         ];
-        drawWrappedText(
-          `${label} ${this.toDisplayContent(answerTextParts[0])}${correctness}`,
+        await drawContentItem(
+          {
+            contentType: answerItems[0].contentType,
+            content: `${label} ${optionLabel} ${this.toDisplayContent(answerItems[0].content)}${correctness}`,
+          },
           { indent: 18 },
         );
-        for (const extraPart of answerTextParts.slice(1)) {
-          drawWrappedText(this.toDisplayContent(extraPart), { indent: 36 });
+        for (const extraItem of answerItems.slice(1)) {
+          await drawContentItem(extraItem, { indent: 36 });
         }
       }
 
@@ -884,6 +1091,165 @@ export class AttemptService {
       return `[Hinh anh] ${trimmed}`;
     }
     return trimmed;
+  }
+
+  private shouldTreatAsImage(item: { contentType: string; content: string }): boolean {
+    return (
+      item.contentType === ContentTypes.IMAGE ||
+      /^\/?uploads\//i.test(item.content ?? '') ||
+      /^https?:\/\/.+\.(png|jpg|jpeg|webp)(\?.*)?$/i.test(item.content ?? '')
+    );
+  }
+
+  private async tryDrawPdfImage(
+    pdfDoc: PDFDocument,
+    rawContent: string,
+    context: {
+      ensureSpace: (heightNeeded: number) => void;
+      getPage: () => any;
+      setPage: (nextPage: any) => void;
+      getY: () => number;
+      setY: (nextY: number) => void;
+      margin: number;
+      pageSize: [number, number];
+      maxWidth: number;
+      indent: number;
+    },
+  ): Promise<boolean> {
+    try {
+      const imageBuffer = await this.resolvePdfImageBuffer(rawContent);
+      if (!imageBuffer) {
+        return false;
+      }
+
+      const embedded = this.isPngBuffer(imageBuffer)
+        ? await pdfDoc.embedPng(imageBuffer)
+        : await pdfDoc.embedJpg(imageBuffer);
+
+      const scaled = embedded.scale(1);
+      const widthRatio =
+        scaled.width > context.maxWidth ? context.maxWidth / scaled.width : 1;
+      const targetWidth = scaled.width * widthRatio;
+      const targetHeight = scaled.height * widthRatio;
+
+      context.ensureSpace(targetHeight + 10);
+      const page = context.getPage();
+      const currentY = context.getY();
+
+      page.drawImage(embedded, {
+        x: context.margin + context.indent,
+        y: currentY - targetHeight,
+        width: targetWidth,
+        height: targetHeight,
+      });
+
+      context.setY(currentY - targetHeight - 6);
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  private async resolvePdfImageBuffer(rawContent: string): Promise<Buffer | null> {
+    const trimmed = (rawContent ?? '').trim();
+    if (!trimmed) {
+      return null;
+    }
+
+    const httpCandidates = this.buildPdfImageHttpCandidates(trimmed);
+    for (const candidate of httpCandidates) {
+      try {
+        const response = await fetch(candidate);
+        if (!response.ok) {
+          continue;
+        }
+        const arrayBuffer = await response.arrayBuffer();
+        return Buffer.from(arrayBuffer);
+      } catch {
+        continue;
+      }
+    }
+
+    const candidatePaths = new Set<string>();
+    const normalized = trimmed.replace(/\\/g, '/');
+    if (normalized.startsWith('/uploads/')) {
+      candidatePaths.add(path.join(process.cwd(), normalized.slice(1)));
+    } else if (normalized.startsWith('uploads/')) {
+      candidatePaths.add(path.join(process.cwd(), normalized));
+    } else {
+      candidatePaths.add(path.join(process.cwd(), normalized));
+      candidatePaths.add(path.join(process.cwd(), 'uploads', normalized));
+    }
+
+    for (const candidate of candidatePaths) {
+      try {
+        return await fs.readFile(candidate);
+      } catch {
+        continue;
+      }
+    }
+
+    return null;
+  }
+
+  private buildPdfImageHttpCandidates(rawContent: string): string[] {
+    const trimmed = rawContent.trim();
+    if (!trimmed) {
+      return [];
+    }
+
+    if (/^https?:\/\//i.test(trimmed)) {
+      return [trimmed];
+    }
+
+    const normalized = trimmed.replace(/\\/g, '/');
+    const pathPart = normalized.startsWith('/') ? normalized : `/${normalized}`;
+    const baseUrls = new Set<string>();
+
+    if (process.env.PUBLIC_BASE_URL) {
+      baseUrls.add(process.env.PUBLIC_BASE_URL.replace(/\/$/, ''));
+    }
+
+    if (process.env.DB_HOST) {
+      baseUrls.add(`http://${process.env.DB_HOST}`.replace(/\/$/, ''));
+    }
+
+    baseUrls.add('https://be.kidostudent.kidoedu.vn');
+
+    return [...baseUrls].map((baseUrl) => `${baseUrl}${pathPart}`);
+  }
+
+  private isPngBuffer(buffer: Buffer): boolean {
+    return (
+      buffer.length >= 8 &&
+      buffer[0] === 0x89 &&
+      buffer[1] === 0x50 &&
+      buffer[2] === 0x4e &&
+      buffer[3] === 0x47
+    );
+  }
+
+  private getAttemptAnswerOptionLabel(
+    answer: AttemptReviewAnswerOptionDto,
+    question: AttemptReviewQuestionItemDto,
+  ): string {
+    const rawLabel =
+      answer.meta &&
+      typeof answer.meta === 'object' &&
+      typeof answer.meta.importOptionLabel === 'string'
+        ? answer.meta.importOptionLabel
+        : null;
+
+    if (rawLabel) {
+      return `${rawLabel}.`;
+    }
+
+    const answerIndex = question.answers.findIndex((item) => item.id === answer.id);
+    if (answerIndex >= 0 && answerIndex < 26) {
+      return `${String.fromCharCode(65 + answerIndex)}.`;
+    }
+
+    return '-';
   }
 
   private toSafeFileName(value: string): string {

@@ -45,14 +45,6 @@ export function classifyQuestionType(
     pattern.test(stemSignature),
   );
 
-  if (hasMatchingHints && hasAnswers) {
-    return {
-      kind: 'matching_choice',
-      questionType: QuestionType.SINGLE_CHOICE,
-      layoutKey: detectMultipleChoiceLayout(input.stemParts, input.answers)?.key ?? null,
-    };
-  }
-
   if (hasOrderingHints && !hasAnswers) {
     return {
       kind: 'ordering',
