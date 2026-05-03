@@ -24,6 +24,32 @@ import { StudentEntity } from 'src/student/student.entity';
 import { TeacherEntity } from 'src/teacher/teacher.entity';
 import { StudentGroupEntity } from 'src/student-group/student-group.entity';
 import { SchoolEntity } from 'src/school/school.entity';
+import { AttemptEntity } from 'src/attempt/attempt.entity';
+import { CertificateLevel } from 'src/common/enum/certificate-level.enum';
+
+type StudentCertificateRow = {
+  attemptId: string;
+  studentName: string | null;
+  userName: string;
+  className: string | null;
+  schoolName: string | null;
+  submittedAt: Date | string | null;
+  score: string | number | null;
+  subjectName: string | null;
+  questionBankName: string | null;
+  gradeCode: string | null;
+  gradeName: string | null;
+};
+
+type StudentCertificate = {
+  id: number;
+  name: string;
+  className: string;
+  school: string;
+  date: string;
+  subject: string;
+  level: CertificateLevel;
+};
 
 @Injectable()
 export class UserService extends BaseService<UserEntity> {
@@ -490,8 +516,120 @@ export class UserService extends BaseService<UserEntity> {
       studentCode: student?.code,
       className: student?.studentGroup?.name,
       schoolName: student?.studentGroup?.school?.name,
-      certificates: [],
+      certificates: await this.getStudentCertificates(user.id),
     };
+  }
+
+  private async getStudentCertificates(
+    studentId: string,
+  ): Promise<StudentCertificate[]> {
+    const rows = await this.entityManager
+      .getRepository(AttemptEntity)
+      .createQueryBuilder('attempt')
+      .innerJoin('attempt.student', 'student')
+      .innerJoin(UserEntity, 'user', 'user.id = student.id')
+      .leftJoin('student.studentGroup', 'studentgroup')
+      .leftJoin('studentgroup.school', 'school')
+      .leftJoin('attempt.examSet', 'examset')
+      .leftJoin('attempt.questionBank', 'questionbank')
+      .leftJoin('questionbank.class', 'questionbankclass')
+      .leftJoin('exam_set_class', 'esc', 'esc.exam_set_id = examset.id')
+      .leftJoin('class', 'examclass', 'examclass.id = esc.class_id')
+      .leftJoin(
+        'class',
+        'legacyexamclass',
+        'legacyexamclass.id = examset.class_id',
+      )
+      .leftJoin(
+        'grade',
+        'grade',
+        `grade.id = COALESCE(
+          examclass.grade_id,
+          legacyexamclass.grade_id,
+          questionbankclass.grade_id
+        )`,
+      )
+      .leftJoin(
+        'subject',
+        'subject',
+        `subject.id = COALESCE(
+          examclass.subject_id,
+          legacyexamclass.subject_id,
+          questionbankclass.subject_id
+        )`,
+      )
+      .select('attempt.id', 'attemptId')
+      .addSelect('user.full_name', 'studentName')
+      .addSelect('user.user_name', 'userName')
+      .addSelect('studentgroup.name', 'className')
+      .addSelect('school.name', 'schoolName')
+      .addSelect('attempt.submitted_at', 'submittedAt')
+      .addSelect('attempt.score', 'score')
+      .addSelect('subject.name', 'subjectName')
+      .addSelect('questionbank.name', 'questionBankName')
+      .addSelect('grade.code', 'gradeCode')
+      .addSelect('grade.name', 'gradeName')
+      .where('student.id = :studentId', { studentId })
+      .andWhere('attempt.submitted_at IS NOT NULL')
+      .andWhere('attempt.score >= :minCertificateScore', {
+        minCertificateScore: 5,
+      })
+      .orderBy('attempt.submitted_at', 'DESC')
+      .getRawMany<StudentCertificateRow>();
+
+    const uniqueRows = new Map<string, StudentCertificateRow>();
+    for (const row of rows) {
+      if (!uniqueRows.has(row.attemptId)) {
+        uniqueRows.set(row.attemptId, row);
+      }
+    }
+
+    return [...uniqueRows.values()]
+      .filter((row) => {
+        const gradeNumber = this.getGradeNumber(row.gradeCode, row.gradeName);
+        return gradeNumber !== null && gradeNumber >= 1 && gradeNumber <= 9;
+      })
+      .map((row, index) => {
+        const score = Number(row.score);
+        return {
+          id: index + 1,
+          name: row.studentName ?? row.userName,
+          className: row.className ?? '',
+          school: row.schoolName ?? '',
+          date: this.formatCertificateDate(row.submittedAt),
+          subject: row.subjectName ?? row.questionBankName ?? '',
+          level:
+            score >= 8
+              ? CertificateLevel.GOOD_COMPLETION
+              : CertificateLevel.COMPLETION,
+        };
+      });
+  }
+
+  private getGradeNumber(
+    gradeCode?: string | null,
+    gradeName?: string | null,
+  ): number | null {
+    const source = `${gradeCode ?? ''} ${gradeName ?? ''}`;
+    const match = source.match(/\d+/);
+    if (!match) {
+      return null;
+    }
+
+    return Number(match[0]);
+  }
+
+  private formatCertificateDate(value: Date | string | null): string {
+    if (!value) {
+      return '';
+    }
+
+    const date = value instanceof Date ? value : new Date(value);
+    if (Number.isNaN(date.getTime())) {
+      return '';
+    }
+
+    return date.toISOString().slice(0, 10);
   }
 
   /**

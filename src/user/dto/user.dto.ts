@@ -11,6 +11,8 @@ import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Exclude, Expose } from 'class-transformer';
 import { Status } from '../enum/status.enum.js';
 import { Gender } from '../enum/gender.enum.js';
+import { CertificateLevel } from '../../common/enum/certificate-level.enum.js';
+import { CertificateSubject } from '../../common/enum/certificate-subject.enum.js';
 
 // ===== CHANGE PASSWORD DTO =====
 export class ChangePasswordDto {
@@ -129,12 +131,15 @@ export class CertificateResponseDto {
   date: string;
 
   @Expose()
-  @ApiProperty({ example: 'STEM' })
-  subject: string;
+  @ApiProperty({ example: CertificateSubject.STEM, enum: CertificateSubject })
+  subject: CertificateSubject | string;
 
   @Expose()
-  @ApiProperty({ example: 'Xuất sắc' })
-  level: string;
+  @ApiProperty({
+    example: CertificateLevel.GOOD_COMPLETION,
+    enum: CertificateLevel,
+  })
+  level: CertificateLevel;
 }
 
 export class MeResponseDto extends UserResponseDto {
@@ -168,7 +173,7 @@ export class MeResponseDto extends UserResponseDto {
         school: 'THPT X',
         date: '2026-05-04',
         subject: 'STEM',
-        level: 'Xuất sắc',
+        level: CertificateLevel.GOOD_COMPLETION,
       },
     ],
   })
