@@ -490,6 +490,7 @@ export class UserService extends BaseService<UserEntity> {
       studentCode: student?.code,
       className: student?.studentGroup?.name,
       schoolName: student?.studentGroup?.school?.name,
+      certificates: [],
     };
   }
 

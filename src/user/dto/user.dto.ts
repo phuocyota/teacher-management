@@ -107,6 +107,36 @@ export class UserResponseDto {
   updatedAt: Date;
 }
 
+export class CertificateResponseDto {
+  @Expose()
+  @ApiProperty({ example: 1 })
+  id: number;
+
+  @Expose()
+  @ApiProperty({ example: 'Nguyễn Văn A' })
+  name: string;
+
+  @Expose()
+  @ApiProperty({ example: '10A' })
+  className: string;
+
+  @Expose()
+  @ApiProperty({ example: 'THPT X' })
+  school: string;
+
+  @Expose()
+  @ApiProperty({ example: '2026-05-04' })
+  date: string;
+
+  @Expose()
+  @ApiProperty({ example: 'STEM' })
+  subject: string;
+
+  @Expose()
+  @ApiProperty({ example: 'Xuất sắc' })
+  level: string;
+}
+
 export class MeResponseDto extends UserResponseDto {
   @Expose()
   @ApiPropertyOptional({ example: 'HS001' })
@@ -125,6 +155,24 @@ export class MeResponseDto extends UserResponseDto {
     description: 'Ten truong hoc, chi co voi user STUDENT',
   })
   schoolName?: string;
+
+  @Expose()
+  @ApiPropertyOptional({
+    type: [CertificateResponseDto],
+    description: 'Danh sach chung chi, chi co voi user STUDENT',
+    example: [
+      {
+        id: 1,
+        name: 'Nguyễn Văn A',
+        className: '10A',
+        school: 'THPT X',
+        date: '2026-05-04',
+        subject: 'STEM',
+        level: 'Xuất sắc',
+      },
+    ],
+  })
+  certificates?: CertificateResponseDto[];
 }
 
 // ===== USER LIST QUERY DTO (cho filter & pagination) =====
