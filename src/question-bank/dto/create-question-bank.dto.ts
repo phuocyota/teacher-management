@@ -76,16 +76,6 @@ export class CreateQuestionBankDto {
   @IsOptional()
   @Min(0)
   @ApiProperty({
-    description: 'Tong diem',
-    example: 100,
-    required: false,
-  })
-  totalScore?: number;
-
-  @IsInt()
-  @IsOptional()
-  @Min(0)
-  @ApiProperty({
     description: 'So lan lam bai toi da',
     example: 3,
     required: false,

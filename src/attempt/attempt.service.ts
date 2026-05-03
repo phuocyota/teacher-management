@@ -176,7 +176,7 @@ export class AttemptService {
 
     await this.studentAnswerRepo.delete({ attemptId: attempt.id });
 
-    let totalScore = 0;
+    let earnedScore = 0;
 
     if (dto.answers.length > 0) {
       const submittedQuestionIds = [
@@ -265,7 +265,7 @@ export class AttemptService {
             ? (pointsByQuestionId.get(submitted.questionId) ?? 0)
             : 0;
 
-        totalScore += pointsEarned;
+        earnedScore += pointsEarned;
 
         return this.studentAnswerRepo.create({
           attemptId: attempt.id,
@@ -284,7 +284,7 @@ export class AttemptService {
 
     attempt.status = AttemptStatus.SUBMITTED;
     attempt.submittedAt = new Date();
-    attempt.score = totalScore;
+    attempt.score = earnedScore;
     const savedAttempt = await this.attemptRepo.save(attempt);
 
     return {
@@ -349,8 +349,8 @@ export class AttemptService {
     const mappedData = data.map((attempt) => {
       const dto = autoMapToDto(AttemptResponseDto, attempt);
       // Add fullScore from questionBank
-      if (attempt.questionBank?.totalScore) {
-        dto.fullScore = attempt.questionBank.totalScore;
+      if (attempt.questionBank?.totalMarks) {
+        dto.fullScore = attempt.questionBank.totalMarks;
       }
       return dto;
     });

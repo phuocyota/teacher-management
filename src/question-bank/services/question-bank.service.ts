@@ -57,7 +57,6 @@ export class QuestionBankService {
         name: dto.name,
         totalQuestions: dto.totalQuestions,
         timeLimit: dto.timeLimit,
-        totalScore: dto.totalScore,
         maxAttempts: dto.maxAttempts,
         totalMarks: dto.totalMarks,
         examDate: dto.examDate,
@@ -194,10 +193,6 @@ export class QuestionBankService {
 
     if (dto.timeLimit !== undefined) {
       record.timeLimit = dto.timeLimit;
-    }
-
-    if (dto.totalScore !== undefined) {
-      record.totalScore = dto.totalScore;
     }
 
     if (dto.maxAttempts !== undefined) {

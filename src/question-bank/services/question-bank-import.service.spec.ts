@@ -148,12 +148,11 @@ describe('QuestionBankImportService', () => {
     );
   });
 
-  it('sets totalScore from totalMarks divided across imported questions', async () => {
+  it('keeps totalMarks as the single score source when importing questions', async () => {
     const deps = createServiceDependencies();
     const questionBank = {
       id: 'question-bank-1',
       totalQuestions: 0,
-      totalScore: 0,
       totalMarks: 10,
     };
     deps.questionBankRepo.findOne.mockResolvedValue(questionBank);
@@ -203,7 +202,7 @@ describe('QuestionBankImportService', () => {
     expect(deps.questionBankRepo.save).toHaveBeenCalledWith(
       expect.objectContaining({
         totalQuestions: 2,
-        totalScore: 10,
+        totalMarks: 10,
       }),
     );
   });

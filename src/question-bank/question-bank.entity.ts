@@ -29,13 +29,6 @@ export class QuestionBankEntity extends BaseEntity {
   timeLimit!: number; // Thời gian giới hạn
 
   @Column({
-    name: 'total_score',
-    type: 'integer',
-    nullable: true,
-  })
-  totalScore!: number; // Tổng điểm
-
-  @Column({
     name: 'max_attempts',
     type: 'integer',
     nullable: true,

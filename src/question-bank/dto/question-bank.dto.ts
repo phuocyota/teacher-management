@@ -32,13 +32,6 @@ export class QuestionBankResponseDto extends BaseDto {
   timeLimit?: number;
 
   @ApiProperty({
-    description: 'Tong diem',
-    example: 100,
-    required: false,
-  })
-  totalScore?: number;
-
-  @ApiProperty({
     description: 'So lan lam bai toi da',
     example: 3,
     required: false,

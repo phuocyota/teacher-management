@@ -198,7 +198,7 @@ export class ExamSetService {
           totalQuestions:
             qb.totalQuestions ?? questionCounts.get(qb.id) ?? null,
           maxAttempts: qb.maxAttempts ?? null,
-          totalPoints: qb.totalMarks ?? qb.totalScore ?? null,
+          totalPoints: qb.totalMarks ?? null,
           difficulty: null,
           status: null,
           createdAt: qb.createdAt,

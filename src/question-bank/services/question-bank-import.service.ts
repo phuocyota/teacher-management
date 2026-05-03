@@ -127,8 +127,6 @@ export class QuestionBankImportService {
       });
 
       questionBank.totalQuestions = totalQuestions;
-      questionBank.totalScore =
-        totalQuestions > 0 ? pointsPerQuestion * totalQuestions : 0;
       await this.questionBankRepo.save(questionBank);
 
       const duration = Date.now() - startTime;
