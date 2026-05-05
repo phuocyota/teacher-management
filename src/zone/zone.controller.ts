@@ -8,6 +8,7 @@ import {
   Patch,
   Post,
   Query,
+  Req,
   UseGuards,
 } from '@nestjs/common';
 import {
@@ -23,8 +24,19 @@ import { UserType } from 'src/common/enum/user-type.enum';
 import { RolesGuard } from 'src/common/guard/roles.guard';
 import { PaginationResponseDto } from 'src/common/dto/pagination.dto';
 import { CreateZoneDto, UpdateZoneDto } from './dto/create-zone.dto';
-import { ZoneListResponseDto, ZoneResponseDto } from './dto/zone.dto';
+import {
+  ZoneDetailListResponseDto,
+  ZoneDetailResponseDto,
+  ZoneListResponseDto,
+  ZoneResponseDto,
+} from './dto/zone.dto';
 import { ZoneService } from './zone.service';
+import { JwtPayload } from 'src/common/interface/jwt-payload.interface';
+import { Request } from 'express';
+
+interface RequestWithUser extends Request {
+  user?: JwtPayload;
+}
 
 @ApiTags('Zone')
 @ApiBearerAuth('access-token')
@@ -51,13 +63,29 @@ export class ZoneController {
     type: String,
     description: 'Tim kiem theo ten hoac ma khu vuc',
   })
+  @ApiQuery({
+    name: 'isGetAllDetail',
+    required: false,
+    type: Boolean,
+    description:
+      'Lay chi tiet truong, nhom hoc sinh va thanh vien theo tung khu vuc',
+  })
   @ApiOkResponse({ type: ZoneListResponseDto })
+  @ApiOkResponse({ type: ZoneDetailListResponseDto })
   findAll(
     @Query('page') page?: number,
     @Query('size') size?: number,
     @Query('search') search?: string,
-  ): Promise<PaginationResponseDto<ZoneResponseDto>> {
-    return this.zoneService.findAll(page, size, search);
+    @Query('isGetAllDetail') isGetAllDetail?: string,
+    @Req() req?: RequestWithUser,
+  ): Promise<PaginationResponseDto<ZoneResponseDto | ZoneDetailResponseDto>> {
+    return this.zoneService.findAll(
+      page,
+      size,
+      search,
+      isGetAllDetail,
+      req?.user,
+    );
   }
 
   @Get(':id')
