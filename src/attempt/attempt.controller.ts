@@ -280,6 +280,46 @@ export class AttemptController {
     res.send(file.buffer);
   }
 
+  @Get('export-pdf/by-student-question-bank')
+  @UseGuards(RolesGuard)
+  @Roles(UserType.STUDENT, UserType.TEACHER, UserType.ADMIN)
+  @ApiOperation({
+    summary:
+      'Export submitted attempt review PDF by userId and questionBankId, using the highest score attempt',
+  })
+  @ApiProduces('application/pdf')
+  @ApiQuery({
+    name: 'userId',
+    required: true,
+    type: String,
+    description: 'Student user ID',
+  })
+  @ApiQuery({
+    name: 'questionBankId',
+    required: true,
+    type: String,
+    description: 'Question bank ID',
+  })
+  async exportAttemptPdfByStudentQuestionBank(
+    @Query('userId', ParseUUIDPipe) userId: string,
+    @Query('questionBankId', ParseUUIDPipe) questionBankId: string,
+    @User() user: JwtPayload,
+    @Res() res: Response,
+  ): Promise<void> {
+    const file = await this.attemptService.exportBestAttemptReviewPdf(
+      user,
+      userId,
+      questionBankId,
+    );
+
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader(
+      'Content-Disposition',
+      `attachment; filename="${file.fileName}"`,
+    );
+    res.send(file.buffer);
+  }
+
   @Get(':id')
   @ApiOperation({ summary: 'Get attempt by id' })
   @ApiOkResponse({ type: AttemptResponseDto })

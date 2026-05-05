@@ -5,7 +5,8 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { PDFDocument, StandardFonts, rgb, type PDFFont } from 'pdf-lib';
+import { PDFDocument, rgb, type PDFFont } from 'pdf-lib';
+import fontkit from '@pdf-lib/fontkit';
 import { promises as fs } from 'fs';
 import * as path from 'path';
 import { In, Repository } from 'typeorm';
@@ -54,6 +55,21 @@ import {
   StartAttemptResponseDto,
 } from './dto/attempt-session.dto';
 import { ContentTypes } from 'src/common/enum/content-type.enum';
+
+const PDF_STANDARD_FONT_DIR = path.join(
+  process.cwd(),
+  'node_modules',
+  'dejavu-fonts-ttf',
+  'ttf',
+);
+const PDF_REGULAR_FONT_PATH = path.join(
+  PDF_STANDARD_FONT_DIR,
+  'DejaVuSans.ttf',
+);
+const PDF_BOLD_FONT_PATH = path.join(
+  PDF_STANDARD_FONT_DIR,
+  'DejaVuSans-Bold.ttf',
+);
 
 @Injectable()
 export class AttemptService {
@@ -583,6 +599,31 @@ export class AttemptService {
     };
   }
 
+  async exportBestAttemptReviewPdf(
+    user: JwtPayload,
+    studentId: string,
+    questionBankId: string,
+  ): Promise<{ buffer: Buffer; fileName: string }> {
+    const bestAttempt = await this.attemptRepo
+      .createQueryBuilder('attempt')
+      .where('attempt.student_id = :studentId', { studentId })
+      .andWhere('attempt.question_bank_id = :questionBankId', {
+        questionBankId,
+      })
+      .andWhere('attempt.submitted_at IS NOT NULL')
+      .orderBy('attempt.score', 'DESC', 'NULLS LAST')
+      .addOrderBy('attempt.submitted_at', 'DESC')
+      .getOne();
+
+    if (!bestAttempt) {
+      throw new NotFoundException(
+        'Khong tim thay lan lam bai da nop cua hoc sinh voi questionBankId nay',
+      );
+    }
+
+    return this.exportAttemptReviewPdf(bestAttempt.id, user);
+  }
+
   private async ensureCanExportAttempt(
     attempt: AttemptEntity,
     user: JwtPayload,
@@ -856,8 +897,14 @@ export class AttemptService {
     },
   ): Promise<Buffer> {
     const pdfDoc = await PDFDocument.create();
-    const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
-    const boldFont = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
+    pdfDoc.registerFontkit(fontkit);
+    const font = await pdfDoc.embedFont(await fs.readFile(PDF_REGULAR_FONT_PATH), {
+      subset: false,
+    });
+    const boldFont = await pdfDoc.embedFont(
+      await fs.readFile(PDF_BOLD_FONT_PATH),
+      { subset: false },
+    );
     const pageSize: [number, number] = [595.28, 841.89];
     const margin = 40;
     const contentWidth = pageSize[0] - margin * 2;
@@ -952,34 +999,34 @@ export class AttemptService {
       drawWrappedText(this.toDisplayContent(item.content), options);
     };
 
-    drawWrappedText('PHIEU XUAT BAI LAM', {
+    drawWrappedText('PHIẾU XUẤT BÀI LÀM', {
       size: 16,
       bold: true,
       gapAfter: 8,
     });
-    drawWrappedText(`Hoc sinh: ${meta.studentName}`, { bold: true });
-    drawWrappedText(`Tai khoan: ${meta.studentUserName || '-'}`);
-    drawWrappedText(`Bo de: ${meta.examSetName || '-'}`);
-    drawWrappedText(`De thi: ${meta.questionBankName || '-'}`);
-    drawWrappedText(`Bat dau: ${this.formatDateTime(meta.startedAt)}`);
+    drawWrappedText(`Học sinh: ${meta.studentName}`, { bold: true });
+    drawWrappedText(`Tài khoản: ${meta.studentUserName || '-'}`);
+    drawWrappedText(`Bộ đề: ${meta.examSetName || '-'}`);
+    drawWrappedText(`Đề thi: ${meta.questionBankName || '-'}`);
+    drawWrappedText(`Bắt đầu: ${this.formatDateTime(meta.startedAt)}`);
     drawWrappedText(
-      `Nop bai: ${
+      `Nộp bài: ${
         meta.submittedAt ? this.formatDateTime(meta.submittedAt) : '-'
       }`,
     );
     drawWrappedText(
-      `Tong diem: ${review.score ?? 0} | So cau: ${review.totalQuestions} | Da tra loi: ${review.answeredQuestions}`,
+      `Tổng điểm: ${review.score ?? 0} | Số câu: ${review.totalQuestions} | Đã trả lời: ${review.answeredQuestions}`,
       { gapAfter: 10 },
     );
 
     for (const question of review.questions) {
       drawWrappedText(
-        `Cau ${question.orderNo} - ${question.pointsEarned ?? 0}/${question.points} diem - ${
+        `Câu ${question.orderNo} - ${question.pointsEarned ?? 0}/${question.points} điểm - ${
           question.isCorrect === true
-            ? 'Dung'
+            ? 'Đúng'
             : question.isCorrect === false
               ? 'Sai'
-              : 'Chua cham'
+              : 'Chưa chấm'
         }`,
         {
           bold: true,
@@ -1004,7 +1051,7 @@ export class AttemptService {
       }
 
       if (question.textValue) {
-        drawWrappedText(`Tra loi tu luan: ${question.textValue}`, {
+        drawWrappedText(`Trả lời tự luận: ${question.textValue}`, {
           indent: 12,
         });
       }
@@ -1012,7 +1059,7 @@ export class AttemptService {
       for (const answer of question.answers) {
         const isSelected = answer.isSelected;
         const label = isSelected ? '[x]' : '[ ]';
-        const correctness = answer.isCorrect ? ' (dap an dung)' : '';
+        const correctness = answer.isCorrect ? ' (đáp án đúng)' : '';
         const optionLabel = this.getAttemptAnswerOptionLabel(answer, question);
         const answerItems = [
           { contentType: answer.contentType, content: answer.content },
@@ -1034,7 +1081,7 @@ export class AttemptService {
       }
 
       if (question.description) {
-        drawWrappedText(`Ghi chu: ${question.description}`, { indent: 12 });
+        drawWrappedText(`Ghi chú: ${question.description}`, { indent: 12 });
       }
 
       y -= 4;
@@ -1080,11 +1127,9 @@ export class AttemptService {
 
   private toPdfText(value: string): string {
     return (value ?? '')
-      .replace(/đ/g, 'd')
-      .replace(/Đ/g, 'D')
-      .normalize('NFD')
-      .replace(/[\u0300-\u036f]/g, '')
-      .replace(/[^\x20-\x7E]/g, '');
+      .replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]/g, '')
+      .replace(/\r\n/g, '\n')
+      .replace(/\r/g, '\n');
   }
 
   private toDisplayContent(value: string): string {
@@ -1093,7 +1138,7 @@ export class AttemptService {
       return '';
     }
     if (/^\/?uploads\/|^https?:\/\//i.test(trimmed)) {
-      return `[Hinh anh] ${trimmed}`;
+      return `[Hình ảnh] ${trimmed}`;
     }
     return trimmed;
   }
