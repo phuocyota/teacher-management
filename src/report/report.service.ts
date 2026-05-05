@@ -50,6 +50,11 @@ const CLASS_RESULT_TEMPLATE_PATH = join(
   'templates',
   'template-excel-class.xlsx',
 );
+const SCHOOL_STAT_TEMPLATE_PATH = join(
+  process.cwd(),
+  'templates',
+  'template-excel-school.xlsx',
+);
 
 type ReportStudentRow = {
   id: string;
@@ -553,6 +558,18 @@ export class ReportService {
     return workbook;
   }
 
+  private async createSchoolStatWorkbook(): Promise<Workbook> {
+    const workbook = new Workbook();
+    workbook.creator = 'teacher-management';
+    workbook.created = new Date();
+
+    if (existsSync(SCHOOL_STAT_TEMPLATE_PATH)) {
+      await workbook.xlsx.readFile(SCHOOL_STAT_TEMPLATE_PATH);
+    }
+
+    return workbook;
+  }
+
   async exportCurrentStudentBestAttemptDetailExcel(
     user: JwtPayload,
     studentId: string,
@@ -633,9 +650,7 @@ export class ReportService {
     this.ensureCanAccessSchoolReport(school, user);
 
     const rows = await this.getSchoolStatSheetRows(schoolId, filters);
-    const workbook = new Workbook();
-    workbook.creator = 'teacher-management';
-    workbook.created = new Date();
+    const workbook = await this.createSchoolStatWorkbook();
     this.addSchoolStatWorksheet(workbook, school, rows, filters);
 
     const xlsx = await workbook.xlsx.writeBuffer();
@@ -1533,42 +1548,37 @@ export class ReportService {
     rows: SchoolStatRow[],
     filters: SchoolAttemptReportFilters,
   ): void {
-    const worksheet = workbook.addWorksheet('Thống kê TRƯỜNG.KHU VỰC');
-    this.setupSheetColumns(
-      worksheet,
-      [22, 12, 12, 12, 12, 12, 16, 12, 14, 10, 16, 16],
-    );
+    const worksheet =
+      workbook.getWorksheet('Thống kê TRƯỜNG.KHU VỰC') ??
+      workbook.addWorksheet('Thống kê TRƯỜNG.KHU VỰC');
 
-    worksheet.getCell('A1').value = '    CÔNG TY CỔ PHẦN GIÁO DỤC';
-    worksheet.getCell('A2').value = 'KHOA HỌC CÔNG NGHỆ ICHI SKILL';
-    worksheet.getCell('H1').value = 'CỘNG HÒA XÃ HỘI CHỦ NGHĨA VIỆT NAM';
-    worksheet.getCell('H2').value = 'Độc lập - Tự do - Hạnh Phúc';
-    worksheet.mergeCells('C4:H4');
-    worksheet.getCell('C4').value = 'BẢNG THỐNG KÊ ĐIỂM SỐ';
-    worksheet.getCell('C5').value = `TRƯỜNG: ${school.name}`;
-    worksheet.getCell('C6').value = this.formatReportFilters(filters);
+    if (!worksheet.columns.length) {
+      this.setupSheetColumns(
+        worksheet,
+        [22, 12, 12, 12, 12, 12, 16, 12, 14, 10, 16, 16],
+      );
+    }
 
-    const headerRow = worksheet.getRow(8);
-    [
-      'LỚP',
-      'Tổng số HS',
-      'Số HS dự thi',
-      'Số HS bỏ thi',
-      'Điểm cao nhất',
-      'Điểm thấp nhất',
-      'Số HS dưới 5 điểm',
-      'Điểm TB',
-      'Tỷ lệ đạt (%)',
-      'Xếp hạng',
-      'Đánh giá',
-      'Ghi chú',
-    ].forEach((value, index) => {
-      headerRow.getCell(index + 1).value = value;
-    });
-    this.styleTableHeader(headerRow);
+    const dataWorksheet = workbook.getWorksheet('data');
+    if (dataWorksheet) {
+      dataWorksheet.getCell('B1').value = school.name;
+    }
 
+    worksheet.getCell('A4').value = [
+      'KỲ THI ĐÁNH GIÁ HỌC KỲ II - NĂM HỌC: 2025 2026',
+      'BẢNG THỐNG KÊ ĐIỂM SỐ',
+      `TRƯỜNG: ${school.name}`,
+      'CHƯƠNG TRÌNH GIÁO DỤC : KỸ NĂNG SỐNG/STEM/CÔNG DÂN SỐ ICHI SKILL',
+    ].join('\n');
+
+    const dataStartRow = 9;
+    const templateRow = worksheet.getRow(dataStartRow);
     rows.forEach((row, index) => {
-      const excelRow = worksheet.getRow(9 + index);
+      const rowIndex = dataStartRow + index;
+      const excelRow = worksheet.getRow(rowIndex);
+      if (rowIndex !== dataStartRow) {
+        this.copyRowStyle(templateRow, excelRow, 12);
+      }
       excelRow.getCell(1).value = row.groupName;
       excelRow.getCell(2).value = row.totalStudents;
       excelRow.getCell(3).value = row.attemptedStudents;
@@ -1585,9 +1595,21 @@ export class ReportService {
       excelRow.getCell(11).value = row.assessment;
       excelRow.getCell(12).value = '';
       this.styleDataRow(excelRow);
+      excelRow.commit();
     });
 
-    this.applyTableBorder(worksheet, 8, Math.max(8, 8 + rows.length), 12);
+    if (rows.length === 0) {
+      for (let col = 1; col <= 12; col += 1) {
+        templateRow.getCell(col).value = '';
+      }
+    }
+
+    this.applyTableBorder(
+      worksheet,
+      8,
+      Math.max(dataStartRow, dataStartRow + rows.length - 1),
+      12,
+    );
   }
 
   private setupSheetColumns(worksheet: Worksheet, widths: number[]): void {
