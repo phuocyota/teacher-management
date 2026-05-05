@@ -61,21 +61,40 @@ export class ReportController {
   }
 
   @Get('student')
+  @Roles(UserType.ADMIN, UserType.TEACHER)
   @ApiOperation({
     summary:
       'Lay bao cao hoc sinh theo nhom hoc sinh va khoang thoi gian, gom tong quan, xu huong diem va lich su lam bai',
   })
   @ApiQuery({
     name: 'groupId',
-    required: true,
+    required: false,
     type: String,
     description: 'ID nhom hoc sinh (student_group.id)',
   })
   @ApiQuery({
-    name: 'studentId',
-    required: true,
+    name: 'studentGroupId',
+    required: false,
     type: String,
-    description: 'ID hoc sinh thuoc group',
+    description: 'Alias cua groupId',
+  })
+  @ApiQuery({
+    name: 'zoneId',
+    required: false,
+    type: String,
+    description: 'ID khu vuc',
+  })
+  @ApiQuery({
+    name: 'schoolId',
+    required: false,
+    type: String,
+    description: 'ID truong',
+  })
+  @ApiQuery({
+    name: 'studentId',
+    required: false,
+    type: String,
+    description: 'ID hoc sinh thuoc group, hoac all de xem tong hop',
   })
   @ApiQuery({
     name: 'fromDate',
@@ -104,8 +123,11 @@ export class ReportController {
   @ApiOkResponse({ type: StudentReportDto })
   getStudentReport(
     @User() user: JwtPayload,
-    @Query('groupId', ParseUUIDPipe) groupId: string,
-    @Query('studentId', ParseUUIDPipe) studentId: string,
+    @Query('groupId') groupId?: string,
+    @Query('studentGroupId') studentGroupId?: string,
+    @Query('zoneId') zoneId?: string,
+    @Query('schoolId') schoolId?: string,
+    @Query('studentId') studentId?: string,
     @Query('fromDate') fromDate?: string,
     @Query('toDate') toDate?: string,
     @Query('page', new DefaultValuePipe(1), ParseIntPipe) page?: number,
@@ -121,12 +143,16 @@ export class ReportController {
 
     return this.reportService.getStudentReport(
       user,
-      groupId,
-      studentId,
-      fromDate,
-      toDate,
-      page,
-      limit,
+      {
+        zoneId,
+        schoolId,
+        groupId: groupId ?? studentGroupId,
+        studentId,
+        fromDate,
+        toDate,
+        page,
+        limit,
+      },
     );
   }
 

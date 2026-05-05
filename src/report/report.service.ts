@@ -72,6 +72,17 @@ type SchoolAttemptReportFilters = {
   toDate?: string;
 };
 
+type StudentReportFilters = {
+  zoneId?: string;
+  schoolId?: string;
+  groupId?: string;
+  studentId?: string;
+  fromDate?: string;
+  toDate?: string;
+  page?: number;
+  limit?: number;
+};
+
 type SchoolAttemptReportRow = {
   studentId: string;
   fullName: string | null;
@@ -291,24 +302,59 @@ export class ReportService {
 
   async getStudentReport(
     user: JwtPayload,
-    groupId: string,
-    studentId: string,
-    fromDate?: string,
-    toDate?: string,
-    page = 1,
-    limit = 10,
+    filters: StudentReportFilters,
   ): Promise<StudentReportDto> {
     this.ensureAuthenticatedUser(user);
-    this.validateDateRange(fromDate, toDate);
+    this.validateDateRange(filters.fromDate, filters.toDate);
 
-    const safePage = Number.isFinite(page) && page > 0 ? page : 1;
-    const safeLimit = Number.isFinite(limit) && limit > 0 ? limit : 10;
+    const groupId = this.normalizeOptionalFilter(filters.groupId);
+    const zoneId = this.normalizeOptionalFilter(filters.zoneId);
+    const schoolId = this.normalizeOptionalFilter(filters.schoolId);
+    const studentId = this.normalizeOptionalFilter(filters.studentId);
+    const isAllStudents = !studentId || studentId.toLowerCase() === 'all';
+
+    if (!groupId && !schoolId && !zoneId) {
+      throw new BadRequestException(
+        'Can chon it nhat mot filter: zoneId, schoolId hoac groupId',
+      );
+    }
+
+    this.validateOptionalUuid(zoneId, 'zoneId');
+    this.validateOptionalUuid(schoolId, 'schoolId');
+    this.validateOptionalUuid(groupId, 'groupId');
+    if (!isAllStudents) {
+      this.validateOptionalUuid(studentId, 'studentId');
+    }
+
+    const safePage =
+      Number.isFinite(filters.page) && Number(filters.page) > 0
+        ? Number(filters.page)
+        : 1;
+    const safeLimit =
+      Number.isFinite(filters.limit) && Number(filters.limit) > 0
+        ? Number(filters.limit)
+        : 10;
     const skip = (safePage - 1) * safeLimit;
 
-    await this.ensureCanAccessStudentGroup(groupId, user);
-    const student = await this.ensureStudentBelongsToGroup(groupId, studentId);
+    if (groupId) {
+      await this.ensureCanAccessStudentGroup(groupId, user);
+    }
 
-    const summaryRaw = await this.buildAttemptScope(studentId, fromDate, toDate)
+    const student =
+      !isAllStudents && groupId
+        ? await this.ensureStudentBelongsToGroup(groupId, studentId!)
+        : !isAllStudents
+          ? await this.getStudentOptionById(studentId!)
+          : null;
+
+    const summaryRaw = await this.buildAttemptReportScope(user, {
+      zoneId,
+      schoolId,
+      groupId,
+      studentId: isAllStudents ? undefined : studentId,
+      fromDate: filters.fromDate,
+      toDate: filters.toDate,
+    })
       .select('COUNT(attempt.id)', 'totalAttempts')
       .addSelect('AVG(attempt.score)', 'averageScore')
       .addSelect('MAX(attempt.score)', 'highestScore')
@@ -332,7 +378,14 @@ export class ReportService {
         : null,
     };
 
-    const trendRows = await this.buildAttemptScope(studentId, fromDate, toDate)
+    const trendRows = await this.buildAttemptReportScope(user, {
+      zoneId,
+      schoolId,
+      groupId,
+      studentId: isAllStudents ? undefined : studentId,
+      fromDate: filters.fromDate,
+      toDate: filters.toDate,
+    })
       .select('DATE(attempt.started_at)', 'date')
       .addSelect('COUNT(attempt.id)', 'attemptCount')
       .addSelect('AVG(attempt.score)', 'averageScore')
@@ -353,10 +406,20 @@ export class ReportService {
       highestScore: this.toNullableNumber(row.highestScore),
     }));
 
-    const historyQb = this.buildAttemptScope(studentId, fromDate, toDate)
+    const historyQb = this.buildAttemptReportScope(user, {
+      zoneId,
+      schoolId,
+      groupId,
+      studentId: isAllStudents ? undefined : studentId,
+      fromDate: filters.fromDate,
+      toDate: filters.toDate,
+    })
       .leftJoin('attempt.questionBank', 'questionBank')
       .leftJoin('attempt.examSet', 'examSet')
       .select('attempt.id', 'attemptId')
+      .addSelect('student.id', 'studentId')
+      .addSelect('COALESCE(user.full_name, user.user_name)', 'studentName')
+      .addSelect('student.code', 'studentCode')
       .addSelect('attempt.questionBankId', 'questionBankId')
       .addSelect('questionBank.name', 'questionBankName')
       .addSelect('attempt.examSetId', 'examSetId')
@@ -378,10 +441,20 @@ export class ReportService {
         examSetName: string;
         status: StudentAttemptDto['status'];
         startedAt: Date;
-        submittedAt: Date | null;
-        score: string | null;
-      }>(),
-      this.buildAttemptScope(studentId, fromDate, toDate).getCount(),
+      submittedAt: Date | null;
+      score: string | null;
+      studentId: string;
+      studentName: string | null;
+      studentCode: string | null;
+    }>(),
+      this.buildAttemptReportScope(user, {
+        zoneId,
+        schoolId,
+        groupId,
+        studentId: isAllStudents ? undefined : studentId,
+        fromDate: filters.fromDate,
+        toDate: filters.toDate,
+      }).getCount(),
     ]);
 
     const attempts: StudentAttemptDto[] = historyRows.map((row) => ({
@@ -394,13 +467,18 @@ export class ReportService {
       startedAt: new Date(row.startedAt),
       submittedAt: row.submittedAt ? new Date(row.submittedAt) : null,
       score: this.toNullableNumber(row.score),
+      studentId: row.studentId,
+      studentName: row.studentName,
+      studentCode: row.studentCode,
     }));
 
     return {
-      groupId,
+      groupId: groupId ?? null,
+      zoneId: zoneId ?? null,
+      schoolId: schoolId ?? null,
       student,
-      fromDate: fromDate ?? null,
-      toDate: toDate ?? null,
+      fromDate: filters.fromDate ?? null,
+      toDate: filters.toDate ?? null,
       summary,
       trend,
       attempts,
@@ -762,6 +840,36 @@ export class ReportService {
       .andWhere('user.user_type = :userType', { userType: UserType.STUDENT })
       .orderBy('COALESCE(user.full_name, user.user_name)', 'ASC')
       .getRawMany<ReportStudentRow>();
+  }
+
+  private async getStudentOptionById(
+    studentId: string,
+  ): Promise<ReportStudentOptionDto> {
+    const row = await this.studentRepo
+      .createQueryBuilder('student')
+      .innerJoin(UserEntity, 'user', 'user.id = student.id')
+      .leftJoin(
+        StudentGroupEntity,
+        'studentGroup',
+        'studentGroup.id = student.student_group_id',
+      )
+      .select('user.id', 'id')
+      .addSelect('user.full_name', 'fullName')
+      .addSelect('user.user_name', 'userName')
+      .addSelect('student.code', 'code')
+      .addSelect('student.student_group_id', 'studentGroupId')
+      .addSelect('studentGroup.name', 'studentGroupName')
+      .where('student.id = :studentId', { studentId })
+      .andWhere('user.user_type = :userType', { userType: UserType.STUDENT })
+      .getRawOne<ReportStudentRow>();
+
+    if (!row) {
+      throw new NotFoundException(
+        ERROR_MESSAGES.NOT_FOUND_WITH_ID(ENTITY_NAMES.STUDENT, studentId),
+      );
+    }
+
+    return row;
   }
 
   private async getStudentRowInGroup(
@@ -1764,6 +1872,87 @@ export class ReportService {
     }
 
     return qb;
+  }
+
+  private buildAttemptReportScope(
+    user: JwtPayload,
+    filters: {
+      zoneId?: string;
+      schoolId?: string;
+      groupId?: string;
+      studentId?: string;
+      fromDate?: string;
+      toDate?: string;
+    },
+  ) {
+    const qb = this.attemptRepo
+      .createQueryBuilder('attempt')
+      .innerJoin('attempt.student', 'student')
+      .innerJoin(UserEntity, 'user', 'user.id = student.id')
+      .leftJoin('student.studentGroup', 'studentGroup')
+      .leftJoin('studentGroup.school', 'school')
+      .leftJoin('school.zone', 'zone')
+      .where('user.user_type = :studentUserType', {
+        studentUserType: UserType.STUDENT,
+      });
+
+    if (filters.zoneId) {
+      qb.andWhere('zone.id = :zoneId', { zoneId: filters.zoneId });
+    }
+
+    if (filters.schoolId) {
+      qb.andWhere('school.id = :schoolId', { schoolId: filters.schoolId });
+    }
+
+    if (filters.groupId) {
+      qb.andWhere('studentGroup.id = :groupId', { groupId: filters.groupId });
+    }
+
+    if (filters.studentId) {
+      qb.andWhere('student.id = :studentId', { studentId: filters.studentId });
+    }
+
+    if (filters.fromDate) {
+      qb.andWhere('DATE(attempt.started_at) >= :fromDate', {
+        fromDate: filters.fromDate,
+      });
+    }
+
+    if (filters.toDate) {
+      qb.andWhere('DATE(attempt.started_at) <= :toDate', {
+        toDate: filters.toDate,
+      });
+    }
+
+    if (user.userType !== UserType.ADMIN) {
+      qb.andWhere(
+        this.canAccessStudentGroupCondition(),
+        this.accessParams(user.userId),
+      );
+    }
+
+    return qb;
+  }
+
+  private normalizeOptionalFilter(value?: string): string | undefined {
+    const normalized = value?.trim();
+    if (!normalized || normalized.toLowerCase() === 'all') {
+      return undefined;
+    }
+    return normalized;
+  }
+
+  private validateOptionalUuid(value: string | undefined, fieldName: string) {
+    if (!value || value.toLowerCase() === 'all') {
+      return;
+    }
+
+    const uuidRegex =
+      /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+    if (!uuidRegex.test(value)) {
+      throw new BadRequestException(`${fieldName} khong hop le`);
+    }
   }
 
   private validateDateRange(fromDate?: string, toDate?: string): void {

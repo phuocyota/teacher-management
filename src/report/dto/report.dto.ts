@@ -121,6 +121,27 @@ export class StudentAttemptDto {
     nullable: true,
   })
   score!: number | null;
+
+  @ApiPropertyOptional({
+    description: 'ID hoc sinh',
+    example: '6233abe3-1961-4af5-a482-542f1227d844',
+    nullable: true,
+  })
+  studentId?: string | null;
+
+  @ApiPropertyOptional({
+    description: 'Ten hoc sinh',
+    example: 'Nguyen Van B',
+    nullable: true,
+  })
+  studentName?: string | null;
+
+  @ApiPropertyOptional({
+    description: 'Ma hoc sinh',
+    example: 'HS001',
+    nullable: true,
+  })
+  studentCode?: string | null;
 }
 
 export class StudentReportSummaryDto {
@@ -184,14 +205,30 @@ export class StudentReportDto {
   @ApiProperty({
     description: 'ID group duoc chon',
     example: '5233abe3-1961-4af5-a482-542f1227d844',
+    nullable: true,
   })
-  groupId!: string;
+  groupId!: string | null;
 
-  @ApiProperty({
+  @ApiPropertyOptional({
     description: 'Thong tin hoc sinh',
     type: ReportStudentOptionDto,
+    nullable: true,
   })
-  student!: ReportStudentOptionDto;
+  student!: ReportStudentOptionDto | null;
+
+  @ApiPropertyOptional({
+    description: 'ID khu vuc duoc loc',
+    example: '9233abe3-1961-4af5-a482-542f1227d844',
+    nullable: true,
+  })
+  zoneId?: string | null;
+
+  @ApiPropertyOptional({
+    description: 'ID truong duoc loc',
+    example: 'a233abe3-1961-4af5-a482-542f1227d844',
+    nullable: true,
+  })
+  schoolId?: string | null;
 
   @ApiPropertyOptional({
     description: 'Ngay bat dau loc',
