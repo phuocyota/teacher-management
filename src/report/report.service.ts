@@ -45,6 +45,11 @@ const STUDENT_ATTEMPT_DETAIL_TEMPLATE_PATH = join(
   'templates',
   'student-attempt-detail.xlsx',
 );
+const CLASS_RESULT_TEMPLATE_PATH = join(
+  process.cwd(),
+  'templates',
+  'template-excel-class.xlsx',
+);
 
 type ReportStudentRow = {
   id: string;
@@ -536,6 +541,18 @@ export class ReportService {
     return workbook;
   }
 
+  private async createClassResultWorkbook(): Promise<Workbook> {
+    const workbook = new Workbook();
+    workbook.creator = 'teacher-management';
+    workbook.created = new Date();
+
+    if (existsSync(CLASS_RESULT_TEMPLATE_PATH)) {
+      await workbook.xlsx.readFile(CLASS_RESULT_TEMPLATE_PATH);
+    }
+
+    return workbook;
+  }
+
   async exportCurrentStudentBestAttemptDetailExcel(
     user: JwtPayload,
     studentId: string,
@@ -588,9 +605,7 @@ export class ReportService {
     }
 
     const rows = await this.getClassResultSheetRows(groupId, filters);
-    const workbook = new Workbook();
-    workbook.creator = 'teacher-management';
-    workbook.created = new Date();
+    const workbook = await this.createClassResultWorkbook();
     this.addClassResultWorksheet(workbook, studentGroup, rows, filters);
 
     const xlsx = await workbook.xlsx.writeBuffer();
@@ -1449,40 +1464,38 @@ export class ReportService {
     rows: ClassSheetRow[],
     filters: SchoolAttemptReportFilters,
   ): void {
-    const worksheet = workbook.addWorksheet('KẾT QUẢ LỚP');
-    this.setupSheetColumns(worksheet, [8, 28, 18, 14, 14, 20, 26, 20, 16]);
+    const worksheet =
+      workbook.getWorksheet('KẾT QUẢ LỚP') ??
+      workbook.addWorksheet('KẾT QUẢ LỚP');
 
-    worksheet.getCell('A1').value = '    CÔNG TY CỔ PHẦN GIÁO DỤC';
-    worksheet.getCell('A2').value = 'KHOA HỌC CÔNG NGHỆ ICHI SKILL';
-    worksheet.getCell('H1').value = 'CỘNG HÒA XÃ HỘI CHỦ NGHĨA VIỆT NAM';
-    worksheet.getCell('H2').value = 'Độc lập - Tự do - Hạnh Phúc';
-    worksheet.mergeCells('D3:F3');
-    worksheet.getCell('D3').value = 'KỲ THI ĐÁNH GIÁ HỌC KỲ II - NĂM HỌC';
-    worksheet.mergeCells('C4:F4');
-    worksheet.getCell('C4').value = 'BẢNG ĐIỂM HỌC SINH';
-    worksheet.getCell('C5').value =
-      `TRƯỜNG: ${studentGroup.school?.name ?? ''}`;
-    worksheet.getCell('C6').value = `LỚP: ${studentGroup.name}`;
-    worksheet.getCell('G6').value = this.formatReportFilters(filters);
+    if (!worksheet.columns.length) {
+      this.setupSheetColumns(worksheet, [8, 28, 18, 14, 14, 20, 26, 20, 16]);
+    }
 
-    const headerRow = worksheet.getRow(8);
-    [
-      'STT',
-      'HỌ TÊN HỌC SINH',
-      'MÔN',
-      'SỐ CÂU ĐÚNG',
-      'TỔNG ĐIỂM',
-      'KẾT QUẢ/XẾP LOẠI',
-      'THỜI GIAN KIỂM TRA (Ngày giờ..)',
-      'ĐÁNH GIÁ GIÁO VIÊN',
-      'GHI CHÚ',
-    ].forEach((value, index) => {
-      headerRow.getCell(index + 1).value = value;
-    });
-    this.styleTableHeader(headerRow);
+    const dataWorksheet = workbook.getWorksheet('data');
+    if (dataWorksheet) {
+      dataWorksheet.getCell('B1').value = studentGroup.school?.name ?? '';
+      dataWorksheet.getCell('B2').value = studentGroup.name;
+    }
 
+    worksheet.getCell('A4').value = [
+      'KỲ THI ĐÁNH GIÁ HỌC KỲ II - NĂM HỌC: 2025 2026',
+      'BẢNG ĐIỂM HỌC SINH K6',
+      `TRƯỜNG: ${studentGroup.school?.name ?? ''}`,
+      `LỚP: ${studentGroup.name}`,
+    ]
+      .filter(Boolean)
+      .join('\n');
+
+    const dataStartRow = 10;
+    const templateRow = worksheet.getRow(dataStartRow);
     rows.forEach((row, index) => {
-      const excelRow = worksheet.getRow(9 + index);
+      const rowIndex = dataStartRow + index;
+      const excelRow = worksheet.getRow(rowIndex);
+      if (rowIndex !== dataStartRow) {
+        this.copyRowStyle(templateRow, excelRow, 10);
+        worksheet.mergeCells(rowIndex, 9, rowIndex, 10);
+      }
       excelRow.getCell(1).value = index + 1;
       excelRow.getCell(2).value = row.fullName;
       excelRow.getCell(3).value = row.subjectName;
@@ -1495,10 +1508,23 @@ export class ReportService {
         : '';
       excelRow.getCell(8).value = '';
       excelRow.getCell(9).value = '';
+      excelRow.getCell(10).value = '';
       this.styleDataRow(excelRow);
+      excelRow.commit();
     });
 
-    this.applyTableBorder(worksheet, 8, Math.max(8, 8 + rows.length), 9);
+    if (rows.length === 0) {
+      for (let col = 1; col <= 10; col += 1) {
+        templateRow.getCell(col).value = '';
+      }
+    }
+
+    this.applyTableBorder(
+      worksheet,
+      9,
+      Math.max(dataStartRow, dataStartRow + rows.length - 1),
+      10,
+    );
   }
 
   private addSchoolStatWorksheet(
@@ -1590,6 +1616,15 @@ export class ReportService {
       horizontal: 'center',
       wrapText: true,
     };
+  }
+
+  private copyRowStyle(source: Row, target: Row, totalColumns: number): void {
+    target.height = source.height;
+    for (let col = 1; col <= totalColumns; col += 1) {
+      target.getCell(col).style = JSON.parse(
+        JSON.stringify(source.getCell(col).style ?? {}),
+      );
+    }
   }
 
   private styleStudentDetailRow(row: Row, bold = false): void {
