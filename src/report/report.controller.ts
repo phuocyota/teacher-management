@@ -1,21 +1,19 @@
 import {
-  BadRequestException,
   Controller,
-  DefaultValuePipe,
   Get,
   Param,
-  ParseIntPipe,
   ParseUUIDPipe,
   Query,
   Res,
   UseGuards,
+  UsePipes,
+  ValidationPipe,
 } from '@nestjs/common';
 import {
   ApiBearerAuth,
   ApiOkResponse,
   ApiOperation,
   ApiProduces,
-  ApiQuery,
   ApiTags,
 } from '@nestjs/swagger';
 import type { Response } from 'express';
@@ -25,8 +23,12 @@ import { UserType } from 'src/common/enum/user-type.enum';
 import { RolesGuard } from 'src/common/guard/roles.guard';
 import type { JwtPayload } from 'src/common/interface/jwt-payload.interface';
 import {
+  AttemptReportFilterQueryDto,
+  ClassAttemptScoresExportQueryDto,
   ReportStudentOptionDto,
+  StudentBestAttemptDetailExportQueryDto,
   StudentReportDto,
+  StudentReportQueryDto,
   TeacherLeaderGroupDto,
 } from './dto/report.dto';
 import { ReportService } from './report.service';
@@ -35,6 +37,7 @@ import { ReportService } from './report.service';
 @ApiBearerAuth('access-token')
 @Controller('report/attempt')
 @UseGuards(RolesGuard)
+@UsePipes(new ValidationPipe({ transform: true, whitelist: true }))
 @Roles(UserType.TEACHER)
 export class ReportController {
   constructor(private readonly reportService: ReportService) {}
@@ -66,94 +69,21 @@ export class ReportController {
     summary:
       'Lay bao cao hoc sinh theo nhom hoc sinh va khoang thoi gian, gom tong quan, xu huong diem va lich su lam bai',
   })
-  @ApiQuery({
-    name: 'groupId',
-    required: false,
-    type: String,
-    description: 'ID nhom hoc sinh (student_group.id)',
-  })
-  @ApiQuery({
-    name: 'studentGroupId',
-    required: false,
-    type: String,
-    description: 'Alias cua groupId',
-  })
-  @ApiQuery({
-    name: 'zoneId',
-    required: false,
-    type: String,
-    description: 'ID khu vuc',
-  })
-  @ApiQuery({
-    name: 'schoolId',
-    required: false,
-    type: String,
-    description: 'ID truong',
-  })
-  @ApiQuery({
-    name: 'studentId',
-    required: false,
-    type: String,
-    description: 'ID hoc sinh thuoc group, hoac all de xem tong hop',
-  })
-  @ApiQuery({
-    name: 'fromDate',
-    required: false,
-    type: String,
-    description: 'Ngay bat dau loc (YYYY-MM-DD)',
-  })
-  @ApiQuery({
-    name: 'toDate',
-    required: false,
-    type: String,
-    description: 'Ngay ket thuc loc (YYYY-MM-DD)',
-  })
-  @ApiQuery({
-    name: 'page',
-    required: false,
-    type: Number,
-    description: 'Trang lich su attempt',
-  })
-  @ApiQuery({
-    name: 'limit',
-    required: false,
-    type: Number,
-    description: 'So dong moi trang',
-  })
   @ApiOkResponse({ type: StudentReportDto })
   getStudentReport(
     @User() user: JwtPayload,
-    @Query('groupId') groupId?: string,
-    @Query('studentGroupId') studentGroupId?: string,
-    @Query('zoneId') zoneId?: string,
-    @Query('schoolId') schoolId?: string,
-    @Query('studentId') studentId?: string,
-    @Query('fromDate') fromDate?: string,
-    @Query('toDate') toDate?: string,
-    @Query('page', new DefaultValuePipe(1), ParseIntPipe) page?: number,
-    @Query('limit', new DefaultValuePipe(10), ParseIntPipe) limit?: number,
+    @Query() query: StudentReportQueryDto,
   ): Promise<StudentReportDto> {
-    if (page && page < 1) {
-      throw new BadRequestException('page phai lon hon hoac bang 1');
-    }
-
-    if (limit && limit < 1) {
-      throw new BadRequestException('limit phai lon hon hoac bang 1');
-    }
-
-    return this.reportService.getStudentReport(
-      user,
-      {
-        zoneId,
-        schoolId,
-        groupId: groupId ?? studentGroupId,
-        studentId,
-        fromDate,
-        toDate,
-        page,
-        limit,
-      },
-    );
+    return this.reportService.getStudentReport(user, {
+      zoneId: query.zoneId,
+      schoolId: query.schoolId,
+      groupId: query.groupId ?? query.studentGroupId,
+      studentId: query.studentId,
+      fromDate: query.fromDate,
+      toDate: query.toDate,
+      page: query.page,
+      limit: query.limit,
+    });
   }
 
   @Get('schools/:schoolId/export-pdf')
@@ -163,48 +93,16 @@ export class ReportController {
       'Xuat file PDF bao cao diem tong hop cua tat ca lop trong mot truong',
   })
   @ApiProduces('application/pdf')
-  @ApiQuery({
-    name: 'examSetId',
-    required: false,
-    type: String,
-    description: 'Loc theo bo de',
-  })
-  @ApiQuery({
-    name: 'questionBankId',
-    required: false,
-    type: String,
-    description: 'Loc theo de thi/ngan hang cau hoi',
-  })
-  @ApiQuery({
-    name: 'fromDate',
-    required: false,
-    type: String,
-    description: 'Ngay bat dau loc attempt (YYYY-MM-DD)',
-  })
-  @ApiQuery({
-    name: 'toDate',
-    required: false,
-    type: String,
-    description: 'Ngay ket thuc loc attempt (YYYY-MM-DD)',
-  })
   async exportSchoolAttemptReportPdf(
     @User() user: JwtPayload,
     @Param('schoolId', ParseUUIDPipe) schoolId: string,
-    @Query('examSetId') examSetId: string | undefined,
-    @Query('questionBankId') questionBankId: string | undefined,
-    @Query('fromDate') fromDate: string | undefined,
-    @Query('toDate') toDate: string | undefined,
+    @Query() query: AttemptReportFilterQueryDto,
     @Res() res: Response,
   ): Promise<void> {
     const file = await this.reportService.exportSchoolAttemptReportPdf(
       user,
       schoolId,
-      {
-        examSetId,
-        questionBankId,
-        fromDate,
-        toDate,
-      },
+      query,
     );
 
     res.setHeader('Content-Type', 'application/pdf');
@@ -223,55 +121,15 @@ export class ReportController {
   @ApiProduces(
     'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
   )
-  @ApiQuery({
-    name: 'groupIds',
-    required: true,
-    type: String,
-    description:
-      'Danh sach ID lop/student_group, cach nhau boi dau phay. Moi lop la mot sheet.',
-  })
-  @ApiQuery({
-    name: 'examSetId',
-    required: false,
-    type: String,
-    description: 'Loc theo bo de',
-  })
-  @ApiQuery({
-    name: 'questionBankId',
-    required: false,
-    type: String,
-    description: 'Loc theo de thi/ngan hang cau hoi',
-  })
-  @ApiQuery({
-    name: 'fromDate',
-    required: false,
-    type: String,
-    description: 'Ngay bat dau loc attempt (YYYY-MM-DD)',
-  })
-  @ApiQuery({
-    name: 'toDate',
-    required: false,
-    type: String,
-    description: 'Ngay ket thuc loc attempt (YYYY-MM-DD)',
-  })
   async exportClassAttemptScoresExcel(
     @User() user: JwtPayload,
-    @Query('groupIds') groupIds: string,
-    @Query('examSetId') examSetId: string | undefined,
-    @Query('questionBankId') questionBankId: string | undefined,
-    @Query('fromDate') fromDate: string | undefined,
-    @Query('toDate') toDate: string | undefined,
+    @Query() query: ClassAttemptScoresExportQueryDto,
     @Res() res: Response,
   ): Promise<void> {
     const file = await this.reportService.exportClassAttemptScoresExcel(
       user,
-      groupIds?.split(',') ?? [],
-      {
-        examSetId,
-        questionBankId,
-        fromDate,
-        toDate,
-      },
+      query.groupIds,
+      query,
     );
 
     res.setHeader(
@@ -323,29 +181,16 @@ export class ReportController {
   @ApiProduces(
     'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
   )
-  @ApiQuery({
-    name: 'userId',
-    required: true,
-    type: String,
-    description: 'ID hoc sinh',
-  })
-  @ApiQuery({
-    name: 'questionBankId',
-    required: true,
-    type: String,
-    description: 'ID de thi/ngan hang cau hoi',
-  })
   async exportCurrentStudentBestAttemptDetailExcel(
     @User() user: JwtPayload,
-    @Query('userId', ParseUUIDPipe) userId: string,
-    @Query('questionBankId', ParseUUIDPipe) questionBankId: string,
+    @Query() query: StudentBestAttemptDetailExportQueryDto,
     @Res() res: Response,
   ): Promise<void> {
     const file =
       await this.reportService.exportCurrentStudentBestAttemptDetailExcel(
         user,
-        userId,
-        questionBankId,
+        query.userId,
+        query.questionBankId,
       );
 
     res.setHeader(
@@ -367,48 +212,16 @@ export class ReportController {
   @ApiProduces(
     'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
   )
-  @ApiQuery({
-    name: 'examSetId',
-    required: false,
-    type: String,
-    description: 'Loc theo bo de',
-  })
-  @ApiQuery({
-    name: 'questionBankId',
-    required: false,
-    type: String,
-    description: 'Loc theo de thi/ngan hang cau hoi',
-  })
-  @ApiQuery({
-    name: 'fromDate',
-    required: false,
-    type: String,
-    description: 'Ngay bat dau loc attempt (YYYY-MM-DD)',
-  })
-  @ApiQuery({
-    name: 'toDate',
-    required: false,
-    type: String,
-    description: 'Ngay ket thuc loc attempt (YYYY-MM-DD)',
-  })
   async exportGroupResultSheetExcel(
     @User() user: JwtPayload,
     @Param('groupId', ParseUUIDPipe) groupId: string,
-    @Query('examSetId') examSetId: string | undefined,
-    @Query('questionBankId') questionBankId: string | undefined,
-    @Query('fromDate') fromDate: string | undefined,
-    @Query('toDate') toDate: string | undefined,
+    @Query() query: AttemptReportFilterQueryDto,
     @Res() res: Response,
   ): Promise<void> {
     const file = await this.reportService.exportGroupResultSheetExcel(
       user,
       groupId,
-      {
-        examSetId,
-        questionBankId,
-        fromDate,
-        toDate,
-      },
+      query,
     );
 
     res.setHeader(
@@ -430,48 +243,16 @@ export class ReportController {
   @ApiProduces(
     'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
   )
-  @ApiQuery({
-    name: 'examSetId',
-    required: false,
-    type: String,
-    description: 'Loc theo bo de',
-  })
-  @ApiQuery({
-    name: 'questionBankId',
-    required: false,
-    type: String,
-    description: 'Loc theo de thi/ngan hang cau hoi',
-  })
-  @ApiQuery({
-    name: 'fromDate',
-    required: false,
-    type: String,
-    description: 'Ngay bat dau loc attempt (YYYY-MM-DD)',
-  })
-  @ApiQuery({
-    name: 'toDate',
-    required: false,
-    type: String,
-    description: 'Ngay ket thuc loc attempt (YYYY-MM-DD)',
-  })
   async exportSchoolStatSheetExcel(
     @User() user: JwtPayload,
     @Param('schoolId', ParseUUIDPipe) schoolId: string,
-    @Query('examSetId') examSetId: string | undefined,
-    @Query('questionBankId') questionBankId: string | undefined,
-    @Query('fromDate') fromDate: string | undefined,
-    @Query('toDate') toDate: string | undefined,
+    @Query() query: AttemptReportFilterQueryDto,
     @Res() res: Response,
   ): Promise<void> {
     const file = await this.reportService.exportSchoolStatSheetExcel(
       user,
       schoolId,
-      {
-        examSetId,
-        questionBankId,
-        fromDate,
-        toDate,
-      },
+      query,
     );
 
     res.setHeader(

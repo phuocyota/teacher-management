@@ -12,7 +12,7 @@ import {
   type PDFFont,
   type PDFPage,
 } from 'pdf-lib';
-import { Workbook, type Row, type Worksheet } from 'exceljs';
+import { Workbook } from 'exceljs';
 import { existsSync } from 'fs';
 import { join } from 'path';
 import { Repository } from 'typeorm';
@@ -39,6 +39,44 @@ import {
   StudentScoreTrendPointDto,
   TeacherLeaderGroupDto,
 } from './dto/report.dto';
+import {
+  ClassAttemptScoreExportRow,
+  ClassSheetRawRow,
+  ClassSheetRow,
+  ReportStudentRow,
+  SchoolAttemptReportFilters,
+  SchoolAttemptReportRow,
+  SchoolReportAccessScope,
+  SchoolStatRawRow,
+  SchoolStatRow,
+  StudentAttemptDetailContext,
+  StudentAttemptDetailRow,
+  StudentAttemptScoreStats,
+  StudentReportFilters,
+} from './interfaces/report.interface';
+import {
+  applyTableBorder,
+  clearBorders,
+  clearFill,
+  clearUnusedBorders,
+  copyRowStyle,
+  formatAttemptStatusForExport,
+  formatCompletionDuration,
+  formatDate,
+  formatDateTime,
+  formatNullableScore,
+  formatReportFilters,
+  getAssessmentLabel,
+  normalizeOptionalFilter,
+  setupSheetColumns,
+  styleDataRow,
+  styleStudentDetailRow,
+  toNullableNumber,
+  toPdfText,
+  toSafeFileName,
+  toWorksheetName,
+  truncateForWidth,
+} from './helpers/report.helper';
 
 const STUDENT_ATTEMPT_DETAIL_TEMPLATE_PATH = join(
   process.cwd(),
@@ -55,144 +93,6 @@ const SCHOOL_STAT_TEMPLATE_PATH = join(
   'templates',
   'template-excel-school.xlsx',
 );
-
-type ReportStudentRow = {
-  id: string;
-  fullName: string | null;
-  userName: string;
-  code: string;
-  studentGroupId: string | null;
-  studentGroupName: string | null;
-};
-
-type SchoolAttemptReportFilters = {
-  examSetId?: string;
-  questionBankId?: string;
-  fromDate?: string;
-  toDate?: string;
-};
-
-type StudentReportFilters = {
-  zoneId?: string;
-  schoolId?: string;
-  groupId?: string;
-  studentId?: string;
-  fromDate?: string;
-  toDate?: string;
-  page?: number;
-  limit?: number;
-};
-
-type SchoolAttemptReportRow = {
-  studentId: string;
-  fullName: string | null;
-  userName: string;
-  studentCode: string;
-  studentGroupId: string;
-  studentGroupName: string;
-  totalAttempts: string;
-  averageScore: string | null;
-  highestScore: string | null;
-  latestAttemptAt: Date | null;
-};
-
-type ClassAttemptScoreExportRow = {
-  studentId: string;
-  studentCode: string;
-  fullName: string | null;
-  userName: string;
-  attemptId: string | null;
-  examSetId: string | null;
-  examSetName: string | null;
-  questionBankId: string | null;
-  questionBankName: string | null;
-  status: string | null;
-  startedAt: Date | null;
-  submittedAt: Date | null;
-  score: string | number | null;
-};
-
-type StudentAttemptDetailRow = {
-  orderNo: number;
-  isCorrect: boolean | null;
-  pointsEarned: string | number | null;
-};
-
-type StudentAttemptScoreStats = {
-  attemptCount: number;
-  highestScore: number | null;
-  lowestScore: number | null;
-  averageScore: number | null;
-};
-
-type StudentAttemptDetailContext = {
-  attemptId: string;
-  score: number | null;
-  startedAt: Date;
-  submittedAt: Date | null;
-  studentId: string;
-  studentCode: string;
-  studentFullName: string | null;
-  studentUserName: string;
-  groupId: string | null;
-  groupName: string | null;
-  schoolName: string | null;
-  examSetName: string | null;
-  questionBankName: string | null;
-  questionBankId: string;
-};
-
-type ClassSheetRawRow = {
-  studentId: string;
-  studentCode: string;
-  fullName: string | null;
-  userName: string;
-  attemptId: string | null;
-  examSetName: string | null;
-  questionBankName: string | null;
-  subjectName: string | null;
-  startedAt: Date | null;
-  submittedAt: Date | null;
-  score: string | number | null;
-};
-
-type ClassSheetRow = {
-  studentId: string;
-  studentCode: string;
-  fullName: string;
-  subjectName: string;
-  correctCount: number;
-  score: number | null;
-  resultLabel: string;
-  startedAt: Date | null;
-};
-
-type SchoolStatRawRow = {
-  studentId: string;
-  studentCode: string;
-  studentGroupId: string;
-  studentGroupName: string;
-  fullName: string | null;
-  userName: string;
-  attemptId: string | null;
-  score: string | number | null;
-  startedAt: Date | null;
-};
-
-type SchoolStatRow = {
-  groupId: string;
-  groupName: string;
-  totalStudents: number;
-  attemptedStudents: number;
-  absentStudents: number;
-  highestScore: number | null;
-  lowestScore: number | null;
-  underFiveCount: number;
-  averageScore: number | null;
-  passRate: number;
-  ranking: number | null;
-  assessment: string;
-};
 
 @Injectable()
 export class ReportService {
@@ -305,25 +205,17 @@ export class ReportService {
     filters: StudentReportFilters,
   ): Promise<StudentReportDto> {
     this.ensureAuthenticatedUser(user);
-    this.validateDateRange(filters.fromDate, filters.toDate);
 
-    const groupId = this.normalizeOptionalFilter(filters.groupId);
-    const zoneId = this.normalizeOptionalFilter(filters.zoneId);
-    const schoolId = this.normalizeOptionalFilter(filters.schoolId);
-    const studentId = this.normalizeOptionalFilter(filters.studentId);
+    const groupId = normalizeOptionalFilter(filters.groupId);
+    const zoneId = normalizeOptionalFilter(filters.zoneId);
+    const schoolId = normalizeOptionalFilter(filters.schoolId);
+    const studentId = normalizeOptionalFilter(filters.studentId);
     const isAllStudents = !studentId || studentId.toLowerCase() === 'all';
 
     if (!groupId && !schoolId && !zoneId) {
       throw new BadRequestException(
         'Can chon it nhat mot filter: zoneId, schoolId hoac groupId',
       );
-    }
-
-    this.validateOptionalUuid(zoneId, 'zoneId');
-    this.validateOptionalUuid(schoolId, 'schoolId');
-    this.validateOptionalUuid(groupId, 'groupId');
-    if (!isAllStudents) {
-      this.validateOptionalUuid(studentId, 'studentId');
     }
 
     const safePage =
@@ -371,8 +263,8 @@ export class ReportService {
 
     const summary: StudentReportSummaryDto = {
       totalAttempts: Number(summaryRaw?.totalAttempts ?? 0),
-      averageScore: this.toNullableNumber(summaryRaw?.averageScore),
-      highestScore: this.toNullableNumber(summaryRaw?.highestScore),
+      averageScore: toNullableNumber(summaryRaw?.averageScore),
+      highestScore: toNullableNumber(summaryRaw?.highestScore),
       latestAttemptAt: summaryRaw?.latestAttemptAt
         ? new Date(summaryRaw.latestAttemptAt)
         : null,
@@ -402,8 +294,8 @@ export class ReportService {
     const trend: StudentScoreTrendPointDto[] = trendRows.map((row) => ({
       date: row.date,
       attemptCount: Number(row.attemptCount) || 0,
-      averageScore: this.toNullableNumber(row.averageScore),
-      highestScore: this.toNullableNumber(row.highestScore),
+      averageScore: toNullableNumber(row.averageScore),
+      highestScore: toNullableNumber(row.highestScore),
     }));
 
     const historyQb = this.buildAttemptReportScope(user, {
@@ -441,12 +333,12 @@ export class ReportService {
         examSetName: string;
         status: StudentAttemptDto['status'];
         startedAt: Date;
-      submittedAt: Date | null;
-      score: string | null;
-      studentId: string;
-      studentName: string | null;
-      studentCode: string | null;
-    }>(),
+        submittedAt: Date | null;
+        score: string | null;
+        studentId: string;
+        studentName: string | null;
+        studentCode: string | null;
+      }>(),
       this.buildAttemptReportScope(user, {
         zoneId,
         schoolId,
@@ -466,7 +358,7 @@ export class ReportService {
       status: row.status,
       startedAt: new Date(row.startedAt),
       submittedAt: row.submittedAt ? new Date(row.submittedAt) : null,
-      score: this.toNullableNumber(row.score),
+      score: toNullableNumber(row.score),
       studentId: row.studentId,
       studentName: row.studentName,
       studentCode: row.studentCode,
@@ -494,7 +386,6 @@ export class ReportService {
     filters: SchoolAttemptReportFilters,
   ): Promise<{ buffer: Buffer; fileName: string }> {
     this.ensureAuthenticatedUser(user);
-    this.validateDateRange(filters.fromDate, filters.toDate);
 
     const school = await this.schoolRepo.findOne({ where: { id: schoolId } });
     if (!school) {
@@ -503,9 +394,13 @@ export class ReportService {
       );
     }
 
-    this.ensureCanAccessSchoolReport(school, user);
+    const accessScope = await this.ensureCanAccessSchoolReport(school, user);
 
-    const rows = await this.getSchoolAttemptReportRows(schoolId, filters);
+    const rows = await this.getSchoolAttemptReportRows(
+      schoolId,
+      filters,
+      accessScope,
+    );
     const buffer = await this.buildSchoolAttemptReportPdf(
       school,
       rows,
@@ -514,7 +409,7 @@ export class ReportService {
 
     return {
       buffer,
-      fileName: `school-attempt-report-${this.toSafeFileName(school.code)}.pdf`,
+      fileName: `school-attempt-report-${toSafeFileName(school.code)}.pdf`,
     };
   }
 
@@ -524,7 +419,6 @@ export class ReportService {
     filters: SchoolAttemptReportFilters,
   ): Promise<{ buffer: Buffer; fileName: string }> {
     this.ensureAuthenticatedUser(user);
-    this.validateDateRange(filters.fromDate, filters.toDate);
 
     const normalizedGroupIds = [
       ...new Set(groupIds.map((id) => id.trim())),
@@ -532,11 +426,6 @@ export class ReportService {
 
     if (normalizedGroupIds.length === 0) {
       throw new BadRequestException('groupIds la bat buoc');
-    }
-
-    const invalidGroupId = normalizedGroupIds.find((id) => !this.isUuid(id));
-    if (invalidGroupId) {
-      throw new BadRequestException(`groupId khong hop le: ${invalidGroupId}`);
     }
 
     const workbook = new Workbook();
@@ -564,7 +453,7 @@ export class ReportService {
 
     return {
       buffer: Buffer.from(xlsx),
-      fileName: `class-attempt-scores-${this.formatDate(new Date())}.xlsx`,
+      fileName: `class-attempt-scores-${formatDate(new Date())}.xlsx`,
     };
   }
 
@@ -608,7 +497,7 @@ export class ReportService {
     const xlsx = await workbook.xlsx.writeBuffer();
     return {
       buffer: Buffer.from(xlsx),
-      fileName: `chi-tiet-hs-${this.toSafeFileName(context.studentCode)}.xlsx`,
+      fileName: `chi-tiet-hs-${toSafeFileName(context.studentCode)}.xlsx`,
     };
   }
 
@@ -685,7 +574,6 @@ export class ReportService {
     filters: SchoolAttemptReportFilters,
   ): Promise<{ buffer: Buffer; fileName: string }> {
     this.ensureAuthenticatedUser(user);
-    this.validateDateRange(filters.fromDate, filters.toDate);
     await this.ensureCanAccessStudentGroup(groupId, user);
 
     const studentGroup = await this.studentGroupRepo.findOne({
@@ -706,7 +594,7 @@ export class ReportService {
     const xlsx = await workbook.xlsx.writeBuffer();
     return {
       buffer: Buffer.from(xlsx),
-      fileName: `ket-qua-lop-${this.toSafeFileName(studentGroup.name)}.xlsx`,
+      fileName: `ket-qua-lop-${toSafeFileName(studentGroup.name)}.xlsx`,
     };
   }
 
@@ -716,7 +604,6 @@ export class ReportService {
     filters: SchoolAttemptReportFilters,
   ): Promise<{ buffer: Buffer; fileName: string }> {
     this.ensureAuthenticatedUser(user);
-    this.validateDateRange(filters.fromDate, filters.toDate);
 
     const school = await this.schoolRepo.findOne({ where: { id: schoolId } });
     if (!school) {
@@ -725,16 +612,20 @@ export class ReportService {
       );
     }
 
-    this.ensureCanAccessSchoolReport(school, user);
+    const accessScope = await this.ensureCanAccessSchoolReport(school, user);
 
-    const rows = await this.getSchoolStatSheetRows(schoolId, filters);
+    const rows = await this.getSchoolStatSheetRows(
+      schoolId,
+      filters,
+      accessScope,
+    );
     const workbook = await this.createSchoolStatWorkbook();
     this.addSchoolStatWorksheet(workbook, school, rows, filters);
 
     const xlsx = await workbook.xlsx.writeBuffer();
     return {
       buffer: Buffer.from(xlsx),
-      fileName: `thong-ke-truong-${this.toSafeFileName(school.code)}.xlsx`,
+      fileName: `thong-ke-truong-${toSafeFileName(school.code)}.xlsx`,
     };
   }
 
@@ -744,21 +635,51 @@ export class ReportService {
     }
   }
 
-  private ensureCanAccessSchoolReport(
+  private async ensureCanAccessSchoolReport(
     school: SchoolEntity,
     user: JwtPayload,
-  ): void {
+  ): Promise<SchoolReportAccessScope> {
     if (user.userType === UserType.ADMIN) {
-      return;
+      return {};
     }
 
     if (school.principalUserId === user.userId) {
-      return;
+      return {};
+    }
+
+    const groupIds = await this.getAccessibleSchoolGroupIds(
+      school.id,
+      user.userId,
+    );
+    if (groupIds.length > 0) {
+      return { groupIds };
     }
 
     throw new ForbiddenException(
       'Ban khong co quyen xem bao cao cua truong nay',
     );
+  }
+
+  private async getAccessibleSchoolGroupIds(
+    schoolId: string,
+    userId: string,
+  ): Promise<string[]> {
+    const rows = await this.studentGroupRepo
+      .createQueryBuilder('studentGroup')
+      .select('studentGroup.id', 'id')
+      .innerJoin(
+        'studentGroup.members',
+        'studentGroupMember',
+        'studentGroupMember.user_id = :userId AND studentGroupMember.role = :leaderRole',
+        {
+          userId,
+          leaderRole: GroupMemberRole.LEADER,
+        },
+      )
+      .where('studentGroup.schoolId = :schoolId', { schoolId })
+      .getRawMany<{ id: string }>();
+
+    return rows.map((row) => row.id);
   }
 
   private async ensureCanAccessStudentGroup(
@@ -912,9 +833,10 @@ export class ReportService {
   private async getSchoolAttemptReportRows(
     schoolId: string,
     filters: SchoolAttemptReportFilters,
+    accessScope: SchoolReportAccessScope = {},
   ): Promise<SchoolAttemptReportRow[]> {
     const attemptJoinConditions = ['attempt.student_id = student.id'];
-    const params: Record<string, string> = {
+    const params: Record<string, string | string[]> = {
       schoolId,
       userType: UserType.STUDENT,
     };
@@ -939,7 +861,7 @@ export class ReportService {
       params.toDate = filters.toDate;
     }
 
-    return this.studentRepo
+    const qb = this.studentRepo
       .createQueryBuilder('student')
       .innerJoin(UserEntity, 'user', 'user.id = student.id')
       .innerJoin(
@@ -971,8 +893,15 @@ export class ReportService {
       .addGroupBy('studentGroup.id')
       .addGroupBy('studentGroup.name')
       .orderBy('studentGroup.name', 'ASC')
-      .addOrderBy('COALESCE(user.full_name, user.user_name)', 'ASC')
-      .getRawMany<SchoolAttemptReportRow>();
+      .addOrderBy('COALESCE(user.full_name, user.user_name)', 'ASC');
+
+    if (accessScope.groupIds?.length) {
+      qb.andWhere('studentGroup.id IN (:...accessGroupIds)', {
+        accessGroupIds: accessScope.groupIds,
+      });
+    }
+
+    return qb.getRawMany<SchoolAttemptReportRow>();
   }
 
   private async getClassAttemptScoreRows(
@@ -1037,9 +966,7 @@ export class ReportService {
     studentGroup: StudentGroupEntity,
     rows: ClassAttemptScoreExportRow[],
   ): void {
-    const worksheet = workbook.addWorksheet(
-      this.toWorksheetName(studentGroup.name),
-    );
+    const worksheet = workbook.addWorksheet(toWorksheetName(studentGroup.name));
 
     worksheet.columns = [
       { header: 'STT', key: 'index', width: 8 },
@@ -1057,7 +984,7 @@ export class ReportService {
     worksheet.insertRows(1, [
       [`Lop: ${studentGroup.name}`],
       [`Truong: ${studentGroup.school?.name ?? ''}`],
-      [`Ngay xuat: ${this.formatDateTime(new Date())}`],
+      [`Ngay xuat: ${formatDateTime(new Date())}`],
       [],
     ]);
 
@@ -1073,12 +1000,10 @@ export class ReportService {
         userName: row.userName,
         examSetName: row.examSetName ?? '',
         questionBankName: row.questionBankName ?? '',
-        status: this.formatAttemptStatusForExport(row.status),
-        startedAt: row.startedAt ? this.formatDateTime(row.startedAt) : '',
-        submittedAt: row.submittedAt
-          ? this.formatDateTime(row.submittedAt)
-          : '',
-        score: this.toNullableNumber(row.score) ?? '',
+        status: formatAttemptStatusForExport(row.status),
+        startedAt: row.startedAt ? formatDateTime(row.startedAt) : '',
+        submittedAt: row.submittedAt ? formatDateTime(row.submittedAt) : '',
+        score: toNullableNumber(row.score) ?? '',
       });
     });
 
@@ -1179,9 +1104,9 @@ export class ReportService {
 
     return {
       attemptCount: Number(row?.attemptCount ?? 0),
-      highestScore: this.toNullableNumber(row?.highestScore ?? null),
-      lowestScore: this.toNullableNumber(row?.lowestScore ?? null),
-      averageScore: this.toNullableNumber(row?.averageScore ?? null),
+      highestScore: toNullableNumber(row?.highestScore ?? null),
+      lowestScore: toNullableNumber(row?.lowestScore ?? null),
+      averageScore: toNullableNumber(row?.averageScore ?? null),
     };
   }
 
@@ -1205,7 +1130,7 @@ export class ReportService {
     const correctCounts = await this.getCorrectCountsByAttemptIds(attemptIds);
 
     return [...latestRows.values()].map((row) => {
-      const score = this.toNullableNumber(row.score);
+      const score = toNullableNumber(row.score);
       return {
         studentId: row.studentId,
         studentCode: row.studentCode,
@@ -1307,8 +1232,13 @@ export class ReportService {
   private async getSchoolStatSheetRows(
     schoolId: string,
     filters: SchoolAttemptReportFilters,
+    accessScope: SchoolReportAccessScope = {},
   ): Promise<SchoolStatRow[]> {
-    const rawRows = await this.getSchoolStatRawRows(schoolId, filters);
+    const rawRows = await this.getSchoolStatRawRows(
+      schoolId,
+      filters,
+      accessScope,
+    );
     const latestRows = new Map<string, SchoolStatRawRow>();
 
     for (const row of rawRows) {
@@ -1338,7 +1268,7 @@ export class ReportService {
         } satisfies SchoolStatRow);
 
       current.totalStudents += 1;
-      const score = this.toNullableNumber(row.score);
+      const score = toNullableNumber(row.score);
       if (row.attemptId && score !== null) {
         current.attemptedStudents += 1;
         current.highestScore =
@@ -1377,7 +1307,7 @@ export class ReportService {
         averageScore,
         absentStudents,
         passRate,
-        assessment: this.getAssessmentLabel(averageScore),
+        assessment: getAssessmentLabel(averageScore),
       };
     });
 
@@ -1401,9 +1331,10 @@ export class ReportService {
   private async getSchoolStatRawRows(
     schoolId: string,
     filters: SchoolAttemptReportFilters,
+    accessScope: SchoolReportAccessScope = {},
   ): Promise<SchoolStatRawRow[]> {
     const attemptJoinConditions = ['attempt.student_id = student.id'];
-    const params: Record<string, string> = {
+    const params: Record<string, string | string[]> = {
       schoolId,
       userType: UserType.STUDENT,
     };
@@ -1428,7 +1359,7 @@ export class ReportService {
       params.toDate = filters.toDate;
     }
 
-    return this.studentRepo
+    const qb = this.studentRepo
       .createQueryBuilder('student')
       .innerJoin(UserEntity, 'user', 'user.id = student.id')
       .innerJoin(
@@ -1451,8 +1382,15 @@ export class ReportService {
       .setParameters(params)
       .orderBy('studentGroup.name', 'ASC')
       .addOrderBy('COALESCE(user.full_name, user.user_name)', 'ASC')
-      .addOrderBy('attempt.started_at', 'DESC')
-      .getRawMany<SchoolStatRawRow>();
+      .addOrderBy('attempt.started_at', 'DESC');
+
+    if (accessScope.groupIds?.length) {
+      qb.andWhere('studentGroup.id IN (:...accessGroupIds)', {
+        accessGroupIds: accessScope.groupIds,
+      });
+    }
+
+    return qb.getRawMany<SchoolStatRawRow>();
   }
 
   private addStudentDetailWorksheet(
@@ -1466,7 +1404,7 @@ export class ReportService {
       workbook.addWorksheet('CHI TIẾT HS');
 
     if (!worksheet.columns.length) {
-      this.setupSheetColumns(worksheet, [14, 14, 14, 22, 22, 22]);
+      setupSheetColumns(worksheet, [14, 14, 14, 22, 22, 22]);
     }
 
     worksheet.getCell('A1').value =
@@ -1529,7 +1467,7 @@ export class ReportService {
       } else if (row.isCorrect === false) {
         wrongCount += 1;
       }
-      this.styleStudentDetailRow(excelRow);
+      styleStudentDetailRow(excelRow);
     });
 
     const summaryRowIndex =
@@ -1544,41 +1482,33 @@ export class ReportService {
     worksheet.getCell(`A${summaryRowIndex}`).value = 'TỔNG';
     worksheet.getCell(`B${summaryRowIndex}`).value = correctCount;
     worksheet.getCell(`C${summaryRowIndex}`).value = wrongCount;
-    this.styleStudentDetailRow(worksheet.getRow(summaryRowIndex), true);
-    this.clearBorders(worksheet, 9, summaryRowIndex, 3);
-    this.clearFill(worksheet, 1, Math.max(35, averageScoreRowIndex), 8);
-    this.clearUnusedBorders(
-      worksheet,
-      1,
-      Math.max(35, averageScoreRowIndex),
-      8,
-    );
+    styleStudentDetailRow(worksheet.getRow(summaryRowIndex), true);
+    clearBorders(worksheet, 9, summaryRowIndex, 3);
+    clearFill(worksheet, 1, Math.max(35, averageScoreRowIndex), 8);
+    clearUnusedBorders(worksheet, 1, Math.max(35, averageScoreRowIndex), 8);
 
     worksheet.getCell(`B${scoreRowIndex}`).value =
-      `ĐIỂM: ${this.formatNullableScore(context.score)}`;
+      `ĐIỂM: ${formatNullableScore(context.score)}`;
     worksheet.getCell(`B${dateRowIndex}`).value = `Ngày kiểm tra: ${
       context.submittedAt
-        ? this.formatDate(new Date(context.submittedAt))
-        : this.formatDate(context.startedAt)
+        ? formatDate(new Date(context.submittedAt))
+        : formatDate(context.startedAt)
     }`;
-    worksheet.getCell(`D${scoreRowIndex}`).value =
-      this.formatCompletionDuration(context.startedAt, context.submittedAt);
+    worksheet.getCell(`D${scoreRowIndex}`).value = formatCompletionDuration(
+      context.startedAt,
+      context.submittedAt,
+    );
     worksheet.getCell(`A${noteRowIndex}`).value = 'Ghi chú:';
     worksheet.getCell(`B${noteRowIndex}`).value =
       `Số lần làm bài: ${stats.attemptCount}`;
     worksheet.getCell(`B${highestScoreRowIndex}`).value =
-      `Điểm số cao nhất: ${this.formatNullableScore(stats.highestScore)}`;
+      `Điểm số cao nhất: ${formatNullableScore(stats.highestScore)}`;
     worksheet.getCell(`B${lowestScoreRowIndex}`).value =
-      `Điểm số thấp nhất: ${this.formatNullableScore(stats.lowestScore)}`;
+      `Điểm số thấp nhất: ${formatNullableScore(stats.lowestScore)}`;
     worksheet.getCell(`B${averageScoreRowIndex}`).value =
-      `Trung bình điểm thi: ${this.formatNullableScore(stats.averageScore)}`;
-    this.clearFill(worksheet, 1, Math.max(35, averageScoreRowIndex), 8);
-    this.clearUnusedBorders(
-      worksheet,
-      1,
-      Math.max(35, averageScoreRowIndex),
-      8,
-    );
+      `Trung bình điểm thi: ${formatNullableScore(stats.averageScore)}`;
+    clearFill(worksheet, 1, Math.max(35, averageScoreRowIndex), 8);
+    clearUnusedBorders(worksheet, 1, Math.max(35, averageScoreRowIndex), 8);
   }
 
   private addClassResultWorksheet(
@@ -1592,7 +1522,7 @@ export class ReportService {
       workbook.addWorksheet('KẾT QUẢ LỚP');
 
     if (!worksheet.columns.length) {
-      this.setupSheetColumns(worksheet, [8, 28, 18, 14, 14, 20, 26, 20, 16]);
+      setupSheetColumns(worksheet, [8, 28, 18, 14, 14, 20, 26, 20, 16]);
     }
 
     const dataWorksheet = workbook.getWorksheet('data');
@@ -1616,7 +1546,7 @@ export class ReportService {
       const rowIndex = dataStartRow + index;
       const excelRow = worksheet.getRow(rowIndex);
       if (rowIndex !== dataStartRow) {
-        this.copyRowStyle(templateRow, excelRow, 10);
+        copyRowStyle(templateRow, excelRow, 10);
         worksheet.mergeCells(rowIndex, 9, rowIndex, 10);
       }
       excelRow.getCell(1).value = index + 1;
@@ -1627,12 +1557,12 @@ export class ReportService {
         row.score === null ? '' : Number(row.score.toFixed(2));
       excelRow.getCell(6).value = row.resultLabel;
       excelRow.getCell(7).value = row.startedAt
-        ? this.formatDateTime(row.startedAt)
+        ? formatDateTime(row.startedAt)
         : '';
       excelRow.getCell(8).value = '';
       excelRow.getCell(9).value = '';
       excelRow.getCell(10).value = '';
-      this.styleDataRow(excelRow);
+      styleDataRow(excelRow);
       excelRow.commit();
     });
 
@@ -1642,7 +1572,7 @@ export class ReportService {
       }
     }
 
-    this.applyTableBorder(
+    applyTableBorder(
       worksheet,
       9,
       Math.max(dataStartRow, dataStartRow + rows.length - 1),
@@ -1661,7 +1591,7 @@ export class ReportService {
       workbook.addWorksheet('Thống kê TRƯỜNG.KHU VỰC');
 
     if (!worksheet.columns.length) {
-      this.setupSheetColumns(
+      setupSheetColumns(
         worksheet,
         [22, 12, 12, 12, 12, 12, 16, 12, 14, 10, 16, 16],
       );
@@ -1685,7 +1615,7 @@ export class ReportService {
       const rowIndex = dataStartRow + index;
       const excelRow = worksheet.getRow(rowIndex);
       if (rowIndex !== dataStartRow) {
-        this.copyRowStyle(templateRow, excelRow, 12);
+        copyRowStyle(templateRow, excelRow, 12);
       }
       excelRow.getCell(1).value = row.groupName;
       excelRow.getCell(2).value = row.totalStudents;
@@ -1702,7 +1632,7 @@ export class ReportService {
       excelRow.getCell(10).value = row.ranking ?? '';
       excelRow.getCell(11).value = row.assessment;
       excelRow.getCell(12).value = '';
-      this.styleDataRow(excelRow);
+      styleDataRow(excelRow);
       excelRow.commit();
     });
 
@@ -1712,146 +1642,12 @@ export class ReportService {
       }
     }
 
-    this.applyTableBorder(
+    applyTableBorder(
       worksheet,
       8,
       Math.max(dataStartRow, dataStartRow + rows.length - 1),
       12,
     );
-  }
-
-  private setupSheetColumns(worksheet: Worksheet, widths: number[]): void {
-    worksheet.columns = widths.map((width) => ({ width }));
-  }
-
-  private styleTableHeader(row: Row): void {
-    row.font = { bold: true };
-    row.alignment = {
-      vertical: 'middle',
-      horizontal: 'center',
-      wrapText: true,
-    };
-    row.eachCell((cell) => {
-      cell.fill = {
-        type: 'pattern',
-        pattern: 'solid',
-        fgColor: { argb: 'D9EAF7' },
-      };
-    });
-  }
-
-  private styleDataRow(row: Row): void {
-    row.alignment = {
-      vertical: 'middle',
-      horizontal: 'center',
-      wrapText: true,
-    };
-  }
-
-  private copyRowStyle(source: Row, target: Row, totalColumns: number): void {
-    target.height = source.height;
-    for (let col = 1; col <= totalColumns; col += 1) {
-      target.getCell(col).style = JSON.parse(
-        JSON.stringify(source.getCell(col).style ?? {}),
-      );
-    }
-  }
-
-  private styleStudentDetailRow(row: Row, bold = false): void {
-    if (bold) {
-      row.font = { bold: true };
-    }
-    row.alignment = {
-      vertical: 'middle',
-      horizontal: 'center',
-      wrapText: true,
-    };
-  }
-
-  private clearFill(
-    worksheet: Worksheet,
-    fromRow: number,
-    toRow: number,
-    totalColumns: number,
-  ): void {
-    for (let rowIndex = fromRow; rowIndex <= toRow; rowIndex += 1) {
-      const row = worksheet.getRow(rowIndex);
-      for (let col = 1; col <= totalColumns; col += 1) {
-        row.getCell(col).fill = {
-          type: 'pattern',
-          pattern: 'none',
-        };
-      }
-    }
-  }
-
-  private clearUnusedBorders(
-    worksheet: Worksheet,
-    fromRow: number,
-    toRow: number,
-    totalColumns: number,
-  ): void {
-    for (let rowIndex = fromRow; rowIndex <= toRow; rowIndex += 1) {
-      const row = worksheet.getRow(rowIndex);
-      for (let col = 1; col <= totalColumns; col += 1) {
-        const cell = row.getCell(col);
-        const hasValue =
-          cell.value !== null && cell.value !== undefined && cell.value !== '';
-        if (!hasValue) {
-          cell.border = {};
-        }
-      }
-    }
-  }
-
-  private clearBorders(
-    worksheet: Worksheet,
-    fromRow: number,
-    toRow: number,
-    totalColumns: number,
-  ): void {
-    for (let rowIndex = fromRow; rowIndex <= toRow; rowIndex += 1) {
-      const row = worksheet.getRow(rowIndex);
-      for (let col = 1; col <= totalColumns; col += 1) {
-        row.getCell(col).border = {};
-      }
-    }
-  }
-
-  private applyTableBorder(
-    worksheet: Worksheet,
-    fromRow: number,
-    toRow: number,
-    totalColumns: number,
-  ): void {
-    for (let rowIndex = fromRow; rowIndex <= toRow; rowIndex += 1) {
-      const row = worksheet.getRow(rowIndex);
-      for (let col = 1; col <= totalColumns; col += 1) {
-        const cell = row.getCell(col);
-        cell.border = {
-          top: { style: 'thin' },
-          left: { style: 'thin' },
-          bottom: { style: 'thin' },
-          right: { style: 'thin' },
-        };
-      }
-    }
-  }
-
-  private getAssessmentLabel(score: number | null): string {
-    if (score === null) {
-      return 'Chua co du lieu';
-    }
-    if (score >= 8) {
-      return 'Tot';
-    }
-    if (score >= 6.5) {
-      return 'Kha';
-    }
-    if (score >= 5) {
-      return 'Dat';
-    }
-    return 'Can ho tro';
   }
 
   private buildAttemptScope(
@@ -1934,61 +1730,6 @@ export class ReportService {
     return qb;
   }
 
-  private normalizeOptionalFilter(value?: string): string | undefined {
-    const normalized = value?.trim();
-    if (!normalized || normalized.toLowerCase() === 'all') {
-      return undefined;
-    }
-    return normalized;
-  }
-
-  private validateOptionalUuid(value: string | undefined, fieldName: string) {
-    if (!value || value.toLowerCase() === 'all') {
-      return;
-    }
-
-    const uuidRegex =
-      /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
-
-    if (!uuidRegex.test(value)) {
-      throw new BadRequestException(`${fieldName} khong hop le`);
-    }
-  }
-
-  private validateDateRange(fromDate?: string, toDate?: string): void {
-    if (fromDate) {
-      this.validateDate(fromDate, 'fromDate');
-    }
-
-    if (toDate) {
-      this.validateDate(toDate, 'toDate');
-    }
-
-    if (fromDate && toDate && fromDate > toDate) {
-      throw new BadRequestException('fromDate phai nho hon hoac bang toDate');
-    }
-  }
-
-  private validateDate(value: string, fieldName: string): void {
-    const isoDateRegex = /^\d{4}-\d{2}-\d{2}$/;
-    if (!isoDateRegex.test(value)) {
-      throw new BadRequestException(
-        `${fieldName} phai theo dinh dang YYYY-MM-DD`,
-      );
-    }
-  }
-
-  private toNullableNumber(
-    value: string | number | null | undefined,
-  ): number | null {
-    if (value === null || value === undefined) {
-      return null;
-    }
-
-    const parsed = Number(value);
-    return Number.isNaN(parsed) ? null : parsed;
-  }
-
   private async buildSchoolAttemptReportPdf(
     school: SchoolEntity,
     rows: SchoolAttemptReportRow[],
@@ -2026,7 +1767,7 @@ export class ReportService {
       maxWidth?: number,
     ) => {
       targetPage.drawText(
-        this.truncateForWidth(targetFont, this.toPdfText(text), size, maxWidth),
+        truncateForWidth(targetFont, toPdfText(text), size, maxWidth),
         {
           x,
           y: textY,
@@ -2071,15 +1812,9 @@ export class ReportService {
     y -= 24;
     drawText(page, `Truong: ${school.name} (${school.code})`, margin, y, 11);
     y -= 16;
-    drawText(
-      page,
-      `Ngay xuat: ${this.formatDateTime(new Date())}`,
-      margin,
-      y,
-      10,
-    );
+    drawText(page, `Ngay xuat: ${formatDateTime(new Date())}`, margin, y, 10);
     y -= 16;
-    drawText(page, this.formatReportFilters(filters), margin, y, 10);
+    drawText(page, formatReportFilters(filters), margin, y, 10);
     y -= tableTopGap;
 
     drawTableHeader();
@@ -2106,9 +1841,9 @@ export class ReportService {
         row.fullName ?? row.userName,
         row.userName,
         String(Number(row.totalAttempts) || 0),
-        this.formatNullableScore(row.averageScore),
-        this.formatNullableScore(row.highestScore),
-        row.latestAttemptAt ? this.formatDate(row.latestAttemptAt) : '-',
+        formatNullableScore(row.averageScore),
+        formatNullableScore(row.highestScore),
+        row.latestAttemptAt ? formatDate(row.latestAttemptAt) : '-',
       ];
 
       page.drawLine({
@@ -2160,121 +1895,5 @@ export class ReportService {
 
     const pdfBytes = await pdfDoc.save();
     return Buffer.from(pdfBytes);
-  }
-
-  private toPdfText(value: string): string {
-    return value
-      .replace(/đ/g, 'd')
-      .replace(/Đ/g, 'D')
-      .normalize('NFD')
-      .replace(/[\u0300-\u036f]/g, '')
-      .replace(/[^\x20-\x7E]/g, '');
-  }
-
-  private truncateForWidth(
-    font: PDFFont,
-    value: string,
-    size: number,
-    maxWidth?: number,
-  ): string {
-    if (!maxWidth || font.widthOfTextAtSize(value, size) <= maxWidth) {
-      return value;
-    }
-
-    let truncated = value;
-    while (
-      truncated.length > 0 &&
-      font.widthOfTextAtSize(`${truncated}...`, size) > maxWidth
-    ) {
-      truncated = truncated.slice(0, -1);
-    }
-
-    return truncated ? `${truncated}...` : '';
-  }
-
-  private formatNullableScore(value: string | number | null): string {
-    const score = this.toNullableNumber(value);
-    return score === null ? '-' : score.toFixed(2);
-  }
-
-  private formatDate(value: Date): string {
-    return value.toISOString().slice(0, 10);
-  }
-
-  private formatDateTime(value: Date): string {
-    return value.toISOString().replace('T', ' ').slice(0, 19);
-  }
-
-  private formatCompletionDuration(
-    startedAt: Date,
-    submittedAt: Date | null,
-  ): string {
-    if (!submittedAt) {
-      return '-';
-    }
-
-    const durationInSeconds = Math.max(
-      0,
-      Math.floor(
-        (new Date(submittedAt).getTime() - new Date(startedAt).getTime()) /
-          1000,
-      ),
-    );
-    const hours = Math.floor(durationInSeconds / 3600);
-    const minutes = Math.floor((durationInSeconds % 3600) / 60);
-    const seconds = durationInSeconds % 60;
-
-    if (hours > 0) {
-      return `${hours} giờ ${minutes} phút ${seconds} giây`;
-    }
-
-    if (minutes > 0) {
-      return `${minutes} phút ${seconds} giây`;
-    }
-
-    return `${seconds} giây`;
-  }
-
-  private formatReportFilters(filters: SchoolAttemptReportFilters): string {
-    const parts = [
-      filters.examSetId ? `Bo de: ${filters.examSetId}` : null,
-      filters.questionBankId ? `De thi: ${filters.questionBankId}` : null,
-      filters.fromDate ? `Tu ngay: ${filters.fromDate}` : null,
-      filters.toDate ? `Den ngay: ${filters.toDate}` : null,
-    ].filter(Boolean);
-
-    return parts.length ? parts.join(' | ') : 'Bo loc: Tat ca bai lam';
-  }
-
-  private formatAttemptStatusForExport(status: string | null): string {
-    switch (status) {
-      case 'DOING':
-        return 'Dang lam';
-      case 'SUBMITTED':
-        return 'Hoan thanh';
-      default:
-        return status ?? '';
-    }
-  }
-
-  private toSafeFileName(value: string): string {
-    return this.toPdfText(value)
-      .toLowerCase()
-      .replace(/[^a-z0-9]+/g, '-')
-      .replace(/^-+|-+$/g, '');
-  }
-
-  private toWorksheetName(value: string): string {
-    const sanitized = this.toPdfText(value)
-      .replace(/[:\\/?*\[\]]/g, ' ')
-      .trim();
-
-    return (sanitized || 'Sheet').slice(0, 31);
-  }
-
-  private isUuid(value: string): boolean {
-    return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
-      value,
-    );
   }
 }
