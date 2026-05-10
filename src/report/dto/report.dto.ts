@@ -1,6 +1,179 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+import { Transform, Type } from 'class-transformer';
+import {
+  ArrayNotEmpty,
+  IsArray,
+  IsInt,
+  IsOptional,
+  IsUUID,
+  Matches,
+  Min,
+  Validate,
+  ValidationArguments,
+  ValidatorConstraint,
+  ValidatorConstraintInterface,
+} from 'class-validator';
 import { AttemptStatus } from 'src/attempt/enum/attempt-status.enum';
 import { GroupType } from 'src/group/enum/group-type.enum';
+
+const ISO_DATE_REGEX = /^\d{4}-\d{2}-\d{2}$/;
+const UUID_OR_ALL_REGEX =
+  /^(all|[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12})$/i;
+
+@ValidatorConstraint({ name: 'DateRange', async: false })
+class DateRangeConstraint implements ValidatorConstraintInterface {
+  validate(_: unknown, args: ValidationArguments): boolean {
+    const object = args.object as { fromDate?: string; toDate?: string };
+    return (
+      !object.fromDate || !object.toDate || object.fromDate <= object.toDate
+    );
+  }
+
+  defaultMessage(): string {
+    return 'fromDate phai nho hon hoac bang toDate';
+  }
+}
+
+class ReportDateRangeQueryDto {
+  @ApiPropertyOptional({
+    type: String,
+    description: 'Ngay bat dau loc attempt (YYYY-MM-DD)',
+  })
+  @IsOptional()
+  @Matches(ISO_DATE_REGEX, {
+    message: 'fromDate phai theo dinh dang YYYY-MM-DD',
+  })
+  fromDate?: string;
+
+  @ApiPropertyOptional({
+    type: String,
+    description: 'Ngay ket thuc loc attempt (YYYY-MM-DD)',
+  })
+  @IsOptional()
+  @Matches(ISO_DATE_REGEX, {
+    message: 'toDate phai theo dinh dang YYYY-MM-DD',
+  })
+  @Validate(DateRangeConstraint)
+  toDate?: string;
+}
+
+export class StudentReportQueryDto extends ReportDateRangeQueryDto {
+  @ApiPropertyOptional({
+    type: String,
+    description: 'ID nhom hoc sinh (student_group.id)',
+  })
+  @IsOptional()
+  @Matches(UUID_OR_ALL_REGEX, { message: 'groupId khong hop le' })
+  groupId?: string;
+
+  @ApiPropertyOptional({
+    type: String,
+    description: 'Alias cua groupId',
+  })
+  @IsOptional()
+  @Matches(UUID_OR_ALL_REGEX, { message: 'studentGroupId khong hop le' })
+  studentGroupId?: string;
+
+  @ApiPropertyOptional({
+    type: String,
+    description: 'ID khu vuc',
+  })
+  @IsOptional()
+  @Matches(UUID_OR_ALL_REGEX, { message: 'zoneId khong hop le' })
+  zoneId?: string;
+
+  @ApiPropertyOptional({
+    type: String,
+    description: 'ID truong',
+  })
+  @IsOptional()
+  @Matches(UUID_OR_ALL_REGEX, { message: 'schoolId khong hop le' })
+  schoolId?: string;
+
+  @ApiPropertyOptional({
+    type: String,
+    description: 'ID hoc sinh thuoc group, hoac all de xem tong hop',
+  })
+  @IsOptional()
+  @Matches(UUID_OR_ALL_REGEX, { message: 'studentId khong hop le' })
+  studentId?: string;
+
+  @ApiPropertyOptional({
+    type: Number,
+    description: 'Trang lich su attempt',
+    default: 1,
+    minimum: 1,
+  })
+  @Type(() => Number)
+  @IsInt({ message: 'page phai la so nguyen' })
+  @Min(1, { message: 'page phai lon hon hoac bang 1' })
+  page = 1;
+
+  @ApiPropertyOptional({
+    type: Number,
+    description: 'So dong moi trang',
+    default: 10,
+    minimum: 1,
+  })
+  @Type(() => Number)
+  @IsInt({ message: 'limit phai la so nguyen' })
+  @Min(1, { message: 'limit phai lon hon hoac bang 1' })
+  limit = 10;
+}
+
+export class AttemptReportFilterQueryDto extends ReportDateRangeQueryDto {
+  @ApiPropertyOptional({
+    type: String,
+    description: 'Loc theo bo de',
+  })
+  @IsOptional()
+  @IsUUID('4', { message: 'examSetId khong hop le' })
+  examSetId?: string;
+
+  @ApiPropertyOptional({
+    type: String,
+    description: 'Loc theo de thi/ngan hang cau hoi',
+  })
+  @IsOptional()
+  @IsUUID('4', { message: 'questionBankId khong hop le' })
+  questionBankId?: string;
+}
+
+export class ClassAttemptScoresExportQueryDto extends AttemptReportFilterQueryDto {
+  @ApiProperty({
+    type: String,
+    description:
+      'Danh sach ID lop/student_group, cach nhau boi dau phay. Moi lop la mot sheet.',
+  })
+  @Transform(({ value }) =>
+    typeof value === 'string'
+      ? value
+          .split(',')
+          .map((item) => item.trim())
+          .filter(Boolean)
+      : value,
+  )
+  @IsArray({ message: 'groupIds phai la danh sach ID lop' })
+  @ArrayNotEmpty({ message: 'groupIds la bat buoc' })
+  @IsUUID('4', { each: true, message: 'groupId khong hop le' })
+  groupIds!: string[];
+}
+
+export class StudentBestAttemptDetailExportQueryDto {
+  @ApiProperty({
+    type: String,
+    description: 'ID hoc sinh',
+  })
+  @IsUUID('4', { message: 'userId khong hop le' })
+  userId!: string;
+
+  @ApiProperty({
+    type: String,
+    description: 'ID de thi/ngan hang cau hoi',
+  })
+  @IsUUID('4', { message: 'questionBankId khong hop le' })
+  questionBankId!: string;
+}
 
 export class TeacherLeaderGroupDto {
   @ApiProperty({
@@ -121,6 +294,27 @@ export class StudentAttemptDto {
     nullable: true,
   })
   score!: number | null;
+
+  @ApiPropertyOptional({
+    description: 'ID hoc sinh',
+    example: '6233abe3-1961-4af5-a482-542f1227d844',
+    nullable: true,
+  })
+  studentId?: string | null;
+
+  @ApiPropertyOptional({
+    description: 'Ten hoc sinh',
+    example: 'Nguyen Van B',
+    nullable: true,
+  })
+  studentName?: string | null;
+
+  @ApiPropertyOptional({
+    description: 'Ma hoc sinh',
+    example: 'HS001',
+    nullable: true,
+  })
+  studentCode?: string | null;
 }
 
 export class StudentReportSummaryDto {
@@ -184,14 +378,30 @@ export class StudentReportDto {
   @ApiProperty({
     description: 'ID group duoc chon',
     example: '5233abe3-1961-4af5-a482-542f1227d844',
+    nullable: true,
   })
-  groupId!: string;
+  groupId!: string | null;
 
-  @ApiProperty({
+  @ApiPropertyOptional({
     description: 'Thong tin hoc sinh',
     type: ReportStudentOptionDto,
+    nullable: true,
   })
-  student!: ReportStudentOptionDto;
+  student!: ReportStudentOptionDto | null;
+
+  @ApiPropertyOptional({
+    description: 'ID khu vuc duoc loc',
+    example: '9233abe3-1961-4af5-a482-542f1227d844',
+    nullable: true,
+  })
+  zoneId?: string | null;
+
+  @ApiPropertyOptional({
+    description: 'ID truong duoc loc',
+    example: 'a233abe3-1961-4af5-a482-542f1227d844',
+    nullable: true,
+  })
+  schoolId?: string | null;
 
   @ApiPropertyOptional({
     description: 'Ngay bat dau loc',
