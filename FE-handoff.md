@@ -230,7 +230,8 @@ Authorization: Bearer <token>
 Muc dich:
 
 - Lay ngau nhien 1 cau hoi trong ngan hang cau hoi.
-- Ho tro loai tru cac cau hoi FE da hien thi de tranh trung lap.
+- Backend tu luu cac cau hoi da random vao file `data/question-bank-random-history.json` de tranh tra lai cau hoi da lay.
+- Van ho tro `excludeQuestionIds` neu FE muon loai tru them cac cau hoi dang giu trong state.
 
 Danh sach param:
 
@@ -266,6 +267,34 @@ Vi du response:
   "questionBankId": "3233abe3-1961-4af5-a482-542f1227d844",
   "nextContent": null,
   "nextContentDetails": null,
+  "answers": [
+    {
+      "id": "8233abe3-1961-4af5-a482-542f1227d844",
+      "orderNo": 1,
+      "isCorrect": false,
+      "contentType": "TEXT",
+      "content": "London",
+      "meta": null,
+      "questionId": "7233abe3-1961-4af5-a482-542f1227d844",
+      "nextContent": null,
+      "nextContentDetails": null,
+      "createdAt": "2026-05-11T01:00:00.000Z",
+      "updatedAt": "2026-05-11T01:00:00.000Z"
+    },
+    {
+      "id": "9233abe3-1961-4af5-a482-542f1227d844",
+      "orderNo": 2,
+      "isCorrect": true,
+      "contentType": "TEXT",
+      "content": "Paris",
+      "meta": null,
+      "questionId": "7233abe3-1961-4af5-a482-542f1227d844",
+      "nextContent": null,
+      "nextContentDetails": null,
+      "createdAt": "2026-05-11T01:00:00.000Z",
+      "updatedAt": "2026-05-11T01:00:00.000Z"
+    }
+  ],
   "createdAt": "2026-05-11T01:00:00.000Z",
   "updatedAt": "2026-05-11T01:00:00.000Z"
 }
@@ -273,25 +302,22 @@ Vi du response:
 
 Luu y response:
 
-- API tra ve thong tin cau hoi, chua tra ve danh sach dap an.
+- API tra ve thong tin cau hoi kem danh sach dap an trong field `answers`.
+- Dap an duoc sap xep theo `orderNo` tang dan, neu trung `orderNo` thi theo `createdAt`.
 - Neu cau hoi co chuoi noi dung tiep theo, field `nextContentDetails` se co thong tin node tiep theo.
+- Neu dap an co chuoi noi dung tiep theo, field `answers[].nextContentDetails` se co thong tin node tiep theo.
 - Backend chi random cac cau hoi root (`isRoot = true`) trong ngan hang cau hoi.
+- Moi cau hoi da random se duoc ghi vao `data/question-bank-random-history.json` theo `questionBankId`.
 
 ## 2. Cach FE tranh trung lap
 
-FE nen giu state danh sach cau hoi da nhan:
+Backend da tu tranh trung lap bang file JSON, nen FE co the goi endpoint khong can gui `excludeQuestionIds`:
 
 ```ts
-const usedQuestionIds: string[] = [];
+await api.get(`/question-bank/random/${questionBankId}`);
 ```
 
-Moi lan nhan duoc cau hoi moi:
-
-```ts
-usedQuestionIds.push(question.id);
-```
-
-Lan goi tiep theo:
+Neu FE van co state local va muon loai tru them, co the tiep tuc gui `excludeQuestionIds`:
 
 ```ts
 const excludeQuestionIds = usedQuestionIds.join(',');
@@ -301,11 +327,8 @@ await api.get(`/question-bank/random/${questionBankId}`, {
 });
 ```
 
-Khi nguoi dung doi `questionBankId` hoac bat dau session moi:
-
-```ts
-usedQuestionIds.length = 0;
-```
+Khi tat ca cau hoi trong ngan hang da duoc random, backend tra `404`.
+Muon bat dau lai vong random, xoa entry tuong ung trong file `data/question-bank-random-history.json` hoac xoa file nay de reset tat ca ngan hang cau hoi.
 
 ## 3. Xu ly loi
 

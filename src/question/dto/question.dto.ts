@@ -3,6 +3,7 @@ import { PaginationResponseDto } from 'src/common/dto/pagination.dto';
 import { BaseDto } from 'src/common/dto/base.dto';
 import { ContentTypes } from 'src/common/enum/content-type.enum';
 import { QuestionType } from '../enum/question-type.enum';
+import { AnswerResponseDto } from 'src/answer/dto/answer.dto';
 
 export class NextContentDto {
   @ApiProperty({
@@ -146,6 +147,13 @@ export class QuestionResponseDto extends BaseDto {
     required: false,
   })
   nextContentDetails?: NextContentDto;
+
+  @ApiProperty({
+    description: 'Danh sach dap an cua cau hoi',
+    type: [AnswerResponseDto],
+    required: false,
+  })
+  answers?: AnswerResponseDto[];
 }
 
 export class QuestionListResponseDto extends PaginationResponseDto<QuestionResponseDto> {
