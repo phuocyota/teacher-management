@@ -26,6 +26,7 @@ import { ImportExamResultDto } from '../dto/import-exam.dto';
 import { QuestionBankQuestionEntity } from 'src/question-bank-question/question-bank-question.entity';
 import { QuestionBankImportService } from './question-bank-import.service';
 import { QuestionService } from 'src/question/question.service';
+import { QuestionEntity } from 'src/question/question.entity';
 import { ExamSetEntity } from 'src/exam-set/exam-set.entity';
 import { ExamSetQuestionBankEntity } from 'src/exam-set-question-bank/exam-set-question-bank.entity';
 import { runInTransaction } from 'src/common/database/transaction.utils';
@@ -37,6 +38,8 @@ export class QuestionBankService {
     private readonly questionBankRepo: Repository<QuestionBankEntity>,
     @InjectRepository(QuestionBankQuestionEntity)
     private readonly questionBankQuestionRepo: Repository<QuestionBankQuestionEntity>,
+    @InjectRepository(QuestionEntity)
+    private readonly questionRepo: Repository<QuestionEntity>,
     @InjectRepository(ExamSetEntity)
     private readonly examSetRepo: Repository<ExamSetEntity>,
     private readonly entityManager: EntityManager,
@@ -148,6 +151,58 @@ export class QuestionBankService {
     }
 
     return Number(result.maxCode) || 0;
+  }
+
+  async findRandomQuestion(
+    questionBankId: string,
+    excludeQuestionIds: string[] = [],
+  ): Promise<QuestionEntity> {
+    await this.findOne(questionBankId);
+
+    const qb = this.questionRepo
+      .createQueryBuilder('question')
+      .innerJoin(
+        QuestionBankQuestionEntity,
+        'qbq',
+        'qbq.question_id = question.id AND qbq.question_bank_id = :questionBankId',
+        { questionBankId },
+      )
+      .where('question.isRoot = :isRoot', { isRoot: true });
+
+    if (excludeQuestionIds.length > 0) {
+      qb.andWhere('question.id NOT IN (:...excludeQuestionIds)', {
+        excludeQuestionIds,
+      });
+    }
+
+    const question = await qb.orderBy('RANDOM()').limit(1).getOne();
+
+    if (!question) {
+      throw new NotFoundException(
+        'Khong con cau hoi nao phu hop trong ngan hang cau hoi nay',
+      );
+    }
+
+    (question as any).questionBankId = questionBankId;
+
+    if (question.nextContent) {
+      const nextContentEntity = await this.questionRepo.findOne({
+        where: { id: question.nextContent },
+        select: ['id', 'type', 'content', 'contentType', 'meta'],
+      });
+
+      if (nextContentEntity) {
+        (question as any).nextContentDetails = {
+          id: nextContentEntity.id,
+          type: nextContentEntity.type,
+          content: nextContentEntity.content,
+          contentType: nextContentEntity.contentType,
+          meta: nextContentEntity.meta,
+        };
+      }
+    }
+
+    return question;
   }
 
   async findOne(id: string): Promise<QuestionBankEntity> {

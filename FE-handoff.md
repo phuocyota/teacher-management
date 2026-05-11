@@ -3,18 +3,20 @@
 Base path: `/report/attempt`
 
 Xác thực:
+
 - `Authorization: Bearer <teacher_token>`
 
 Vai trò:
+
 - `TEACHER`
 
 ## 1. Tổng quan API
 
-| API | Method | Mục đích | Đầu vào | Đầu ra chính |
-| --- | --- | --- | --- | --- |
-| `/report/attempt/groups` | `GET` | Lấy danh sách nhóm mà giáo viên đang là trưởng nhóm | Không có | Danh sách nhóm: `id`, `name`, `type` |
-| `/report/attempt/groups/:groupId/students` | `GET` | Lấy danh sách học sinh theo nhóm đã chọn | Path param `groupId` | Danh sách học sinh: `id`, `fullName`, `userName`, `code`, `studentGroupId`, `studentGroupName` |
-| `/report/attempt/student` | `GET` | Lấy dữ liệu báo cáo của 1 học sinh | Query: `groupId`, `studentId`, `fromDate?`, `toDate?`, `page?`, `limit?` | `student`, `summary`, `trend`, `attempts`, `page`, `limit`, `total` |
+| API                                        | Method | Mục đích                                            | Đầu vào                                                                  | Đầu ra chính                                                                                   |
+| ------------------------------------------ | ------ | --------------------------------------------------- | ------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------- |
+| `/report/attempt/groups`                   | `GET`  | Lấy danh sách nhóm mà giáo viên đang là trưởng nhóm | Không có                                                                 | Danh sách nhóm: `id`, `name`, `type`                                                           |
+| `/report/attempt/groups/:groupId/students` | `GET`  | Lấy danh sách học sinh theo nhóm đã chọn            | Path param `groupId`                                                     | Danh sách học sinh: `id`, `fullName`, `userName`, `code`, `studentGroupId`, `studentGroupName` |
+| `/report/attempt/student`                  | `GET`  | Lấy dữ liệu báo cáo của 1 học sinh                  | Query: `groupId`, `studentId`, `fromDate?`, `toDate?`, `page?`, `limit?` | `student`, `summary`, `trend`, `attempts`, `page`, `limit`, `total`                            |
 
 ## 2. Chi tiết API
 
@@ -45,6 +47,7 @@ Ví dụ response:
 ```
 
 Frontend sử dụng:
+
 - Đổ dữ liệu cho combobox `Nhóm`
 
 ### 2.2 Lấy danh sách học sinh theo nhóm
@@ -80,6 +83,7 @@ Ví dụ response:
 ```
 
 Frontend sử dụng:
+
 - Đổ dữ liệu cho combobox `Học sinh` sau khi người dùng chọn nhóm
 
 ### 2.3 Lấy báo cáo học sinh
@@ -93,14 +97,14 @@ Authorization: Bearer <token>
 
 Danh sách query param:
 
-| Trường | Bắt buộc | Kiểu | Ghi chú |
-| --- | --- | --- | --- |
-| `groupId` | Có | `string` | UUID |
-| `studentId` | Có | `string` | UUID |
-| `fromDate` | Không | `string` | Định dạng `YYYY-MM-DD` |
-| `toDate` | Không | `string` | Định dạng `YYYY-MM-DD` |
-| `page` | Không | `number` | Mặc định `1` |
-| `limit` | Không | `number` | Mặc định `10` |
+| Trường      | Bắt buộc | Kiểu     | Ghi chú                |
+| ----------- | -------- | -------- | ---------------------- |
+| `groupId`   | Có       | `string` | UUID                   |
+| `studentId` | Có       | `string` | UUID                   |
+| `fromDate`  | Không    | `string` | Định dạng `YYYY-MM-DD` |
+| `toDate`    | Không    | `string` | Định dạng `YYYY-MM-DD` |
+| `page`      | Không    | `number` | Mặc định `1`           |
+| `limit`     | Không    | `number` | Mặc định `10`          |
 
 Ví dụ response:
 
@@ -169,17 +173,17 @@ Ví dụ response:
 
 ## 3. Mapping dữ liệu ra UI
 
-| Thành phần UI | Nguồn dữ liệu |
-| --- | --- |
-| Combobox `Nhóm` | `GET /report/attempt/groups` |
-| Combobox `Học sinh` | `GET /report/attempt/groups/:groupId/students` |
-| `Tổng lần làm` | `summary.totalAttempts` |
-| `Điểm trung bình` | `summary.averageScore` |
-| `Điểm cao nhất` | `summary.highestScore` |
-| `Lần gần nhất` | `summary.latestAttemptAt` |
-| Tab `Xu hướng điểm` | `trend[]` |
-| Tab `Lịch sử làm bài` | `attempts[]` |
-| Phân trang lịch sử | `page`, `limit`, `total` |
+| Thành phần UI         | Nguồn dữ liệu                                  |
+| --------------------- | ---------------------------------------------- |
+| Combobox `Nhóm`       | `GET /report/attempt/groups`                   |
+| Combobox `Học sinh`   | `GET /report/attempt/groups/:groupId/students` |
+| `Tổng lần làm`        | `summary.totalAttempts`                        |
+| `Điểm trung bình`     | `summary.averageScore`                         |
+| `Điểm cao nhất`       | `summary.highestScore`                         |
+| `Lần gần nhất`        | `summary.latestAttemptAt`                      |
+| Tab `Xu hướng điểm`   | `trend[]`                                      |
+| Tab `Lịch sử làm bài` | `attempts[]`                                   |
+| Phân trang lịch sử    | `page`, `limit`, `total`                       |
 
 ## 4. Luồng gọi API đề xuất cho frontend
 
@@ -190,11 +194,11 @@ Ví dụ response:
 
 ## 5. Lỗi thường gặp
 
-| Mã HTTP | Trường hợp |
-| --- | --- |
-| `400` | UUID không hợp lệ, ngày sai định dạng, `fromDate > toDate`, `page < 1`, `limit < 1` |
-| `403` | Giáo viên không phải trưởng nhóm của nhóm đã chọn, hoặc token không hợp lệ |
-| `404` | Không tìm thấy nhóm, không tìm thấy học sinh, hoặc học sinh không thuộc nhóm đã chọn |
+| Mã HTTP | Trường hợp                                                                           |
+| ------- | ------------------------------------------------------------------------------------ |
+| `400`   | UUID không hợp lệ, ngày sai định dạng, `fromDate > toDate`, `page < 1`, `limit < 1`  |
+| `403`   | Giáo viên không phải trưởng nhóm của nhóm đã chọn, hoặc token không hợp lệ           |
+| `404`   | Không tìm thấy nhóm, không tìm thấy học sinh, hoặc học sinh không thuộc nhóm đã chọn |
 
 ## 6. Lưu ý cho frontend
 
@@ -203,3 +207,120 @@ Ví dụ response:
 - `attempts` có thể là mảng rỗng
 - Backend yêu cầu định dạng ngày là `YYYY-MM-DD`
 - Chức năng xuất Excel hiện chưa được implement ở backend
+
+---
+
+# FE Handoff: Random cau hoi trong ngan hang cau hoi
+
+Base path: `/question-bank`
+
+Xac thuc:
+
+- `Authorization: Bearer <token>`
+
+## 1. API random cau hoi
+
+Endpoint:
+
+```http
+GET /question-bank/random/:questionBankId
+Authorization: Bearer <token>
+```
+
+Muc dich:
+
+- Lay ngau nhien 1 cau hoi trong ngan hang cau hoi.
+- Ho tro loai tru cac cau hoi FE da hien thi de tranh trung lap.
+
+Danh sach param:
+
+| Truong               | Vi tri | Bat buoc | Kieu     | Ghi chu                                                      |
+| -------------------- | ------ | -------- | -------- | ------------------------------------------------------------ |
+| `questionBankId`     | Path   | Co       | `string` | UUID ngan hang cau hoi                                       |
+| `excludeQuestionIds` | Query  | Khong    | `string` | Danh sach `questionId` can loai tru, phan cach bang dau phay |
+
+Vi du goi lan dau:
+
+```http
+GET /question-bank/random/3233abe3-1961-4af5-a482-542f1227d844
+Authorization: Bearer <token>
+```
+
+Vi du goi lan tiep theo, tranh lay lai cac cau da co:
+
+```http
+GET /question-bank/random/3233abe3-1961-4af5-a482-542f1227d844?excludeQuestionIds=5233abe3-1961-4af5-a482-542f1227d844,6233abe3-1961-4af5-a482-542f1227d844
+Authorization: Bearer <token>
+```
+
+Vi du response:
+
+```json
+{
+  "id": "7233abe3-1961-4af5-a482-542f1227d844",
+  "type": "SINGLE_CHOICE",
+  "contentType": "TEXT",
+  "content": "What is the capital of France?",
+  "meta": null,
+  "isRoot": true,
+  "questionBankId": "3233abe3-1961-4af5-a482-542f1227d844",
+  "nextContent": null,
+  "nextContentDetails": null,
+  "createdAt": "2026-05-11T01:00:00.000Z",
+  "updatedAt": "2026-05-11T01:00:00.000Z"
+}
+```
+
+Luu y response:
+
+- API tra ve thong tin cau hoi, chua tra ve danh sach dap an.
+- Neu cau hoi co chuoi noi dung tiep theo, field `nextContentDetails` se co thong tin node tiep theo.
+- Backend chi random cac cau hoi root (`isRoot = true`) trong ngan hang cau hoi.
+
+## 2. Cach FE tranh trung lap
+
+FE nen giu state danh sach cau hoi da nhan:
+
+```ts
+const usedQuestionIds: string[] = [];
+```
+
+Moi lan nhan duoc cau hoi moi:
+
+```ts
+usedQuestionIds.push(question.id);
+```
+
+Lan goi tiep theo:
+
+```ts
+const excludeQuestionIds = usedQuestionIds.join(',');
+
+await api.get(`/question-bank/random/${questionBankId}`, {
+  params: { excludeQuestionIds },
+});
+```
+
+Khi nguoi dung doi `questionBankId` hoac bat dau session moi:
+
+```ts
+usedQuestionIds.length = 0;
+```
+
+## 3. Xu ly loi
+
+| Ma HTTP   | Truong hop                                                        | FE nen lam gi                                                |
+| --------- | ----------------------------------------------------------------- | ------------------------------------------------------------ |
+| `400`     | `questionBankId` hoac `excludeQuestionIds` khong phai UUID hop le | Kiem tra lai du lieu truoc khi goi API                       |
+| `401/403` | Thieu token hoac token khong co quyen                             | Dieu huong dang nhap hoac hien thong bao het phien           |
+| `404`     | Khong tim thay ngan hang cau hoi, hoac da het cau hoi chua dung   | Hien trang thai "Da het cau hoi" va dung nut "Cau tiep theo" |
+
+## 4. Khuyen nghi neu can tranh trung lap ben vung
+
+Cach dung `excludeQuestionIds` phu thuoc vao state FE. Neu reload trang, doi thiet bi, hoac can dam bao chong trung lap trong bai thi that, FE nen dung flow co `attemptId` de backend luu lich su cau hoi da phat.
+
+Phuong an backend nen lam tiep:
+
+- Tao bang/session luu `attemptId`, `questionId`, `servedAt`.
+- API random nhan `attemptId` thay vi FE gui danh sach exclude.
+- Backend tu loai cac cau da phat trong attempt do.

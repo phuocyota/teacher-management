@@ -10,6 +10,7 @@ import {
   ParseUUIDPipe,
   UseInterceptors,
   UploadedFile,
+  BadRequestException,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import {
@@ -35,6 +36,7 @@ import {
 import { PaginationResponseDto } from 'src/common/dto/pagination.dto';
 import { ImportExamResultDto } from './dto/import-exam.dto';
 import { QuestionBankQuestionResponseDto } from 'src/question-bank-question/dto/question-bank-question.dto';
+import { QuestionResponseDto } from 'src/question/dto/question.dto';
 
 @ApiTags('Question Bank')
 @ApiBearerAuth('access-token')
@@ -93,6 +95,29 @@ export class QuestionBankController {
   async getMaxCode(): Promise<{ maxCode: number }> {
     const maxCode = await this.questionBankService.getMaxCode();
     return { maxCode };
+  }
+
+  @Get('random/:questionBankId')
+  @ApiOperation({
+    summary: 'Lay ngau nhien 1 cau hoi trong ngan hang cau hoi',
+    description:
+      'Dung excludeQuestionIds de tranh lay lai cac cau hoi da hien thi, vi du: ?excludeQuestionIds=id1,id2',
+  })
+  @ApiQuery({
+    name: 'excludeQuestionIds',
+    required: false,
+    type: String,
+    description: 'Danh sach questionId can loai tru, phan cach bang dau phay',
+  })
+  @ApiOkResponse({ type: QuestionResponseDto })
+  findRandomQuestion(
+    @Param('questionBankId', ParseUUIDPipe) questionBankId: string,
+    @Query('excludeQuestionIds') excludeQuestionIds?: string,
+  ) {
+    return this.questionBankService.findRandomQuestion(
+      questionBankId,
+      this.parseQuestionIds(excludeQuestionIds),
+    );
   }
 
   @Get(':id')
@@ -155,5 +180,30 @@ export class QuestionBankController {
       questionBankId,
       file.buffer,
     );
+  }
+
+  private parseQuestionIds(value?: string): string[] {
+    if (!value) {
+      return [];
+    }
+
+    const ids = value
+      .split(',')
+      .map((item) => item.trim())
+      .filter(Boolean);
+    const invalidId = ids.find(
+      (id) =>
+        !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
+          id,
+        ),
+    );
+
+    if (invalidId) {
+      throw new BadRequestException(
+        `excludeQuestionIds contains invalid UUID: ${invalidId}`,
+      );
+    }
+
+    return [...new Set(ids)];
   }
 }
