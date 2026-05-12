@@ -6,7 +6,7 @@ import {
   Headers,
 } from '@nestjs/common';
 import { AuthService } from './auth.service';
-import { LoginDto } from './dto/login.dto';
+import { CardLoginDto, LoginDto } from './dto/login.dto';
 import { CreateUserDto } from 'src/user/dto/create.dto';
 import {
   ApiBearerAuth,
@@ -21,6 +21,16 @@ import { TokenCheckDto } from './dto/token-check.dto';
 @Controller('auth')
 export class AuthController {
   constructor(private readonly authService: AuthService) {}
+
+  @Public()
+  @Post('login')
+  @ApiOperation({ summary: 'Login bang NFC card ID' })
+  @ApiResponse({ status: 200, description: 'Login successful' })
+  @ApiResponse({ status: 400, description: 'Missing cardId' })
+  @ApiResponse({ status: 401, description: 'Invalid cardId' })
+  async login(@Body() dto: CardLoginDto) {
+    return this.authService.loginByCard(dto);
+  }
 
   @Public()
   @Post('login/admin')

@@ -6,9 +6,9 @@ import {
 } from '@nestjs/common';
 import * as bcrypt from 'bcryptjs';
 import { InjectRepository } from '@nestjs/typeorm';
-import { EntityManager, Repository } from 'typeorm';
+import { EntityManager, Not, Repository } from 'typeorm';
 import { UserEntity } from './user.entity';
-import { ChangePasswordDto, UserQueryDto } from './dto/user.dto';
+import { AddNfcIdDto, ChangePasswordDto, UserQueryDto } from './dto/user.dto';
 import { CreateUserDto } from './dto/create.dto';
 import { UpdateUserDto } from './dto/update.dto';
 import { JwtPayload } from 'src/common/interface/jwt-payload.interface';
@@ -109,6 +109,14 @@ export class UserService extends BaseService<UserEntity> {
   ): Promise<UserEntity | null> {
     const user = await this.repo.findOne({
       where: [{ userName: identifier }, { email: identifier }],
+    });
+
+    return user ?? null;
+  }
+
+  public async findByNfcId(nfcId: string): Promise<UserEntity | null> {
+    const user = await this.repo.findOne({
+      where: { nfcId },
     });
 
     return user ?? null;
@@ -351,6 +359,40 @@ export class UserService extends BaseService<UserEntity> {
 
       return userRepo.save(existingUser);
     });
+  }
+
+  async addNfcId(
+    id: string,
+    dto: AddNfcIdDto,
+    user?: JwtPayload,
+  ): Promise<UserEntity> {
+    const nfcId = dto.nfcId.trim();
+
+    if (!nfcId) {
+      throw new BadRequestException('NFC ID khong duoc de trong');
+    }
+
+    const existingUser = await this.repo.findOne({ where: { id } });
+
+    if (!existingUser) {
+      throw new NotFoundException(ERROR_MESSAGES.NOT_FOUND(ENTITY_NAMES.USER));
+    }
+
+    const existingNfcUser = await this.repo.findOne({
+      where: {
+        id: Not(id),
+        nfcId,
+      },
+    });
+
+    if (existingNfcUser) {
+      throw new ConflictException('NFC ID da duoc gan cho user khac');
+    }
+
+    existingUser.nfcId = nfcId;
+    existingUser.updatedBy = user?.userId;
+
+    return this.repo.save(existingUser);
   }
 
   /**
