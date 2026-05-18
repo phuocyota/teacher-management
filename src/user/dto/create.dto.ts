@@ -94,6 +94,14 @@ export class CreateUserDto {
   citizenId?: string;
 
   @ApiPropertyOptional({
+    example: '04AABBCCDD',
+    description: 'NFC ID cua nguoi dung',
+  })
+  @IsOptional()
+  @IsString()
+  nfcId?: string;
+
+  @ApiPropertyOptional({
     example: '123 Duong ABC, Quan 1, TP.HCM',
     description: 'Dia chi cua nguoi dung',
   })

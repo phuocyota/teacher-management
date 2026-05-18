@@ -1,7 +1,11 @@
-import { Injectable, UnauthorizedException } from '@nestjs/common';
+import {
+  BadRequestException,
+  Injectable,
+  UnauthorizedException,
+} from '@nestjs/common';
 import * as jwt from 'jsonwebtoken';
 import bcrypt from 'bcryptjs';
-import { LoginDto } from './dto/login.dto';
+import { CardLoginDto, LoginDto } from './dto/login.dto';
 import { CreateUserDto } from 'src/user/dto/create.dto';
 import { UserService } from 'src/user/user.service';
 import { UserEntity } from 'src/user/user.entity';
@@ -96,6 +100,28 @@ export class AuthService {
       userId: user.id,
       userType: user.userType,
       deviceId: dto.deviceId,
+    };
+  }
+
+  async loginByCard(dto: CardLoginDto) {
+    const cardId = dto.cardId?.trim();
+
+    if (!cardId) {
+      throw new BadRequestException('cardId khong duoc de trong');
+    }
+
+    const user = await this.userService.findByNfcId(cardId);
+    if (!user) {
+      throw new UnauthorizedException(ERROR_MESSAGES.INVALID_CREDENTIALS);
+    }
+
+    const token = this.generateToken(user, cardId);
+    await this.saveToken(user.id, token);
+    return {
+      accessToken: token,
+      userId: user.id,
+      userType: user.userType,
+      deviceId: cardId,
     };
   }
 

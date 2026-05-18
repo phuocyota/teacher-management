@@ -26,3 +26,13 @@ export class LoginDto {
   @IsString()
   deviceId: string; // required by existing middleware/token structure
 }
+
+export class CardLoginDto {
+  @ApiProperty({
+    example: '04AABBCCDD',
+    description: 'Card ID dung de dang nhap bang NFC',
+  })
+  @IsNotEmpty()
+  @IsString()
+  cardId: string;
+}

@@ -37,6 +37,7 @@ import { PaginationResponseDto } from 'src/common/dto/pagination.dto';
 import { ImportExamResultDto } from './dto/import-exam.dto';
 import { QuestionBankQuestionResponseDto } from 'src/question-bank-question/dto/question-bank-question.dto';
 import { QuestionResponseDto } from 'src/question/dto/question.dto';
+import { Public } from 'src/common/decorator/public.decorator';
 
 @ApiTags('Question Bank')
 @ApiBearerAuth('access-token')
@@ -98,6 +99,7 @@ export class QuestionBankController {
   }
 
   @Get('random/:questionBankId')
+  @Public()
   @ApiOperation({
     summary: 'Lay ngau nhien 1 cau hoi trong ngan hang cau hoi',
     description:

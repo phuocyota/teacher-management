@@ -12,7 +12,12 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import { UserService } from './user.service';
-import { ChangePasswordDto, MeResponseDto, UserQueryDto } from './dto/user.dto';
+import {
+  AddNfcIdDto,
+  ChangePasswordDto,
+  MeResponseDto,
+  UserQueryDto,
+} from './dto/user.dto';
 import { CreateUserDto } from './dto/create.dto.js';
 import { UpdateUserDto } from './dto/update.dto.js';
 import {
@@ -81,6 +86,20 @@ export class UserController {
     @User() user: JwtPayload,
   ) {
     return this.userService.updateUser(id, dto, user);
+  }
+
+  @Patch(':id/nfc-id')
+  @ApiOperation({ summary: 'Gan NFC ID cho nguoi dung' })
+  @ApiResponse({ status: 200, description: 'Gan NFC ID thanh cong' })
+  @ApiResponse({ status: 400, description: 'NFC ID khong hop le' })
+  @ApiResponse({ status: 404, description: 'Khong tim thay' })
+  @ApiResponse({ status: 409, description: 'NFC ID da duoc gan cho user khac' })
+  addNfcId(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: AddNfcIdDto,
+    @User() user: JwtPayload,
+  ) {
+    return this.userService.addNfcId(id, dto, user);
   }
 
   @Patch(':id/password')

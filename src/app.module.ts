@@ -66,6 +66,8 @@ import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { ZoneModule } from './zone/zone.module';
 import { ZoneEntity } from './zone/zone.entity';
+import { GoodsEntity } from './goods/goods.entity';
+import { OrderEntity } from './order/order.entity';
 
 @Module({
   imports: [
@@ -119,6 +121,8 @@ import { ZoneEntity } from './zone/zone.entity';
           ExamSetQuestionBankEntity,
           ExamSetClassEntity,
           ZoneEntity,
+          GoodsEntity,
+          OrderEntity,
         ],
         synchronize: true,
       }),

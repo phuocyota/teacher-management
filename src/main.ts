@@ -36,6 +36,7 @@ async function bootstrap() {
   app.enableCors({
     origin: [
       'http://localhost:5173',
+      'https://localhost:5173',
       'http://160.250.132.143:5173',
       'https://fe.kidostudent.kidoedu.vn/',
       'https://kidostudent.kidoedu.vn/',

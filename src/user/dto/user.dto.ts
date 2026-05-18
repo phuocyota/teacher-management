@@ -40,6 +40,16 @@ export class ChangePasswordResponseDto {
   message: string;
 }
 
+export class AddNfcIdDto {
+  @ApiProperty({
+    example: '04AABBCCDD',
+    description: 'NFC ID cua nguoi dung',
+  })
+  @IsNotEmpty({ message: 'NFC ID khong duoc de trong' })
+  @IsString()
+  nfcId!: string;
+}
+
 // ===== USER RESPONSE DTO (không trả về password) =====
 @Exclude()
 export class UserResponseDto {
@@ -78,6 +88,10 @@ export class UserResponseDto {
   @Expose()
   @ApiPropertyOptional({ example: '001234567890' })
   citizenId?: string;
+
+  @Expose()
+  @ApiPropertyOptional({ example: '04AABBCCDD' })
+  nfcId?: string;
 
   @Expose()
   @ApiPropertyOptional({ example: '123 Đường ABC, Quận 1, TP.HCM' })

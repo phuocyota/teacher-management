@@ -37,6 +37,9 @@ export class UserEntity extends BaseEntity {
   @Column({ name: 'citizen_id', type: 'text', nullable: true })
   citizenId?: string;
 
+  @Column({ name: 'NFC_id', type: 'text', nullable: true })
+  nfcId?: string;
+
   @Column({ type: 'text', nullable: true })
   address?: string;
 
