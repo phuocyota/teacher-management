@@ -4,9 +4,11 @@ import {
   ConflictException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
+import { Workbook } from 'exceljs';
 import { Repository } from 'typeorm';
 import { SchoolEntity } from './school.entity';
 import { UserEntity } from 'src/user/user.entity';
+import { UserType } from 'src/common/enum/user-type.enum';
 import { CreateSchoolDto, UpdateSchoolDto } from './dto/create-school.dto';
 import {
   ERROR_MESSAGES,
@@ -19,6 +21,15 @@ import { ZoneService } from 'src/zone/zone.service';
 import { StudentGroupEntity } from 'src/student-group/student-group.entity';
 import { StudentGroupResponseDto } from 'src/student-group/dto/student-group.dto';
 import { GroupMemberRole } from 'src/user-group/enum/group-member-role.enum';
+import { StudentEntity } from 'src/student/student.entity';
+
+const DEFAULT_STUDENT_PASSWORD = '123456';
+
+interface StudentAccountExportRow {
+  studentGroupName: string | null;
+  fullName: string | null;
+  userName: string;
+}
 
 @Injectable()
 export class SchoolService {
@@ -27,6 +38,8 @@ export class SchoolService {
     private readonly schoolRepo: Repository<SchoolEntity>,
     @InjectRepository(UserEntity)
     private readonly userRepo: Repository<UserEntity>,
+    @InjectRepository(StudentEntity)
+    private readonly studentRepo: Repository<StudentEntity>,
     @InjectRepository(StudentGroupEntity)
     private readonly studentGroupRepo: Repository<StudentGroupEntity>,
     private readonly zoneService: ZoneService,
@@ -173,6 +186,101 @@ export class SchoolService {
     return autoMapListToDto(StudentGroupResponseDto, studentGroups);
   }
 
+  async exportStudentAccountsExcel(
+    schoolId: string,
+  ): Promise<{ fileName: string; buffer: Buffer }> {
+    const school = await this.findOne(schoolId);
+    const rows = await this.getStudentAccountExportRows(schoolId);
+
+    const workbook = new Workbook();
+    workbook.creator = 'teacher-management';
+    workbook.created = new Date();
+
+    const worksheet = workbook.addWorksheet('Tai khoan hoc sinh');
+    worksheet.columns = [
+      { header: 'STT', key: 'index', width: 8 },
+      { header: 'Lop', key: 'studentGroupName', width: 18 },
+      { header: 'Ten', key: 'fullName', width: 32 },
+      { header: 'Tai khoan', key: 'userName', width: 24 },
+      { header: 'Mat khau', key: 'password', width: 14 },
+    ];
+
+    const titleRow = worksheet.insertRow(1, [
+      `DANH SACH TAI KHOAN HOC SINH - ${school.name}`,
+    ]);
+    worksheet.mergeCells(1, 1, 1, 5);
+    titleRow.font = { bold: true, size: 14 };
+    titleRow.alignment = { horizontal: 'center', vertical: 'middle' };
+    titleRow.height = 24;
+
+    const exportedAtRow = worksheet.insertRow(2, [
+      `Ngay xuat: ${this.formatDateTime(new Date())}`,
+    ]);
+    worksheet.mergeCells(2, 1, 2, 5);
+    exportedAtRow.alignment = { horizontal: 'right' };
+    exportedAtRow.font = { italic: true, size: 10 };
+
+    const headerRow = worksheet.getRow(3);
+    headerRow.font = { bold: true };
+    headerRow.alignment = { horizontal: 'center', vertical: 'middle' };
+    headerRow.eachCell((cell) => {
+      cell.fill = {
+        type: 'pattern',
+        pattern: 'solid',
+        fgColor: { argb: 'FFD9EAF7' },
+      };
+      cell.border = this.thinBorder();
+    });
+
+    rows.forEach((row, index) => {
+      const dataRow = worksheet.addRow({
+        index: index + 1,
+        studentGroupName: row.studentGroupName ?? '',
+        fullName: row.fullName ?? '',
+        userName: row.userName,
+        password: DEFAULT_STUDENT_PASSWORD,
+      });
+      dataRow.eachCell((cell) => {
+        cell.border = this.thinBorder();
+        cell.alignment = { vertical: 'middle' };
+      });
+      dataRow.getCell(1).alignment = {
+        horizontal: 'center',
+        vertical: 'middle',
+      };
+    });
+
+    worksheet.views = [{ state: 'frozen', ySplit: 3 }];
+
+    const arrayBuffer = await workbook.xlsx.writeBuffer();
+    return {
+      fileName: `${this.toSafeFileName(school.name)}-tai-khoan-hoc-sinh.xlsx`,
+      buffer: Buffer.from(arrayBuffer),
+    };
+  }
+
+  private async getStudentAccountExportRows(
+    schoolId: string,
+  ): Promise<StudentAccountExportRow[]> {
+    return this.studentRepo
+      .createQueryBuilder('student')
+      .innerJoin(UserEntity, 'user', 'user.id = student.id')
+      .leftJoin('student.studentGroup', 'studentGroup')
+      .select('studentGroup.name', 'studentGroupName')
+      .addSelect('studentGroup.code', 'studentGroupCode')
+      .addSelect('user.full_name', 'fullName')
+      .addSelect('user.user_name', 'userName')
+      .where(
+        '(student.school_id = :schoolId OR studentGroup.schoolId = :schoolId)',
+        { schoolId },
+      )
+      .andWhere('user.user_type = :userType', { userType: UserType.STUDENT })
+      .orderBy('studentGroup.code', 'ASC')
+      .addOrderBy('studentGroup.name', 'ASC')
+      .addOrderBy('COALESCE(user.full_name, user.user_name)', 'ASC')
+      .getRawMany<StudentAccountExportRow>();
+  }
+
   async update(id: string, dto: UpdateSchoolDto): Promise<SchoolEntity> {
     const record = await this.findOne(id);
 
@@ -225,6 +333,37 @@ export class SchoolService {
         zoneName: school.zone?.name ?? null,
         principalUserName: school.principalUser?.fullName ?? null,
       })),
+    );
+  }
+
+  private thinBorder() {
+    return {
+      top: { style: 'thin' as const },
+      left: { style: 'thin' as const },
+      bottom: { style: 'thin' as const },
+      right: { style: 'thin' as const },
+    };
+  }
+
+  private formatDateTime(date: Date): string {
+    const pad = (value: number) => String(value).padStart(2, '0');
+    return `${pad(date.getDate())}/${pad(
+      date.getMonth() + 1,
+    )}/${date.getFullYear()} ${pad(date.getHours())}:${pad(
+      date.getMinutes(),
+    )}`;
+  }
+
+  private toSafeFileName(value: string): string {
+    return (
+      value
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .replace(/đ/g, 'd')
+        .replace(/Đ/g, 'D')
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, '-')
+        .replace(/^-+|-+$/g, '') || 'school'
     );
   }
 }

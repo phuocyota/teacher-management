@@ -7,16 +7,11 @@ import { LectureModule } from './lecture/lecture.module';
 import { TeacherEntity } from './teacher/teacher.entity';
 import { LectureEntity } from './lecture/entity/lecture.entity';
 import { UserModule } from './user/user.module';
-import { LicenseModule } from './license/license.module';
-import { DeviceModule } from './device/device.module';
 import { SocketModule } from './socket/socket.module';
 import { AuthModule } from './auth/auth.module';
 import { AuthGuard } from './common/guard/auth.guard';
 import { AllExceptionsFilter } from './common/filter/all-exceptions.filter';
 import { UserEntity } from './user/user.entity';
-import { LicenseEntity } from './license/license.entity';
-import { ApprovedDeviceEntity } from './device/entity/approved-device.entity';
-import { DeviceRequest } from './device/entity/device-request.entity';
 import { ClassModule } from './class/class.module';
 import { ClassEntity } from './class/class.entity';
 import { UploadModule } from './upload/upload.module';
@@ -59,6 +54,8 @@ import { GradeModule } from './grade/grade.module';
 import { GradeEntity } from './grade/grade.entity';
 import { SubjectModule } from './subject/subject.module';
 import { SubjectEntity } from './subject/subject.entity';
+import { SchoolSubjectEntity } from './subject/school-subject.entity';
+import { StudentGroupSubjectEntity } from './subject/student-group-subject.entity';
 import { ExamSetModule } from './exam-set/exam-set.module';
 import { ExamSetEntity } from './exam-set/exam-set.entity';
 import { ExamSetQuestionBankModule } from './exam-set-question-bank/exam-set-question-bank.module';
@@ -93,9 +90,6 @@ import { ZoneEntity } from './zone/zone.entity';
           TeacherEntity,
           LectureEntity,
           UserEntity,
-          LicenseEntity,
-          ApprovedDeviceEntity,
-          DeviceRequest,
           ClassEntity,
           CourseEntity,
           FileEntity,
@@ -119,6 +113,8 @@ import { ZoneEntity } from './zone/zone.entity';
           StudentAnswerEntity,
           GradeEntity,
           SubjectEntity,
+          SchoolSubjectEntity,
+          StudentGroupSubjectEntity,
           ExamSetEntity,
           ExamSetQuestionBankEntity,
           ExamSetClassEntity,
@@ -130,8 +126,6 @@ import { ZoneEntity } from './zone/zone.entity';
     TeacherModule,
     LectureModule,
     UserModule,
-    LicenseModule,
-    DeviceModule,
     SocketModule,
     AuthModule,
     ClassModule,

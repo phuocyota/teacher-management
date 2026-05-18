@@ -188,6 +188,8 @@ Chinh cac bien:
 - `isTargetSchool`
 - `classCode`
 
+Luu y `schoolName` la ten hien thi luc tao truong, nen viet dung hoa thuong va dau tieng Viet neu co. Vi du dung `THCS Nguyễn An Khương`, khong dung `THCS NGUYỄN AN KHƯƠNG`.
+
 ```bash
 node -r dotenv/config - <<'NODE'
 const ExcelJS = require('exceljs');
@@ -196,7 +198,7 @@ const bcrypt = require('bcryptjs');
 
 const input = '/path/to/file.xlsx';
 const schoolCode = 'TH_EXAMPLE';
-const schoolName = 'TRUONG TIEU HOC EXAMPLE';
+const schoolName = 'THCS Nguyễn An Khương';
 const zoneCode = 'VT';
 const prefix = 'thex';
 
@@ -303,23 +305,32 @@ function isTargetSchool(ws) {
         [classCode(cls), `Lop ${cls}`, school.id, 'MEMBER']
       )).rows[0];
 
-      for (let i = 0; i < names.length; i++) {
-        const code = usernameFor(cls, i + 1);
-        const user = (await client.query(
-          `insert into "user"(user_name, hash_password, full_name, user_type, status, is_disabled)
-           values($1, $2, $3, $4, $5, false)
-           returning id`,
-          [code, hash, names[i], 'STUDENT', 'ACTIVE']
-        )).rows[0];
+      const rows = names.map((name, i) => ({
+        code: usernameFor(cls, i + 1),
+        name,
+      }));
 
-        await client.query(
-          `insert into student(id, student_group_id, school_id, code)
-           values($1, $2, $3, $4)`,
-          [user.id, group.id, school.id, code]
-        );
+      const users = (await client.query(
+        `insert into "user"(user_name, hash_password, full_name, user_type, status, is_disabled)
+         select r.code, $2, r.name, 'STUDENT', 'ACTIVE', false
+         from jsonb_to_recordset($1::jsonb) as r(code text, name text)
+         returning id, user_name`,
+        [JSON.stringify(rows), hash]
+      )).rows;
 
-        inserted++;
-      }
+      const studentRows = users.map((user) => ({
+        id: user.id,
+        code: user.user_name,
+      }));
+
+      await client.query(
+        `insert into student(id, student_group_id, school_id, code)
+         select r.id::uuid, $2, $3, r.code
+         from jsonb_to_recordset($1::jsonb) as r(id text, code text)`,
+        [JSON.stringify(studentRows), group.id, school.id]
+      );
+
+      inserted += names.length;
     }
 
     await client.query('commit');
@@ -333,6 +344,26 @@ function isTargetSchool(ws) {
 })();
 NODE
 ```
+
+### Neu import cham
+
+Doan transaction mau o tren da dung bulk insert theo tung lop. Neu ban dang dung script cu voi vong lap:
+
+```js
+for (...) {
+  await client.query('insert into "user" ... returning id');
+  await client.query('insert into student ...');
+}
+```
+
+thi toc do se cham vi moi hoc sinh ton 2 round-trip toi PostgreSQL. Voi 1.000 hoc sinh la khoang 2.000 query tuan tu. Nen chuyen sang pattern `jsonb_to_recordset` nhu tren:
+
+- Hash mat khau mot lan: `const hash = await bcrypt.hash(password, 10)`.
+- Insert nhieu `"user"` trong mot query va `returning id, user_name`.
+- Insert nhieu `student` trong mot query tu danh sach id vua tra ve.
+- Van giu transaction de rollback toan bo neu co loi.
+
+Co the bulk toan truong nhanh hon nua, nhung bulk theo tung lop de doc, de debug va van nhanh hon rat nhieu so voi insert tung hoc sinh.
 
 ## Doi username sau import
 

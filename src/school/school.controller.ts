@@ -8,6 +8,7 @@ import {
   Delete,
   Query,
   ParseUUIDPipe,
+  Res,
 } from '@nestjs/common';
 import {
   ApiTags,
@@ -16,7 +17,9 @@ import {
   ApiOkResponse,
   ApiCreatedResponse,
   ApiQuery,
+  ApiProduces,
 } from '@nestjs/swagger';
+import type { Response } from 'express';
 import { SchoolService } from './school.service';
 import { CreateSchoolDto, UpdateSchoolDto } from './dto/create-school.dto';
 import { SchoolResponseDto, SchoolListResponseDto } from './dto/school.dto';
@@ -79,6 +82,30 @@ export class SchoolController {
     @User() user: JwtPayload,
   ): Promise<StudentGroupResponseDto[]> {
     return this.schoolService.findStudentGroupsBySchool(id, user.userId);
+  }
+
+  @Get(':id/export-student-accounts')
+  @ApiOperation({
+    summary: 'Xuat file Excel tai khoan hoc sinh theo truong',
+  })
+  @ApiProduces(
+    'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  )
+  async exportStudentAccountsExcel(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Res() res: Response,
+  ): Promise<void> {
+    const file = await this.schoolService.exportStudentAccountsExcel(id);
+
+    res.setHeader(
+      'Content-Type',
+      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    );
+    res.setHeader(
+      'Content-Disposition',
+      `attachment; filename="${file.fileName}"`,
+    );
+    res.send(file.buffer);
   }
 
   @Get(':id')

@@ -1,5 +1,7 @@
 import { BaseEntity } from 'src/common/sql/base.entity';
-import { Column, Entity } from 'typeorm';
+import { Column, Entity, OneToMany } from 'typeorm';
+import { SchoolSubjectEntity } from './school-subject.entity';
+import { StudentGroupSubjectEntity } from './student-group-subject.entity';
 
 @Entity('subject')
 export class SubjectEntity extends BaseEntity {
@@ -18,4 +20,16 @@ export class SubjectEntity extends BaseEntity {
     nullable: false,
   })
   name!: string;
+
+  @OneToMany(
+    () => SchoolSubjectEntity,
+    (schoolSubject) => schoolSubject.subject,
+  )
+  schoolSubjects!: SchoolSubjectEntity[];
+
+  @OneToMany(
+    () => StudentGroupSubjectEntity,
+    (studentGroupSubject) => studentGroupSubject.subject,
+  )
+  studentGroupSubjects!: StudentGroupSubjectEntity[];
 }

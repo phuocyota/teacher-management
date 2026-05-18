@@ -18,7 +18,6 @@ async function bootstrap() {
     .addTag('User', 'User management endpoints')
     .addTag('Auth', 'Authentication endpoints')
     .addTag('Device', 'Device management endpoints')
-    .addTag('License', 'License management endpoints')
     .addTag('Course', 'Course management endpoints')
     .addTag('Upload', 'File upload endpoints')
     .addBearerAuth(

@@ -7,12 +7,14 @@ import { ZoneModule } from 'src/zone/zone.module';
 import { UserEntity } from 'src/user/user.entity';
 import { StudentGroupEntity } from 'src/student-group/student-group.entity';
 import { StudentGroupMemberEntity } from 'src/student-group/student-group-member.entity';
+import { StudentEntity } from 'src/student/student.entity';
 
 @Module({
   imports: [
     TypeOrmModule.forFeature([
       SchoolEntity,
       UserEntity,
+      StudentEntity,
       StudentGroupEntity,
       StudentGroupMemberEntity,
     ]),

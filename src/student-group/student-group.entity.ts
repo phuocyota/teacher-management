@@ -11,6 +11,7 @@ import { SchoolEntity } from 'src/school/school.entity';
 import { StudentEntity } from 'src/student/student.entity';
 import { GroupMemberRole } from 'src/user-group/enum/group-member-role.enum';
 import { StudentGroupMemberEntity } from './student-group-member.entity';
+import { StudentGroupSubjectEntity } from 'src/subject/student-group-subject.entity';
 
 @Entity('student_group')
 @Unique(['code', 'schoolId'])
@@ -42,4 +43,10 @@ export class StudentGroupEntity extends BaseEntity {
 
   @OneToMany(() => StudentGroupMemberEntity, (member) => member.studentGroup)
   members: StudentGroupMemberEntity[];
+
+  @OneToMany(
+    () => StudentGroupSubjectEntity,
+    (studentGroupSubject) => studentGroupSubject.studentGroup,
+  )
+  studentGroupSubjects!: StudentGroupSubjectEntity[];
 }
