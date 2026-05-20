@@ -556,10 +556,14 @@ export class UserService extends BaseService<UserEntity> {
     return {
       ...safeUser,
       studentCode: student?.code,
-      className: student?.studentGroup?.name,
+      className: this.normalizeCertificateClassName(student?.studentGroup?.name),
       schoolName: student?.studentGroup?.school?.name,
       certificates: await this.getStudentCertificates(user.id),
     };
+  }
+
+  private normalizeCertificateClassName(value?: string | null): string {
+    return value?.replace(/^\s*(?:Lớp|Lop)\s+/i, '').trim() ?? '';
   }
 
   private async getStudentCertificates(
@@ -636,7 +640,7 @@ export class UserService extends BaseService<UserEntity> {
         return {
           id: index + 1,
           name: row.studentName ?? row.userName,
-          className: row.className ?? '',
+          className: this.normalizeCertificateClassName(row.className),
           school: row.schoolName ?? '',
           date: this.formatCertificateDate(row.submittedAt),
           subject: row.subjectName ?? row.questionBankName ?? '',
