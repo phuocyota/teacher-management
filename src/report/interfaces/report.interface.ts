@@ -139,3 +139,22 @@ export interface SchoolStatRow {
   ranking: number | null;
   assessment: string;
 }
+
+export interface ZoneStatRawRow extends SchoolStatRawRow {
+  schoolId: string;
+  schoolName: string;
+}
+
+export interface ZoneStatRow {
+  schoolId: string;
+  schoolName: string;
+  totalGroups: number;
+  attemptedGroups: number;
+  absentGroups: number;
+  totalStudents: number;
+  attemptedStudents: number;
+  absentStudents: number;
+  averageScore: number | null;
+  completionRate: number;
+  assessment: string;
+}

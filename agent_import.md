@@ -176,6 +176,13 @@ Voi lop dang `1.1`, `5.6`, dung:
 - `student_group.name`: `Lop 1.1`, `Lop 5.6`
 - username: `<prefix>_11_001`, `<prefix>_56_001`
 
+Neu prefix username da ton tai trong DB thi khong doi bang cach chen them chu cai hoac viet tat moi. Hay them so thu tu vao cuoi prefix goc:
+
+- Thu prefix goc truoc, vi du `thhl`.
+- Neu da co username dang `thhl_%`, thu `thhl1`.
+- Neu `thhl1_%` cung da co, thu tiep `thhl2`, `thhl3`, ...
+- Dung prefix da chon cho toan bo truong trong cung lan import va file export.
+
 ## Import transaction mau
 
 Chinh cac bien:
@@ -184,7 +191,7 @@ Chinh cac bien:
 - `schoolCode`
 - `schoolName`
 - `zoneCode`
-- `prefix`
+- `basePrefix`
 - `isTargetSchool`
 - `classCode`
 
@@ -200,7 +207,7 @@ const input = '/path/to/file.xlsx';
 const schoolCode = 'TH_EXAMPLE';
 const schoolName = 'THCS Nguyễn An Khương';
 const zoneCode = 'VT';
-const prefix = 'thex';
+const basePrefix = 'thex';
 
 function txt(cell) {
   const v = cell.value;
@@ -234,9 +241,20 @@ function classCode(cls) {
   throw new Error(`Bad class ${cls}`);
 }
 
-function usernameFor(cls, index) {
+function usernameFor(prefix, cls, index) {
   const normalizedClass = cls.toLowerCase().replace('.', '');
   return `${prefix}_${normalizedClass}_${String(index).padStart(3, '0')}`;
+}
+
+async function nextAvailablePrefix(client, base) {
+  for (let i = 0; ; i++) {
+    const candidate = i === 0 ? base : `${base}${i}`;
+    const exists = await client.query(
+      `select 1 from "user" where user_name like $1 limit 1`,
+      [`${candidate}_%`]
+    );
+    if (!exists.rowCount) return candidate;
+  }
 }
 
 function isTargetSchool(ws) {
@@ -295,6 +313,7 @@ function isTargetSchool(ws) {
     )).rows[0];
 
     const hash = await bcrypt.hash('123456', 10);
+    const prefix = await nextAvailablePrefix(client, basePrefix);
     let inserted = 0;
 
     for (const [cls, names] of byClass.entries()) {
@@ -306,7 +325,7 @@ function isTargetSchool(ws) {
       )).rows[0];
 
       const rows = names.map((name, i) => ({
-        code: usernameFor(cls, i + 1),
+        code: usernameFor(prefix, cls, i + 1),
         name,
       }));
 
@@ -334,7 +353,7 @@ function isTargetSchool(ws) {
     }
 
     await client.query('commit');
-    console.log({ school, classes: byClass.size, students: inserted });
+    console.log({ school, prefix, classes: byClass.size, students: inserted });
   } catch (e) {
     await client.query('rollback');
     throw e;

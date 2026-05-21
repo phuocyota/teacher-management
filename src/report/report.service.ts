@@ -29,6 +29,7 @@ import { StudentEntity } from 'src/student/student.entity';
 import { StudentAnswerEntity } from 'src/student-answer/student-answer.entity';
 import { StudentGroupEntity } from 'src/student-group/student-group.entity';
 import { SchoolEntity } from 'src/school/school.entity';
+import { ZoneEntity } from 'src/zone/zone.entity';
 import { GroupType } from 'src/group/enum/group-type.enum';
 import { GroupMemberRole } from 'src/user-group/enum/group-member-role.enum';
 import {
@@ -49,6 +50,8 @@ import {
   SchoolReportAccessScope,
   SchoolStatRawRow,
   SchoolStatRow,
+  ZoneStatRawRow,
+  ZoneStatRow,
   StudentAttemptDetailContext,
   StudentAttemptDetailRow,
   StudentAttemptScoreStats,
@@ -93,6 +96,11 @@ const SCHOOL_STAT_TEMPLATE_PATH = join(
   'templates',
   'template-excel-school.xlsx',
 );
+const ZONE_STAT_TEMPLATE_PATH = join(
+  process.cwd(),
+  'templates',
+  'template-zone.xlsx',
+);
 
 @Injectable()
 export class ReportService {
@@ -109,6 +117,8 @@ export class ReportService {
     private readonly studentGroupRepo: Repository<StudentGroupEntity>,
     @InjectRepository(SchoolEntity)
     private readonly schoolRepo: Repository<SchoolEntity>,
+    @InjectRepository(ZoneEntity)
+    private readonly zoneRepo: Repository<ZoneEntity>,
     @InjectRepository(QuestionBankQuestionEntity)
     private readonly questionBankQuestionRepo: Repository<QuestionBankQuestionEntity>,
   ) {}
@@ -537,6 +547,18 @@ export class ReportService {
     return workbook;
   }
 
+  private async createZoneStatWorkbook(): Promise<Workbook> {
+    const workbook = new Workbook();
+    workbook.creator = 'teacher-management';
+    workbook.created = new Date();
+
+    if (existsSync(ZONE_STAT_TEMPLATE_PATH)) {
+      await workbook.xlsx.readFile(ZONE_STAT_TEMPLATE_PATH);
+    }
+
+    return workbook;
+  }
+
   async exportCurrentStudentBestAttemptDetailExcel(
     user: JwtPayload,
     studentId: string,
@@ -626,6 +648,31 @@ export class ReportService {
     return {
       buffer: Buffer.from(xlsx),
       fileName: `thong-ke-truong-${toSafeFileName(school.code)}.xlsx`,
+    };
+  }
+
+  async exportZoneStatSheetExcel(
+    user: JwtPayload,
+    zoneId: string,
+    filters: SchoolAttemptReportFilters,
+  ): Promise<{ buffer: Buffer; fileName: string }> {
+    this.ensureAuthenticatedUser(user);
+
+    const zone = await this.zoneRepo.findOne({ where: { id: zoneId } });
+    if (!zone) {
+      throw new NotFoundException(
+        ERROR_MESSAGES.NOT_FOUND_WITH_ID(ENTITY_NAMES.ZONE, zoneId),
+      );
+    }
+
+    const rows = await this.getZoneStatSheetRows(zoneId, filters, user);
+    const workbook = await this.createZoneStatWorkbook();
+    this.addZoneStatWorksheet(workbook, zone, rows);
+
+    const xlsx = await workbook.xlsx.writeBuffer();
+    return {
+      buffer: Buffer.from(xlsx),
+      fileName: `thong-ke-khu-vuc-${toSafeFileName(zone.code)}.xlsx`,
     };
   }
 
@@ -1393,6 +1440,180 @@ export class ReportService {
     return qb.getRawMany<SchoolStatRawRow>();
   }
 
+  private async getZoneStatSheetRows(
+    zoneId: string,
+    filters: SchoolAttemptReportFilters,
+    user: JwtPayload,
+  ): Promise<ZoneStatRow[]> {
+    const rawRows = await this.getZoneStatRawRows(zoneId, filters, user);
+    const latestRows = new Map<string, ZoneStatRawRow>();
+
+    for (const row of rawRows) {
+      if (!latestRows.has(row.studentId)) {
+        latestRows.set(row.studentId, row);
+      }
+    }
+
+    const statsBySchool = new Map<
+      string,
+      ZoneStatRow & {
+        totalScore: number;
+        groupIds: Set<string>;
+        attemptedGroupIds: Set<string>;
+      }
+    >();
+
+    for (const row of latestRows.values()) {
+      const current =
+        statsBySchool.get(row.schoolId) ??
+        ({
+          schoolId: row.schoolId,
+          schoolName: row.schoolName,
+          totalGroups: 0,
+          attemptedGroups: 0,
+          absentGroups: 0,
+          totalStudents: 0,
+          attemptedStudents: 0,
+          absentStudents: 0,
+          averageScore: null,
+          completionRate: 0,
+          assessment: '',
+          totalScore: 0,
+          groupIds: new Set<string>(),
+          attemptedGroupIds: new Set<string>(),
+        } satisfies ZoneStatRow & {
+          totalScore: number;
+          groupIds: Set<string>;
+          attemptedGroupIds: Set<string>;
+        });
+
+      current.groupIds.add(row.studentGroupId);
+      current.totalStudents += 1;
+
+      const score = toNullableNumber(row.score);
+      if (row.attemptId && score !== null) {
+        current.attemptedStudents += 1;
+        current.totalScore += score;
+        current.attemptedGroupIds.add(row.studentGroupId);
+      }
+
+      statsBySchool.set(row.schoolId, current);
+    }
+
+    return [...statsBySchool.values()]
+      .map((row) => {
+        const totalGroups = row.groupIds.size;
+        const attemptedGroups = row.attemptedGroupIds.size;
+        const absentStudents = row.totalStudents - row.attemptedStudents;
+        const averageScore =
+          row.attemptedStudents > 0
+            ? row.totalScore / row.attemptedStudents
+            : null;
+        const completionRate =
+          row.totalStudents > 0
+            ? (row.attemptedStudents / row.totalStudents) * 100
+            : 0;
+
+        return {
+          schoolId: row.schoolId,
+          schoolName: row.schoolName,
+          totalGroups,
+          attemptedGroups,
+          absentGroups: totalGroups - attemptedGroups,
+          totalStudents: row.totalStudents,
+          attemptedStudents: row.attemptedStudents,
+          absentStudents,
+          averageScore,
+          completionRate,
+          assessment: this.getCompletionAssessmentLabel(completionRate),
+        };
+      })
+      .sort((a, b) => a.schoolName.localeCompare(b.schoolName));
+  }
+
+  private async getZoneStatRawRows(
+    zoneId: string,
+    filters: SchoolAttemptReportFilters,
+    user: JwtPayload,
+  ): Promise<ZoneStatRawRow[]> {
+    const attemptJoinConditions = ['attempt.student_id = student.id'];
+    const params: Record<string, string> = {
+      zoneId,
+      userType: UserType.STUDENT,
+    };
+
+    if (filters.examSetId) {
+      attemptJoinConditions.push('attempt.exam_set_id = :examSetId');
+      params.examSetId = filters.examSetId;
+    }
+
+    if (filters.questionBankId) {
+      attemptJoinConditions.push('attempt.question_bank_id = :questionBankId');
+      params.questionBankId = filters.questionBankId;
+    }
+
+    if (filters.fromDate) {
+      attemptJoinConditions.push('DATE(attempt.started_at) >= :fromDate');
+      params.fromDate = filters.fromDate;
+    }
+
+    if (filters.toDate) {
+      attemptJoinConditions.push('DATE(attempt.started_at) <= :toDate');
+      params.toDate = filters.toDate;
+    }
+
+    const qb = this.studentRepo
+      .createQueryBuilder('student')
+      .innerJoin(UserEntity, 'user', 'user.id = student.id')
+      .innerJoin(
+        StudentGroupEntity,
+        'studentGroup',
+        'studentGroup.id = student.student_group_id',
+      )
+      .innerJoin('studentGroup.school', 'school')
+      .leftJoin(AttemptEntity, 'attempt', attemptJoinConditions.join(' AND '))
+      .select('student.id', 'studentId')
+      .addSelect('student.code', 'studentCode')
+      .addSelect('studentGroup.id', 'studentGroupId')
+      .addSelect('studentGroup.name', 'studentGroupName')
+      .addSelect('school.id', 'schoolId')
+      .addSelect('school.name', 'schoolName')
+      .addSelect('user.full_name', 'fullName')
+      .addSelect('user.user_name', 'userName')
+      .addSelect('attempt.id', 'attemptId')
+      .addSelect('attempt.score', 'score')
+      .addSelect('attempt.started_at', 'startedAt')
+      .where('school.zone_id = :zoneId')
+      .andWhere('user.user_type = :userType')
+      .setParameters(params)
+      .orderBy('school.name', 'ASC')
+      .addOrderBy('studentGroup.name', 'ASC')
+      .addOrderBy('COALESCE(user.full_name, user.user_name)', 'ASC')
+      .addOrderBy('attempt.started_at', 'DESC');
+
+    if (user.userType !== UserType.ADMIN) {
+      qb.andWhere(
+        this.canAccessStudentGroupCondition(),
+        this.accessParams(user.userId),
+      );
+    }
+
+    return qb.getRawMany<ZoneStatRawRow>();
+  }
+
+  private getCompletionAssessmentLabel(completionRate: number): string {
+    if (completionRate >= 100) {
+      return 'Hoàn thành tốt';
+    }
+    if (completionRate >= 80) {
+      return 'Khá';
+    }
+    if (completionRate >= 50) {
+      return 'Chậm tiến độ';
+    }
+    return 'Cần nhắc nhở';
+  }
+
   private addStudentDetailWorksheet(
     workbook: Workbook,
     context: StudentAttemptDetailContext,
@@ -1647,6 +1868,75 @@ export class ReportService {
       8,
       Math.max(dataStartRow, dataStartRow + rows.length - 1),
       12,
+    );
+  }
+
+  private addZoneStatWorksheet(
+    workbook: Workbook,
+    zone: ZoneEntity,
+    rows: ZoneStatRow[],
+  ): void {
+    const worksheet =
+      workbook.getWorksheet('Sheet1') ??
+      workbook.addWorksheet('Thống kê KHU VỰC');
+
+    if (!worksheet.columns.length) {
+      setupSheetColumns(
+        worksheet,
+        [8, 16, 30, 24, 14, 14, 14, 14, 14, 14, 16, 16, 18, 18],
+      );
+    }
+
+    const dataWorksheet = workbook.getWorksheet('data');
+    if (dataWorksheet) {
+      dataWorksheet.getCell('B6').value = zone.name;
+    }
+
+    worksheet.getCell('A4').value = [
+      'KỲ THI ĐÁNH GIÁ HỌC KỲ II - NĂM HỌC: 2025 2026',
+      'BẢNG THỐNG KÊ KHU VỰC',
+      `TỈNH/THÀNH PHỐ: ${zone.name}`,
+      'CHƯƠNG TRÌNH GIÁO DỤC ICHI SKILL',
+    ].join('\n');
+
+    const dataStartRow = 9;
+    const templateRow = worksheet.getRow(dataStartRow);
+    rows.forEach((row, index) => {
+      const rowIndex = dataStartRow + index;
+      const excelRow = worksheet.getRow(rowIndex);
+      if (rowIndex !== dataStartRow) {
+        copyRowStyle(templateRow, excelRow, 14);
+      }
+      excelRow.getCell(1).value = index + 1;
+      excelRow.getCell(2).value = '';
+      excelRow.getCell(3).value = row.schoolName;
+      excelRow.getCell(4).value = '';
+      excelRow.getCell(5).value = row.totalGroups;
+      excelRow.getCell(6).value = row.attemptedGroups;
+      excelRow.getCell(7).value = row.absentGroups;
+      excelRow.getCell(8).value = row.totalStudents;
+      excelRow.getCell(9).value = row.attemptedStudents;
+      excelRow.getCell(10).value = row.absentStudents;
+      excelRow.getCell(11).value =
+        row.averageScore === null ? '' : Number(row.averageScore.toFixed(2));
+      excelRow.getCell(12).value = Number(row.completionRate.toFixed(2));
+      excelRow.getCell(13).value = row.assessment;
+      excelRow.getCell(14).value = '';
+      styleDataRow(excelRow);
+      excelRow.commit();
+    });
+
+    if (rows.length === 0) {
+      for (let col = 1; col <= 14; col += 1) {
+        templateRow.getCell(col).value = '';
+      }
+    }
+
+    applyTableBorder(
+      worksheet,
+      8,
+      Math.max(dataStartRow, dataStartRow + rows.length - 1),
+      14,
     );
   }
 

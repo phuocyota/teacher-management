@@ -265,4 +265,35 @@ export class ReportController {
     );
     res.send(file.buffer);
   }
+
+  @Get('zones/:zoneId/export-zone-stat-sheet')
+  @Roles(UserType.ADMIN, UserType.TEACHER)
+  @ApiOperation({
+    summary: 'Xuat sheet THONG KE KHU VUC cho mot khu vuc',
+  })
+  @ApiProduces(
+    'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  )
+  async exportZoneStatSheetExcel(
+    @User() user: JwtPayload,
+    @Param('zoneId', ParseUUIDPipe) zoneId: string,
+    @Query() query: AttemptReportFilterQueryDto,
+    @Res() res: Response,
+  ): Promise<void> {
+    const file = await this.reportService.exportZoneStatSheetExcel(
+      user,
+      zoneId,
+      query,
+    );
+
+    res.setHeader(
+      'Content-Type',
+      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    );
+    res.setHeader(
+      'Content-Disposition',
+      `attachment; filename="${file.fileName}"`,
+    );
+    res.send(file.buffer);
+  }
 }

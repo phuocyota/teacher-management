@@ -9,6 +9,7 @@ import { StudentGroupEntity } from 'src/student-group/student-group.entity';
 import { StudentGroupMemberEntity } from 'src/student-group/student-group-member.entity';
 import { UserEntity } from 'src/user/user.entity';
 import { SchoolEntity } from 'src/school/school.entity';
+import { ZoneEntity } from 'src/zone/zone.entity';
 import { ReportController } from './report.controller';
 import { ReportService } from './report.service';
 
@@ -22,6 +23,7 @@ import { ReportService } from './report.service';
       StudentGroupEntity,
       StudentGroupMemberEntity,
       SchoolEntity,
+      ZoneEntity,
       QuestionBankQuestionEntity,
       ExamSetQuestionBankEntity,
     ]),
