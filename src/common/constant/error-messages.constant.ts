@@ -11,6 +11,7 @@ export const ERROR_MESSAGES = {
   ACCESS_DENIED_ADMIN: 'Truy cập bị từ chối. Chỉ dành cho Admin.',
   ACCESS_DENIED_TEACHER: 'Truy cập bị từ chối. Chỉ dành cho Giáo viên.',
   ACCESS_DENIED_STUDENT: 'Truy cập bị từ chối. Chỉ dành cho Học sinh.',
+  ACCESS_DENIED_BUSINESS: 'Truy cập bị từ chối. Chỉ dành cho Kinh doanh.',
 
   // Not found errors
   NOT_FOUND: (entity: string) => `${entity} không tồn tại`,

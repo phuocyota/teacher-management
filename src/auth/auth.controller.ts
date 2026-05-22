@@ -69,6 +69,18 @@ export class AuthController {
   }
 
   @Public()
+  @Post('login/business')
+  @ApiOperation({ summary: 'Kinh doanh login' })
+  @ApiResponse({ status: 200, description: 'Login successful' })
+  @ApiResponse({
+    status: 401,
+    description: 'Invalid credentials or not a business user',
+  })
+  async loginBusiness(@Body() dto: LoginDto) {
+    return this.authService.loginBusiness(dto);
+  }
+
+  @Public()
   @Post('register')
   @ApiOperation({ summary: 'User registration' })
   @ApiResponse({ status: 201, description: 'User registered successfully' })

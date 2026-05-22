@@ -312,48 +312,76 @@ function isTargetSchool(ws) {
       [schoolCode, schoolName, zone.id]
     )).rows[0];
 
-    const hash = await bcrypt.hash('123456', 10);
     const prefix = await nextAvailablePrefix(client, basePrefix);
-    let inserted = 0;
+    const groupInput = [...byClass.keys()].map((cls) => ({
+      cls,
+      code: classCode(cls),
+      name: `Lop ${cls}`,
+    }));
 
+    const groups = (await client.query(
+      `insert into student_group(code, name, "schoolId", role)
+       select r.code, r.name, $2, 'MEMBER'
+       from jsonb_to_recordset($1::jsonb) as r(cls text, code int, name text)
+       returning id, code, name`,
+      [JSON.stringify(groupInput), school.id]
+    )).rows;
+
+    const groupByCode = new Map(groups.map((g) => [Number(g.code), g.id]));
+    const userInput = [];
     for (const [cls, names] of byClass.entries()) {
-      const group = (await client.query(
-        `insert into student_group(code, name, "schoolId", role)
-         values($1, $2, $3, $4)
-         returning id`,
-        [classCode(cls), `Lop ${cls}`, school.id, 'MEMBER']
-      )).rows[0];
+      const groupId = groupByCode.get(classCode(cls));
+      if (!groupId) throw new Error(`Khong tao duoc lop ${cls}`);
 
-      const rows = names.map((name, i) => ({
-        code: usernameFor(prefix, cls, i + 1),
-        name,
-      }));
-
-      const users = (await client.query(
-        `insert into "user"(user_name, hash_password, full_name, user_type, status, is_disabled)
-         select r.code, $2, r.name, 'STUDENT', 'ACTIVE', false
-         from jsonb_to_recordset($1::jsonb) as r(code text, name text)
-         returning id, user_name`,
-        [JSON.stringify(rows), hash]
-      )).rows;
-
-      const studentRows = users.map((user) => ({
-        id: user.id,
-        code: user.user_name,
-      }));
-
-      await client.query(
-        `insert into student(id, student_group_id, school_id, code)
-         select r.id::uuid, $2, $3, r.code
-         from jsonb_to_recordset($1::jsonb) as r(id text, code text)`,
-        [JSON.stringify(studentRows), group.id, school.id]
-      );
-
-      inserted += names.length;
+      names.forEach((name, i) => {
+        userInput.push({
+          code: usernameFor(prefix, cls, i + 1),
+          name,
+          groupId,
+        });
+      });
     }
 
+    const duplicateUsers = (await client.query(
+      `select user_name
+       from "user"
+       where user_name = any($1::text[])`,
+      [userInput.map((r) => r.code)]
+    )).rows;
+    if (duplicateUsers.length) {
+      throw new Error(`Trung username: ${duplicateUsers.map((r) => r.user_name).join(', ')}`);
+    }
+
+    const hash = await bcrypt.hash('123456', 10);
+    const users = (await client.query(
+      `insert into "user"(user_name, hash_password, full_name, user_type, status, is_disabled)
+       select r.code, $2, r.name, 'STUDENT', 'ACTIVE', false
+       from jsonb_to_recordset($1::jsonb) as r(code text, name text, "groupId" uuid)
+       returning id, user_name`,
+      [JSON.stringify(userInput), hash]
+    )).rows;
+
+    const inputByCode = new Map(userInput.map((r) => [r.code, r]));
+    const studentInput = users.map((user) => {
+      const input = inputByCode.get(user.user_name);
+      if (!input) throw new Error(`Khong tim thay input cho ${user.user_name}`);
+
+      return {
+        id: user.id,
+        code: user.user_name,
+        groupId: input.groupId,
+      };
+    });
+
+    await client.query(
+      `insert into student(id, student_group_id, school_id, code)
+       select r.id::uuid, r."groupId", $2, r.code
+       from jsonb_to_recordset($1::jsonb) as r(id text, code text, "groupId" uuid)`,
+      [JSON.stringify(studentInput), school.id]
+    );
+
     await client.query('commit');
-    console.log({ school, prefix, classes: byClass.size, students: inserted });
+    console.log({ school, prefix, classes: groups.length, students: studentInput.length });
   } catch (e) {
     await client.query('rollback');
     throw e;
@@ -366,7 +394,7 @@ NODE
 
 ### Neu import cham
 
-Doan transaction mau o tren da dung bulk insert theo tung lop. Neu ban dang dung script cu voi vong lap:
+Doan transaction mau o tren da dung bulk insert toan truong. Neu ban dang dung script cu voi vong lap:
 
 ```js
 for (...) {
@@ -378,11 +406,29 @@ for (...) {
 thi toc do se cham vi moi hoc sinh ton 2 round-trip toi PostgreSQL. Voi 1.000 hoc sinh la khoang 2.000 query tuan tu. Nen chuyen sang pattern `jsonb_to_recordset` nhu tren:
 
 - Hash mat khau mot lan: `const hash = await bcrypt.hash(password, 10)`.
-- Insert nhieu `"user"` trong mot query va `returning id, user_name`.
-- Insert nhieu `student` trong mot query tu danh sach id vua tra ve.
+- Tao truoc toan bo `userInput`, check duplicate username mot query voi `where user_name = any($1::text[])`.
+- Insert tat ca `student_group` trong mot query.
+- Insert tat ca `"user"` trong mot query va `returning id, user_name`.
+- Insert tat ca `student` trong mot query tu danh sach id vua tra ve.
 - Van giu transaction de rollback toan bo neu co loi.
 
-Co the bulk toan truong nhanh hon nua, nhung bulk theo tung lop de doc, de debug va van nhanh hon rat nhieu so voi insert tung hoc sinh.
+Neu can debug de hon, co the bulk theo tung lop, nhung khi import that nen uu tien bulk toan truong de giam round-trip PostgreSQL.
+
+### Index can co
+
+Project da khai bao index trong entity cho cac cot hay dung khi import/xuat file:
+
+- `"user".user_name`: unique/index cho login, join va check duplicate.
+- `student.code`: join voi `"user".user_name`.
+- `student_group."schoolId"`: loc danh sach lop theo truong.
+
+Neu DB khong chay `synchronize` hoac can tao index thu cong, dung:
+
+```sql
+create index if not exists idx_user_user_name on "user"(user_name);
+create index if not exists idx_student_code on student(code);
+create index if not exists idx_student_group_school_id on student_group("schoolId");
+```
 
 ## Doi username sau import
 

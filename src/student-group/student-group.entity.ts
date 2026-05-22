@@ -3,6 +3,7 @@ import {
   Column,
   ManyToOne,
   JoinColumn,
+  Index,
   Unique,
   OneToMany,
 } from 'typeorm';
@@ -15,6 +16,7 @@ import { StudentGroupSubjectEntity } from 'src/subject/student-group-subject.ent
 
 @Entity('student_group')
 @Unique(['code', 'schoolId'])
+@Index('idx_student_group_school_id', ['schoolId'])
 export class StudentGroupEntity extends BaseEntity {
   @Column()
   code: number;

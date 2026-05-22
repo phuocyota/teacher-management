@@ -1,10 +1,11 @@
 //student entity have student group id, user id, code
-import { Entity, Column, ManyToOne, JoinColumn } from 'typeorm';
+import { Entity, Column, ManyToOne, JoinColumn, Index } from 'typeorm';
 import { BaseEntity } from 'src/common/sql/base.entity';
 import { StudentGroupEntity } from 'src/student-group/student-group.entity';
 import { SchoolEntity } from 'src/school/school.entity';
 
 @Entity('student')
+@Index('idx_student_code', ['code'])
 export class StudentEntity extends BaseEntity {
   @Column({ name: 'student_group_id', type: 'uuid', nullable: true })
   studentGroupId!: string | null; // ID của nhóm học sinh

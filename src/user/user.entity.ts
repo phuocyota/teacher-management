@@ -1,12 +1,13 @@
 import { UserType } from '../common/enum/user-type.enum.js';
 import { BaseEntity } from '../common/sql/base.entity.js';
-import { Entity, Column, OneToMany } from 'typeorm';
+import { Entity, Column, OneToMany, Index } from 'typeorm';
 import { Gender } from './enum/gender.enum.js';
 import { Status } from './enum/status.enum.js';
 import { UserGroupEntity } from '../user-group/entity/user-group.entity';
 import { LectureUserEntity } from '../lecture/entity/lecture_user.entity.js';
 
 @Entity('user')
+@Index('idx_user_user_name', ['userName'])
 export class UserEntity extends BaseEntity {
   // ===== Thông tin đăng nhập =====
   @Column({ name: 'user_name', type: 'text', nullable: false, unique: true })

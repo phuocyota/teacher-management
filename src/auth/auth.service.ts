@@ -195,6 +195,29 @@ export class AuthService {
   }
 
   /**
+   * Login for Kinh doanh only
+   */
+  async loginBusiness(dto: LoginDto) {
+    const user = await this.validateUser(dto.username, dto.password);
+    if (!user) {
+      throw new UnauthorizedException(ERROR_MESSAGES.INVALID_CREDENTIALS);
+    }
+
+    if (user.userType !== UserType.KINH_DOANH) {
+      throw new UnauthorizedException(ERROR_MESSAGES.ACCESS_DENIED_BUSINESS);
+    }
+
+    const token = this.generateToken(user, dto.deviceId);
+    await this.saveToken(user.id, token);
+    return {
+      accessToken: token,
+      userId: user.id,
+      userType: user.userType,
+      deviceId: dto.deviceId,
+    };
+  }
+
+  /**
    * Register a new user. Password hashing is handled in UserService.createUser
    */
   register(dto: CreateUserDto) {
