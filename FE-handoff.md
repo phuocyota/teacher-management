@@ -347,3 +347,145 @@ Phuong an backend nen lam tiep:
 - Tao bang/session luu `attemptId`, `questionId`, `servedAt`.
 - API random nhan `attemptId` thay vi FE gui danh sach exclude.
 - Backend tu loai cac cau da phat trong attempt do.
+
+---
+
+# FE Handoff: APPI xuat diem theo template-zone
+
+Base path: `/report/attempt`
+
+Xac thuc:
+
+- `Authorization: Bearer <token>`
+
+Vai tro:
+
+- `ADMIN`
+- `TEACHER`
+
+Template backend dang dung:
+
+- `templates/template-zone.xlsx`
+
+## 1. API xuat file Excel thong ke khu vuc
+
+Endpoint:
+
+```http
+GET /report/attempt/zones/:zoneId/export-zone-stat-sheet
+Authorization: Bearer <token>
+Accept: application/vnd.openxmlformats-officedocument.spreadsheetml.sheet
+```
+
+Muc dich:
+
+- Xuat file Excel thong ke diem theo khu vuc.
+- Moi dong trong file la thong ke tong hop theo truong trong khu vuc da chon.
+- Backend doc template `templates/template-zone.xlsx`, ghi du lieu vao sheet template, sau do tra ve file `.xlsx`.
+
+Danh sach param:
+
+| Truong           | Vi tri | Bat buoc | Kieu     | Ghi chu                                    |
+| ---------------- | ------ | -------- | -------- | ------------------------------------------ |
+| `zoneId`         | Path   | Co       | `string` | UUID khu vuc                               |
+| `examSetId`      | Query  | Khong    | `string` | UUID bo de, loc attempt theo bo de         |
+| `questionBankId` | Query  | Khong    | `string` | UUID de thi/ngan hang cau hoi              |
+| `fromDate`       | Query  | Khong    | `string` | Dinh dang `YYYY-MM-DD`, loc theo ngay lam  |
+| `toDate`         | Query  | Khong    | `string` | Dinh dang `YYYY-MM-DD`, loc theo ngay lam  |
+
+Vi du request:
+
+```http
+GET /report/attempt/zones/9233abe3-1961-4af5-a482-542f1227d844/export-zone-stat-sheet?questionBankId=a233abe3-1961-4af5-a482-542f1227d844&fromDate=2026-03-01&toDate=2026-03-31
+Authorization: Bearer <token>
+```
+
+Response:
+
+```http
+200 OK
+Content-Type: application/vnd.openxmlformats-officedocument.spreadsheetml.sheet
+Content-Disposition: attachment; filename="thong-ke-khu-vuc-<zoneCode>.xlsx"
+```
+
+Body la binary Excel file. FE can xu ly response dang `blob`/`arraybuffer`, khong parse JSON.
+
+## 2. Mapping du lieu trong file Excel
+
+Backend ghi du lieu tu dong bat dau o dong `9` cua sheet template.
+
+| Cot Excel | Gia tri backend ghi                 | Ghi chu                                    |
+| --------- | ----------------------------------- | ------------------------------------------ |
+| `A`       | STT                                 | Bat dau tu `1`                             |
+| `B`       | Rong                                | De trong theo template                     |
+| `C`       | `schoolName`                        | Ten truong                                 |
+| `D`       | Rong                                | De trong theo template                     |
+| `E`       | `totalGroups`                       | Tong so lop/nhom trong truong             |
+| `F`       | `attemptedGroups`                   | So lop co hoc sinh da lam bai             |
+| `G`       | `absentGroups`                      | So lop chua co hoc sinh lam bai           |
+| `H`       | `totalStudents`                     | Tong so hoc sinh                           |
+| `I`       | `attemptedStudents`                 | So hoc sinh co attempt hop le              |
+| `J`       | `absentStudents`                    | So hoc sinh chua lam                       |
+| `K`       | `averageScore`                      | Diem trung binh, lam tron 2 chu so         |
+| `L`       | `completionRate`                    | Ti le hoan thanh, don vi phan tram         |
+| `M`       | `assessment`                        | Danh gia theo ti le hoan thanh             |
+| `N`       | Rong                                | De trong theo template                     |
+
+Header trong file:
+
+- O `A4` gom ten ky thi, ten bang thong ke, ten tinh/thanh pho va chuong trinh.
+- Neu template co sheet `data`, backend ghi ten khu vuc vao cell `data!B6`.
+
+## 3. Cach goi tu frontend
+
+Vi du voi Axios:
+
+```ts
+const response = await api.get(
+  `/report/attempt/zones/${zoneId}/export-zone-stat-sheet`,
+  {
+    params: {
+      examSetId,
+      questionBankId,
+      fromDate,
+      toDate,
+    },
+    responseType: 'blob',
+  },
+);
+
+const disposition = response.headers['content-disposition'];
+const fileName =
+  disposition?.match(/filename="([^"]+)"/)?.[1] ?? 'thong-ke-khu-vuc.xlsx';
+
+const url = URL.createObjectURL(response.data);
+const link = document.createElement('a');
+link.href = url;
+link.download = fileName;
+link.click();
+URL.revokeObjectURL(url);
+```
+
+## 4. Luong UI de xuat
+
+1. Nguoi dung chon `Khu vuc`.
+2. Nguoi dung tuy chon loc theo `Bo de`, `De thi/ngan hang cau hoi`, `Tu ngay`, `Den ngay`.
+3. FE goi `GET /report/attempt/zones/:zoneId/export-zone-stat-sheet` voi cac filter dang co.
+4. FE hien loading trong luc tai file va tat loading khi nhan duoc blob.
+5. Neu thanh cong, trinh duyet tai file `thong-ke-khu-vuc-<zoneCode>.xlsx`.
+
+## 5. Xu ly loi
+
+| Ma HTTP   | Truong hop                                                           | FE nen lam gi                                      |
+| --------- | -------------------------------------------------------------------- | -------------------------------------------------- |
+| `400`     | `zoneId`, `examSetId`, `questionBankId` khong phai UUID hop le; ngay sai dinh dang; `fromDate > toDate` | Validate form truoc khi goi API                    |
+| `401/403` | Thieu token, token het han, hoac user khong co quyen xem khu vuc nay | Dieu huong dang nhap hoac hien thong bao het phien |
+| `404`     | Khong tim thay khu vuc                                               | Hien thong bao "Khong tim thay khu vuc"            |
+
+## 6. Luu y cho FE
+
+- API nay khong tra JSON khi thanh cong.
+- Neu khong co du lieu, backend van tra file Excel theo template, phan bang du lieu se rong.
+- `TEACHER` chi thay du lieu cua cac lop/truong ma giao vien co quyen truy cap theo backend.
+- `fromDate` va `toDate` loc theo `attempt.started_at`.
+- `averageScore` trong file duoc tinh theo attempt moi nhat cua tung hoc sinh trong pham vi filter.
