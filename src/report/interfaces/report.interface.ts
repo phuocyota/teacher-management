@@ -5,6 +5,9 @@ export interface ReportStudentRow {
   code: string;
   studentGroupId: string | null;
   studentGroupName: string | null;
+  schoolId: string | null;
+  schoolName: string | null;
+  schoolCode: string | null;
 }
 
 export interface SchoolAttemptReportFilters {

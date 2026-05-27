@@ -139,11 +139,18 @@ export class ReportService {
         "CONCAT(COALESCE(school.code, ''), CASE WHEN school.code IS NULL THEN '' ELSE ' - ' END, studentGroup.name)",
         'name',
       )
+      .addSelect('studentGroup.name', 'className')
+      .addSelect('school.id', 'schoolId')
+      .addSelect('school.name', 'schoolName')
+      .addSelect('school.name', 'shoolName')
+      .addSelect('school.code', 'schoolCode')
       .addSelect(':type', 'type')
       .setParameter('type', GroupType.CLASS)
       .groupBy('studentGroup.id')
       .addGroupBy('studentGroup.name')
       .addGroupBy('studentGroup.code')
+      .addGroupBy('school.id')
+      .addGroupBy('school.name')
       .addGroupBy('school.code')
       .where(
         `(
@@ -203,10 +210,17 @@ export class ReportService {
     return rows.map((row) => ({
       id: row.id,
       fullName: row.fullName,
+      studentName: row.fullName ?? row.userName,
       userName: row.userName,
       code: row.code,
       studentGroupId: row.studentGroupId,
+      classId: row.studentGroupId,
       studentGroupName: row.studentGroupName,
+      className: row.studentGroupName,
+      schoolId: row.schoolId,
+      schoolName: row.schoolName,
+      shoolName: row.schoolName,
+      schoolCode: row.schoolCode,
     }));
   }
 
@@ -248,6 +262,16 @@ export class ReportService {
         : !isAllStudents
           ? await this.getStudentOptionById(studentId!)
           : null;
+    const selectedGroup = groupId
+      ? await this.studentGroupRepo.findOne({
+          where: { id: groupId },
+          relations: ['school'],
+        })
+      : null;
+    const selectedSchool =
+      schoolId && !selectedGroup
+        ? await this.schoolRepo.findOne({ where: { id: schoolId } })
+        : selectedGroup?.school;
 
     const summaryRaw = await this.buildAttemptReportScope(user, {
       zoneId,
@@ -322,6 +346,12 @@ export class ReportService {
       .addSelect('student.id', 'studentId')
       .addSelect('COALESCE(user.full_name, user.user_name)', 'studentName')
       .addSelect('student.code', 'studentCode')
+      .addSelect('studentGroup.id', 'classId')
+      .addSelect('studentGroup.name', 'className')
+      .addSelect('school.id', 'schoolId')
+      .addSelect('school.name', 'schoolName')
+      .addSelect('school.name', 'shoolName')
+      .addSelect('school.code', 'schoolCode')
       .addSelect('attempt.questionBankId', 'questionBankId')
       .addSelect('questionBank.name', 'questionBankName')
       .addSelect('attempt.examSetId', 'examSetId')
@@ -348,6 +378,12 @@ export class ReportService {
         studentId: string;
         studentName: string | null;
         studentCode: string | null;
+        classId: string | null;
+        className: string | null;
+        schoolId: string | null;
+        schoolName: string | null;
+        shoolName: string | null;
+        schoolCode: string | null;
       }>(),
       this.buildAttemptReportScope(user, {
         zoneId,
@@ -372,12 +408,23 @@ export class ReportService {
       studentId: row.studentId,
       studentName: row.studentName,
       studentCode: row.studentCode,
+      classId: row.classId,
+      className: row.className,
+      schoolId: row.schoolId,
+      schoolName: row.schoolName,
+      shoolName: row.schoolName,
+      schoolCode: row.schoolCode,
     }));
 
     return {
       groupId: groupId ?? null,
+      groupName: selectedGroup?.name ?? student?.studentGroupName ?? null,
+      className: selectedGroup?.name ?? student?.studentGroupName ?? null,
       zoneId: zoneId ?? null,
-      schoolId: schoolId ?? null,
+      schoolId: selectedSchool?.id ?? schoolId ?? student?.schoolId ?? null,
+      schoolName: selectedSchool?.name ?? student?.schoolName ?? null,
+      shoolName: selectedSchool?.name ?? student?.schoolName ?? null,
+      schoolCode: selectedSchool?.code ?? student?.schoolCode ?? null,
       student,
       fromDate: filters.fromDate ?? null,
       toDate: filters.toDate ?? null,
@@ -798,12 +845,17 @@ export class ReportService {
         'studentGroup',
         'studentGroup.id = student.student_group_id',
       )
+      .leftJoin('studentGroup.school', 'school')
       .select('user.id', 'id')
       .addSelect('user.full_name', 'fullName')
       .addSelect('user.user_name', 'userName')
       .addSelect('student.code', 'code')
       .addSelect('student.student_group_id', 'studentGroupId')
       .addSelect('studentGroup.name', 'studentGroupName')
+      .addSelect('school.id', 'schoolId')
+      .addSelect('school.name', 'schoolName')
+      .addSelect('school.name', 'shoolName')
+      .addSelect('school.code', 'schoolCode')
       .where('student.student_group_id = :groupId', { groupId })
       .andWhere('user.user_type = :userType', { userType: UserType.STUDENT })
       .orderBy('COALESCE(user.full_name, user.user_name)', 'ASC')
@@ -821,12 +873,17 @@ export class ReportService {
         'studentGroup',
         'studentGroup.id = student.student_group_id',
       )
+      .leftJoin('studentGroup.school', 'school')
       .select('user.id', 'id')
       .addSelect('user.full_name', 'fullName')
       .addSelect('user.user_name', 'userName')
       .addSelect('student.code', 'code')
       .addSelect('student.student_group_id', 'studentGroupId')
       .addSelect('studentGroup.name', 'studentGroupName')
+      .addSelect('school.id', 'schoolId')
+      .addSelect('school.name', 'schoolName')
+      .addSelect('school.name', 'shoolName')
+      .addSelect('school.code', 'schoolCode')
       .where('student.id = :studentId', { studentId })
       .andWhere('user.user_type = :userType', { userType: UserType.STUDENT })
       .getRawOne<ReportStudentRow>();
@@ -837,7 +894,21 @@ export class ReportService {
       );
     }
 
-    return row;
+    return {
+      id: row.id,
+      fullName: row.fullName,
+      studentName: row.fullName ?? row.userName,
+      userName: row.userName,
+      code: row.code,
+      studentGroupId: row.studentGroupId,
+      classId: row.studentGroupId,
+      studentGroupName: row.studentGroupName,
+      className: row.studentGroupName,
+      schoolId: row.schoolId,
+      schoolName: row.schoolName,
+      shoolName: row.schoolName,
+      schoolCode: row.schoolCode,
+    };
   }
 
   private async getStudentRowInGroup(
@@ -852,12 +923,17 @@ export class ReportService {
         'studentGroup',
         'studentGroup.id = student.student_group_id',
       )
+      .leftJoin('studentGroup.school', 'school')
       .select('user.id', 'id')
       .addSelect('user.full_name', 'fullName')
       .addSelect('user.user_name', 'userName')
       .addSelect('student.code', 'code')
       .addSelect('student.student_group_id', 'studentGroupId')
       .addSelect('studentGroup.name', 'studentGroupName')
+      .addSelect('school.id', 'schoolId')
+      .addSelect('school.name', 'schoolName')
+      .addSelect('school.name', 'shoolName')
+      .addSelect('school.code', 'schoolCode')
       .where('student.student_group_id = :groupId', { groupId })
       .andWhere('user.id = :studentId', { studentId })
       .andWhere('user.user_type = :userType', { userType: UserType.STUDENT })
@@ -870,10 +946,17 @@ export class ReportService {
     return {
       id: row.id,
       fullName: row.fullName,
+      studentName: row.fullName ?? row.userName,
       userName: row.userName,
       code: row.code,
       studentGroupId: row.studentGroupId,
+      classId: row.studentGroupId,
       studentGroupName: row.studentGroupName,
+      className: row.studentGroupName,
+      schoolId: row.schoolId,
+      schoolName: row.schoolName,
+      shoolName: row.schoolName,
+      schoolCode: row.schoolCode,
     };
   }
 

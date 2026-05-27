@@ -189,6 +189,36 @@ export class TeacherLeaderGroupDto {
   name!: string;
 
   @ApiProperty({
+    description: 'Ten lop/nhom hoc sinh',
+    example: 'Khoi 5A',
+  })
+  className!: string;
+
+  @ApiProperty({
+    description: 'ID truong',
+    example: 'a233abe3-1961-4af5-a482-542f1227d844',
+  })
+  schoolId!: string;
+
+  @ApiProperty({
+    description: 'Ten truong',
+    example: 'TH Nguyen Van Bua',
+  })
+  schoolName!: string;
+
+  @ApiProperty({
+    description: 'Alias cua schoolName theo contract FE hien tai',
+    example: 'TH Nguyen Van Bua',
+  })
+  shoolName!: string;
+
+  @ApiProperty({
+    description: 'Ma truong',
+    example: 'THNVB',
+  })
+  schoolCode!: string;
+
+  @ApiProperty({
     description: 'Loai group',
     enum: GroupType,
     example: GroupType.PERSONAL,
@@ -210,6 +240,13 @@ export class ReportStudentOptionDto {
   })
   fullName!: string | null;
 
+  @ApiPropertyOptional({
+    description: 'Ten hoc sinh hien thi',
+    example: 'Nguyen Van B',
+    nullable: true,
+  })
+  studentName!: string | null;
+
   @ApiProperty({
     description: 'Ten dang nhap hoc sinh',
     example: 'student_b',
@@ -230,11 +267,53 @@ export class ReportStudentOptionDto {
   studentGroupId!: string | null;
 
   @ApiPropertyOptional({
+    description: 'ID lop/nhom hoc sinh',
+    example: '7233abe3-1961-4af5-a482-542f1227d844',
+    nullable: true,
+  })
+  classId!: string | null;
+
+  @ApiPropertyOptional({
     description: 'Ten nhom hoc sinh',
     example: 'Lop 5A',
     nullable: true,
   })
   studentGroupName!: string | null;
+
+  @ApiPropertyOptional({
+    description: 'Ten lop/nhom hoc sinh',
+    example: 'Lop 5A',
+    nullable: true,
+  })
+  className!: string | null;
+
+  @ApiPropertyOptional({
+    description: 'ID truong',
+    example: 'a233abe3-1961-4af5-a482-542f1227d844',
+    nullable: true,
+  })
+  schoolId!: string | null;
+
+  @ApiPropertyOptional({
+    description: 'Ten truong',
+    example: 'TH Nguyen Van Bua',
+    nullable: true,
+  })
+  schoolName!: string | null;
+
+  @ApiPropertyOptional({
+    description: 'Alias cua schoolName theo contract FE hien tai',
+    example: 'TH Nguyen Van Bua',
+    nullable: true,
+  })
+  shoolName!: string | null;
+
+  @ApiPropertyOptional({
+    description: 'Ma truong',
+    example: 'THNVB',
+    nullable: true,
+  })
+  schoolCode!: string | null;
 }
 
 export class StudentAttemptDto {
@@ -315,6 +394,48 @@ export class StudentAttemptDto {
     nullable: true,
   })
   studentCode?: string | null;
+
+  @ApiPropertyOptional({
+    description: 'ID lop/nhom hoc sinh',
+    example: '7233abe3-1961-4af5-a482-542f1227d844',
+    nullable: true,
+  })
+  classId?: string | null;
+
+  @ApiPropertyOptional({
+    description: 'Ten lop/nhom hoc sinh',
+    example: 'Lop 5A',
+    nullable: true,
+  })
+  className?: string | null;
+
+  @ApiPropertyOptional({
+    description: 'ID truong',
+    example: 'a233abe3-1961-4af5-a482-542f1227d844',
+    nullable: true,
+  })
+  schoolId?: string | null;
+
+  @ApiPropertyOptional({
+    description: 'Ten truong',
+    example: 'TH Nguyen Van Bua',
+    nullable: true,
+  })
+  schoolName?: string | null;
+
+  @ApiPropertyOptional({
+    description: 'Alias cua schoolName theo contract FE hien tai',
+    example: 'TH Nguyen Van Bua',
+    nullable: true,
+  })
+  shoolName?: string | null;
+
+  @ApiPropertyOptional({
+    description: 'Ma truong',
+    example: 'THNVB',
+    nullable: true,
+  })
+  schoolCode?: string | null;
 }
 
 export class StudentReportSummaryDto {
@@ -383,6 +504,20 @@ export class StudentReportDto {
   groupId!: string | null;
 
   @ApiPropertyOptional({
+    description: 'Ten lop/nhom duoc chon',
+    example: 'Lop 5A',
+    nullable: true,
+  })
+  groupName?: string | null;
+
+  @ApiPropertyOptional({
+    description: 'Ten lop/nhom duoc chon',
+    example: 'Lop 5A',
+    nullable: true,
+  })
+  className?: string | null;
+
+  @ApiPropertyOptional({
     description: 'Thong tin hoc sinh',
     type: ReportStudentOptionDto,
     nullable: true,
@@ -402,6 +537,27 @@ export class StudentReportDto {
     nullable: true,
   })
   schoolId?: string | null;
+
+  @ApiPropertyOptional({
+    description: 'Ten truong duoc loc',
+    example: 'TH Nguyen Van Bua',
+    nullable: true,
+  })
+  schoolName?: string | null;
+
+  @ApiPropertyOptional({
+    description: 'Alias cua schoolName theo contract FE hien tai',
+    example: 'TH Nguyen Van Bua',
+    nullable: true,
+  })
+  shoolName?: string | null;
+
+  @ApiPropertyOptional({
+    description: 'Ma truong duoc loc',
+    example: 'THNVB',
+    nullable: true,
+  })
+  schoolCode?: string | null;
 
   @ApiPropertyOptional({
     description: 'Ngay bat dau loc',
