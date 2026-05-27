@@ -20,11 +20,14 @@ export class StartAttemptDto {
   questionBankId!: string;
 
   @IsUUID()
+  @IsOptional()
   @ApiProperty({
     description: 'ID bo de thi',
     example: '4233abe3-1961-4af5-a482-542f1227d844',
+    required: false,
+    nullable: true,
   })
-  examSetId!: string;
+  examSetId?: string | null;
 }
 
 export class EndAttemptAnswerDto {
@@ -176,11 +179,11 @@ export class StartAttemptResponseDto {
   @ApiProperty()
   questionBankName!: string;
 
-  @ApiProperty()
-  examSetId!: string;
+  @ApiProperty({ required: false, nullable: true })
+  examSetId?: string | null;
 
-  @ApiProperty()
-  examSetName!: string;
+  @ApiProperty({ required: false, nullable: true })
+  examSetName?: string | null;
 
   @ApiProperty()
   examName!: string;
@@ -259,8 +262,8 @@ export class AttemptReviewResponseDto {
   @ApiProperty()
   questionBankId!: string;
 
-  @ApiProperty()
-  examSetId!: string;
+  @ApiProperty({ required: false, nullable: true })
+  examSetId?: string | null;
 
   @ApiProperty({ required: false, nullable: true })
   submittedAt?: Date | null;

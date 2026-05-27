@@ -22,7 +22,10 @@ import {
   ENTITY_NAMES,
 } from 'src/common/constant/error-messages.constant';
 import { PaginationResponseDto } from 'src/common/dto/pagination.dto';
-import { QuestionBankResponseDto } from '../dto/question-bank.dto';
+import {
+  QuestionBankDetailResponseDto,
+  QuestionBankResponseDto,
+} from '../dto/question-bank.dto';
 import { autoMapListToDto } from 'src/common/utils/auto-map.util';
 import { ImportExamResultDto } from '../dto/import-exam.dto';
 import { QuestionBankQuestionEntity } from 'src/question-bank-question/question-bank-question.entity';
@@ -177,6 +180,59 @@ export class QuestionBankService {
         excludeQuestionIds,
       ),
     );
+  }
+
+  async findQuestions(id: string): Promise<QuestionBankDetailResponseDto> {
+    const questionBank = await this.findOne(id);
+    const links = await this.questionBankQuestionRepo.find({
+      where: { questionBankId: id },
+      relations: ['question'],
+      order: { orderNo: 'ASC' },
+    });
+    const questionIds = links
+      .map((item) => item.questionId)
+      .filter((questionId): questionId is string => Boolean(questionId));
+    const answers = questionIds.length
+      ? await this.answerRepo.find({
+          where: { questionId: In(questionIds) },
+          order: { orderNo: 'ASC', createdAt: 'ASC' },
+        })
+      : [];
+    const answersByQuestionId = answers.reduce<Map<string, AnswerEntity[]>>(
+      (map, answer) => {
+        const items = map.get(answer.questionId) ?? [];
+        items.push(answer);
+        map.set(answer.questionId, items);
+        return map;
+      },
+      new Map(),
+    );
+
+    return {
+      id: questionBank.id,
+      code: questionBank.code,
+      name: questionBank.name,
+      questions: links
+        .filter((item) => Boolean(item.question))
+        .map((item) => ({
+          id: item.question.id,
+          questionBankId: item.questionBankId,
+          content: item.question.content,
+          contentType: item.question.contentType,
+          orderNo: item.orderNo,
+          point: item.points,
+          type: item.question.type,
+          answers: (answersByQuestionId.get(item.questionId) ?? []).map(
+            (answer) => ({
+              id: answer.id,
+              questionId: answer.questionId,
+              content: answer.content,
+              contentType: answer.contentType,
+              isCorrect: answer.isCorrect ?? null,
+            }),
+          ),
+        })),
+    };
   }
 
   private async findRandomQuestionWithoutDuplicate(

@@ -31,6 +31,7 @@ import {
 import { AddQuestionToQuestionBankDto } from './dto/add-question-to-question-bank.dto';
 import {
   QuestionBankListResponseDto,
+  QuestionBankDetailResponseDto,
   QuestionBankResponseDto,
 } from './dto/question-bank.dto';
 import { PaginationResponseDto } from 'src/common/dto/pagination.dto';
@@ -120,6 +121,14 @@ export class QuestionBankController {
       questionBankId,
       this.parseQuestionIds(excludeQuestionIds),
     );
+  }
+
+  @Get(':id/questions')
+  @Public()
+  @ApiOperation({ summary: 'Lay danh sach cau hoi cua mot de thi' })
+  @ApiOkResponse({ type: QuestionBankDetailResponseDto })
+  findQuestions(@Param('id', ParseUUIDPipe) id: string) {
+    return this.questionBankService.findQuestions(id);
   }
 
   @Get(':id')

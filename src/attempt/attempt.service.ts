@@ -102,7 +102,9 @@ export class AttemptService {
   async create(dto: CreateAttemptDto): Promise<AttemptEntity> {
     await this.studentService.findOne(dto.studentId);
     await this.questionBankService.findOne(dto.questionBankId);
-    await this.examSetService.findOne(dto.examSetId);
+    if (dto.examSetId) {
+      await this.examSetService.findOne(dto.examSetId);
+    }
 
     const record = this.attemptRepo.create({
       studentId: dto.studentId,
@@ -128,8 +130,12 @@ export class AttemptService {
     const questionBank = await this.questionBankService.findOne(
       dto.questionBankId,
     );
-    const examSet = await this.examSetService.findOne(dto.examSetId);
-    await this.validateExamSetQuestionBank(dto.examSetId, dto.questionBankId);
+    const examSet = dto.examSetId
+      ? await this.examSetService.findOne(dto.examSetId)
+      : null;
+    if (dto.examSetId) {
+      await this.validateExamSetQuestionBank(dto.examSetId, dto.questionBankId);
+    }
     await this.ensureStudentProfile(user.userId);
 
     const record = this.attemptRepo.create({
@@ -150,8 +156,8 @@ export class AttemptService {
       studentId: savedAttempt.studentId,
       questionBankId: savedAttempt.questionBankId,
       questionBankName: questionBank.name,
-      examSetId: savedAttempt.examSetId,
-      examSetName: examSet.name,
+      examSetId: savedAttempt.examSetId ?? null,
+      examSetName: examSet?.name ?? null,
       examName: questionBank.name,
       questions,
     };
@@ -330,12 +336,6 @@ export class AttemptService {
 
     if (!user?.userId) {
       throw new ForbiddenException(ERROR_MESSAGES.INVALID_TOKEN_STRUCTURE);
-    }
-
-    if ((questionBankId && !examSetId) || (!questionBankId && examSetId)) {
-      throw new BadRequestException(
-        'questionBankId and examSetId must be provided together',
-      );
     }
 
     const qb = this.attemptRepo
@@ -1351,8 +1351,10 @@ export class AttemptService {
     }
 
     if (dto.examSetId !== undefined) {
-      await this.examSetService.findOne(dto.examSetId);
-      record.examSetId = dto.examSetId;
+      if (dto.examSetId) {
+        await this.examSetService.findOne(dto.examSetId);
+      }
+      record.examSetId = dto.examSetId ?? null;
     }
 
     if (dto.status !== undefined) {

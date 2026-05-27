@@ -22,12 +22,12 @@ export class AttemptEntity extends BaseEntity {
   questionBank!: QuestionBankEntity;
 
   //exam_set_id
-  @Column({ name: 'exam_set_id', type: 'uuid', nullable: false })
-  examSetId!: string; // Id cua bo suu tap
+  @Column({ name: 'exam_set_id', type: 'uuid', nullable: true })
+  examSetId?: string | null; // Id cua bo suu tap
 
-  @ManyToOne(() => ExamSetEntity, { onDelete: 'CASCADE' })
+  @ManyToOne(() => ExamSetEntity, { onDelete: 'SET NULL', nullable: true })
   @JoinColumn({ name: 'exam_set_id' })
-  examSet!: ExamSetEntity;
+  examSet?: ExamSetEntity | null;
 
   @Column({
     name: 'status',

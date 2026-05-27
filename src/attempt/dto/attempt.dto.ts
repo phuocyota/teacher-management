@@ -19,8 +19,10 @@ export class AttemptResponseDto extends BaseDto {
   @ApiProperty({
     description: 'ID bo de thi',
     example: '4233abe3-1961-4af5-a482-542f1227d844',
+    required: false,
+    nullable: true,
   })
-  examSetId!: string;
+  examSetId?: string | null;
 
   @ApiProperty({
     description: 'Trang thai bai lam',
@@ -81,8 +83,10 @@ export class AttemptExamHistoryItemDto {
   @ApiProperty({
     description: 'ID bo de thi',
     example: '4233abe3-1961-4af5-a482-542f1227d844',
+    required: false,
+    nullable: true,
   })
-  examSetId!: string;
+  examSetId?: string | null;
 
   @ApiProperty({
     description: 'Ten bai thi',
