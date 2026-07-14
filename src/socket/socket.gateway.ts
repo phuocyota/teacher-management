@@ -14,6 +14,7 @@ import { Server, Socket } from 'socket.io';
 import { GoldenBellRoomStateService } from './golden-bell-room-state.service';
 import type {
   GoldenBellCreateRoomPayload,
+  GoldenBellEndRoomPayload,
   GoldenBellJoinPayload,
   GoldenBellRoom,
   GoldenBellStudent,
@@ -33,6 +34,8 @@ const allowedOrigins = process.env.ALLOWED_ORIGINS
     ];
 
 const DEFAULT_QUESTION_DURATION_SECONDS = 15;
+const ROOM_LIFETIME_MS = 24 * 60 * 60 * 1000;
+const ROOM_CLEANUP_INTERVAL_MS = 60 * 60 * 1000;
 
 @WebSocketGateway({
   cors: {
@@ -53,10 +56,19 @@ export class SocketGateway
     string,
     { questionKey: string; timer: ReturnType<typeof setTimeout> }
   >();
+  private readonly roomExpiryTimers = new Map<
+    string,
+    ReturnType<typeof setTimeout>
+  >();
 
   constructor(private readonly roomStateService: GoldenBellRoomStateService) {}
 
   afterInit(server: Server) {
+    void this.roomStateService.removeExpired();
+    setInterval(() => {
+      void this.roomStateService.removeExpired();
+    }, ROOM_CLEANUP_INTERVAL_MS);
+
     server.use((socket, next) => {
       // Thêm rate limiting
       if (!socket.handshake.auth?.token) {
@@ -107,6 +119,7 @@ export class SocketGateway
       }
 
       await client.join(this.getGoldenBellRoomName(roomId));
+      this.scheduleRoomExpiry(roomId, room);
       this.server
         .to(this.getGoldenBellRoomName(roomId))
         .emit('golden-bell:room-state', room);
@@ -142,23 +155,38 @@ export class SocketGateway
     return this.roomStateService.runExclusive(roomId, async () => {
       const roomName = this.getGoldenBellRoomName(roomId);
 
-      const currentRoom =
+      const storedRoom =
         this.goldenBellRooms.get(roomId) ||
         (await this.roomStateService.find(roomId));
 
-      if (!currentRoom) {
+      if (!storedRoom) {
         return { ok: false, message: 'Room not found' };
+      }
+
+      const currentRoom = this.ensureRoomLifecycle(storedRoom);
+      if (this.isRoomExpired(currentRoom)) {
+        await this.expireRoom(roomId);
+        return { ok: false, message: 'Room expired' };
+      }
+
+      if (
+        currentRoom.status === 'FINISHED' ||
+        currentRoom.status === 'EXPIRED'
+      ) {
+        return { ok: false, message: 'Room has ended' };
       }
 
       await client.join(roomName);
 
+      const roomWithTiming = this.ensureQuestionTiming(currentRoom);
       const nextRoom = payload.student
-        ? this.upsertGoldenBellStudent(currentRoom, payload.student)
-        : currentRoom;
+        ? this.upsertGoldenBellStudent(roomWithTiming, payload.student)
+        : roomWithTiming;
 
       await this.roomStateService.save(roomId, nextRoom);
       this.goldenBellRooms.set(roomId, nextRoom);
       this.scheduleQuestionTimeout(roomId, nextRoom);
+      this.scheduleRoomExpiry(roomId, nextRoom);
       this.server.to(roomName).emit('golden-bell:room-state', nextRoom);
 
       return { ok: true, room: nextRoom };
@@ -174,12 +202,25 @@ export class SocketGateway
     const roomId = this.normalizeRoomId(payload.roomId);
 
     return this.roomStateService.runExclusive(roomId, async () => {
-      const currentRoom =
+      const storedRoom =
         this.goldenBellRooms.get(roomId) ||
         (await this.roomStateService.find(roomId));
 
-      if (!currentRoom) {
+      if (!storedRoom) {
         return { ok: false, message: 'Room not found' };
+      }
+
+      const currentRoom = this.ensureRoomLifecycle(storedRoom);
+      if (this.isRoomExpired(currentRoom)) {
+        await this.expireRoom(roomId);
+        return { ok: false, message: 'Room expired' };
+      }
+
+      if (
+        currentRoom.status === 'FINISHED' ||
+        currentRoom.status === 'EXPIRED'
+      ) {
+        return { ok: false, message: 'Room has ended' };
       }
 
       const isRoomReset =
@@ -212,26 +253,79 @@ export class SocketGateway
         return student;
       });
 
-      const nextRoom = {
+      const nextRoom = this.ensureQuestionTiming({
         ...currentRoom,
         ...payload.room,
         roomId,
         code: currentRoom.code || roomId,
         questionBankId: currentRoom.questionBankId,
+        status: payload.room!.currentQuestion ? 'RUNNING' : 'WAITING',
+        createdAt: currentRoom.createdAt,
+        expiresAt: currentRoom.expiresAt,
+        endedAt: null,
         students: nextStudents,
         usedQuestionIds: payload.room!.usedQuestionIds || [],
         questionEndedAt:
           isSameQuestion && currentRoom.questionEndedAt
             ? currentRoom.questionEndedAt
             : payload.room!.questionEndedAt,
-      };
+      });
 
       await this.roomStateService.save(roomId, nextRoom);
       this.goldenBellRooms.set(roomId, nextRoom);
       this.scheduleQuestionTimeout(roomId, nextRoom);
+      this.scheduleRoomExpiry(roomId, nextRoom);
       this.server
         .to(this.getGoldenBellRoomName(roomId))
         .emit('golden-bell:room-state', nextRoom);
+
+      return { ok: true, room: nextRoom };
+    });
+  }
+
+  @SubscribeMessage('golden-bell:end-room')
+  async handleGoldenBellEndRoom(
+    @ConnectedSocket() client: Socket,
+    @MessageBody() payload: GoldenBellEndRoomPayload,
+  ) {
+    if (!payload?.roomId) {
+      return { ok: false, message: 'roomId is required' };
+    }
+
+    if (client.handshake.auth?.token === 'guest') {
+      return { ok: false, message: 'Teacher authentication is required' };
+    }
+
+    const roomId = this.normalizeRoomId(payload.roomId);
+
+    return this.roomStateService.runExclusive(roomId, async () => {
+      const storedRoom =
+        this.goldenBellRooms.get(roomId) ||
+        (await this.roomStateService.find(roomId));
+
+      if (!storedRoom) {
+        return { ok: false, message: 'Room not found' };
+      }
+
+      const currentRoom = this.ensureRoomLifecycle(storedRoom);
+      const nextRoom: GoldenBellRoom = {
+        ...currentRoom,
+        status: 'FINISHED',
+        endedAt: new Date().toISOString(),
+        questionEndedAt:
+          currentRoom.questionEndedAt || new Date().toISOString(),
+      };
+
+      await this.roomStateService.save(roomId, nextRoom);
+      this.goldenBellRooms.set(roomId, nextRoom);
+      this.clearQuestionTimer(roomId);
+      this.scheduleRoomExpiry(roomId, nextRoom);
+      this.server
+        .to(this.getGoldenBellRoomName(roomId))
+        .emit('golden-bell:room-state', nextRoom);
+      this.server
+        .to(this.getGoldenBellRoomName(roomId))
+        .emit('golden-bell:room-closed', { roomId, reason: 'FINISHED' });
 
       return { ok: true, room: nextRoom };
     });
@@ -256,6 +350,8 @@ export class SocketGateway
     roomId: string,
     questionBankId?: string,
   ): GoldenBellRoom {
+    const now = Date.now();
+
     return {
       roomId,
       code: roomId,
@@ -264,6 +360,10 @@ export class SocketGateway
       questionNo: 0,
       usedQuestionIds: [],
       students: [],
+      status: 'WAITING',
+      createdAt: new Date(now).toISOString(),
+      expiresAt: new Date(now + ROOM_LIFETIME_MS).toISOString(),
+      endedAt: null,
     };
   }
 
@@ -305,6 +405,91 @@ export class SocketGateway
     };
   }
 
+  private ensureRoomLifecycle(room: GoldenBellRoom): GoldenBellRoom {
+    const createdAt = Date.parse(room.createdAt || '');
+    const normalizedCreatedAt = Number.isFinite(createdAt)
+      ? createdAt
+      : Date.now();
+    const expiresAt = Date.parse(room.expiresAt || '');
+
+    return {
+      ...room,
+      status: room.status || (room.currentQuestion ? 'RUNNING' : 'WAITING'),
+      createdAt: new Date(normalizedCreatedAt).toISOString(),
+      expiresAt: new Date(
+        Number.isFinite(expiresAt)
+          ? expiresAt
+          : normalizedCreatedAt + ROOM_LIFETIME_MS,
+      ).toISOString(),
+      endedAt: room.endedAt || null,
+    };
+  }
+
+  private isRoomExpired(room: GoldenBellRoom): boolean {
+    const expiresAt = Date.parse(room.expiresAt || '');
+    return Number.isFinite(expiresAt) && expiresAt <= Date.now();
+  }
+
+  private scheduleRoomExpiry(roomId: string, room: GoldenBellRoom): void {
+    const expiresAt = Date.parse(room.expiresAt || '');
+    if (!Number.isFinite(expiresAt)) return;
+
+    this.clearRoomExpiryTimer(roomId);
+    const timer = setTimeout(
+      () => {
+        void this.roomStateService.runExclusive(roomId, () =>
+          this.expireRoom(roomId),
+        );
+      },
+      Math.max(0, expiresAt - Date.now()),
+    );
+
+    this.roomExpiryTimers.set(roomId, timer);
+  }
+
+  private async expireRoom(roomId: string): Promise<void> {
+    const storedRoom =
+      this.goldenBellRooms.get(roomId) ||
+      (await this.roomStateService.find(roomId));
+
+    if (!storedRoom) {
+      this.clearRoomExpiryTimer(roomId);
+      return;
+    }
+
+    const room = this.ensureRoomLifecycle(storedRoom);
+    if (!this.isRoomExpired(room)) {
+      this.scheduleRoomExpiry(roomId, room);
+      return;
+    }
+
+    const expiredRoom: GoldenBellRoom = {
+      ...room,
+      status: 'EXPIRED',
+      endedAt: room.endedAt || new Date().toISOString(),
+      questionEndedAt: room.questionEndedAt || new Date().toISOString(),
+    };
+    const roomName = this.getGoldenBellRoomName(roomId);
+
+    this.server.to(roomName).emit('golden-bell:room-state', expiredRoom);
+    this.server
+      .to(roomName)
+      .emit('golden-bell:room-closed', { roomId, reason: 'EXPIRED' });
+    this.server.in(roomName).socketsLeave(roomName);
+    this.goldenBellRooms.delete(roomId);
+    this.clearQuestionTimer(roomId);
+    this.clearRoomExpiryTimer(roomId);
+    await this.roomStateService.remove(roomId);
+  }
+
+  private clearRoomExpiryTimer(roomId: string): void {
+    const timer = this.roomExpiryTimers.get(roomId);
+    if (!timer) return;
+
+    clearTimeout(timer);
+    this.roomExpiryTimers.delete(roomId);
+  }
+
   private scheduleQuestionTimeout(roomId: string, room: GoldenBellRoom): void {
     const questionId = this.getQuestionId(room.currentQuestion);
     const startedAt = Date.parse(room.questionStartedAt || '');
@@ -331,6 +516,25 @@ export class SocketGateway
     }, delay);
 
     this.questionTimers.set(roomId, { questionKey, timer });
+  }
+
+  private ensureQuestionTiming(room: GoldenBellRoom): GoldenBellRoom {
+    if (!room.currentQuestion || room.questionEndedAt) {
+      return room;
+    }
+
+    const startedAt = Date.parse(room.questionStartedAt || '');
+    if (Number.isFinite(startedAt)) {
+      return room;
+    }
+
+    return {
+      ...room,
+      questionStartedAt: new Date().toISOString(),
+      questionDurationSeconds:
+        room.questionDurationSeconds || DEFAULT_QUESTION_DURATION_SECONDS,
+      questionEndedAt: null,
+    };
   }
 
   private async eliminateUnansweredStudents(

@@ -20,6 +20,10 @@ export type GoldenBellRoom = {
   questionStartedAt?: string;
   questionDurationSeconds?: number;
   questionEndedAt?: string | null;
+  status?: 'WAITING' | 'RUNNING' | 'FINISHED' | 'EXPIRED';
+  createdAt?: string;
+  expiresAt?: string;
+  endedAt?: string | null;
 };
 
 export type GoldenBellCreateRoomPayload = {
@@ -35,4 +39,8 @@ export type GoldenBellJoinPayload = {
 export type GoldenBellSyncPayload = {
   roomId?: string;
   room?: GoldenBellRoom;
+};
+
+export type GoldenBellEndRoomPayload = {
+  roomId?: string;
 };

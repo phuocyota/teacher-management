@@ -28,6 +28,23 @@ export class GoldenBellRoomStateService {
     );
   }
 
+  async remove(roomId: string): Promise<void> {
+    await this.roomStateRepository.delete({ roomId });
+  }
+
+  async removeExpired(now = new Date()): Promise<number> {
+    const result = await this.roomStateRepository
+      .createQueryBuilder()
+      .delete()
+      .where("state ->> 'expiresAt' IS NOT NULL")
+      .andWhere("(state ->> 'expiresAt')::timestamptz <= :now", {
+        now: now.toISOString(),
+      })
+      .execute();
+
+    return result.affected || 0;
+  }
+
   runExclusive<T>(roomId: string, operation: () => Promise<T>): Promise<T> {
     const previousOperation = this.roomOperations.get(roomId);
     const currentOperation = (previousOperation || Promise.resolve())
