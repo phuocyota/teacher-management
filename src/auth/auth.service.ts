@@ -167,6 +167,8 @@ export class AuthService {
       accessToken: token,
       userId: user.id,
       userType: user.userType,
+      fullName: user.fullName,
+      userName: user.userName,
       deviceId: dto.deviceId,
     };
   }
