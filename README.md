@@ -96,3 +96,27 @@ Nest is an MIT-licensed open source project. It can grow thanks to the sponsors 
 ## License
 
 Nest is [MIT licensed](https://github.com/nestjs/nest/blob/master/LICENSE).
+
+## Runtime processes
+
+The REST API and Socket.IO server use separate entry points:
+
+```bash
+npm run build
+npm run start:prod      # REST API, PORT defaults to 3001
+npm run start:socket    # Socket.IO, SOCKET_PORT defaults to 3002
+```
+
+For deployment, set `SOCKET_PORT` once in `.env`, then run:
+
+```bash
+npm run deploy
+```
+
+The deploy script installs updated dependencies, builds both entry points and
+starts or reloads both PM2 processes.
+
+Set `ALLOWED_ORIGINS` to a comma-separated list of frontend origins. The
+production PM2 configuration keeps the REST API in cluster mode and runs the
+Socket.IO server as one forked process so every Golden Bell room shares the
+same in-memory state.

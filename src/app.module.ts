@@ -7,7 +7,6 @@ import { LectureModule } from './lecture/lecture.module';
 import { TeacherEntity } from './teacher/teacher.entity';
 import { LectureEntity } from './lecture/entity/lecture.entity';
 import { UserModule } from './user/user.module';
-import { SocketModule } from './socket/socket.module';
 import { AuthModule } from './auth/auth.module';
 import { AuthGuard } from './common/guard/auth.guard';
 import { AllExceptionsFilter } from './common/filter/all-exceptions.filter';
@@ -68,6 +67,7 @@ import { ZoneModule } from './zone/zone.module';
 import { ZoneEntity } from './zone/zone.entity';
 import { GoodsEntity } from './goods/goods.entity';
 import { OrderEntity } from './order/order.entity';
+import { GoldenBellRoomStateEntity } from './socket/golden-bell-room-state.entity';
 
 @Module({
   imports: [
@@ -123,6 +123,7 @@ import { OrderEntity } from './order/order.entity';
           ZoneEntity,
           GoodsEntity,
           OrderEntity,
+          GoldenBellRoomStateEntity,
         ],
         synchronize: true,
       }),
@@ -130,7 +131,6 @@ import { OrderEntity } from './order/order.entity';
     TeacherModule,
     LectureModule,
     UserModule,
-    SocketModule,
     AuthModule,
     ClassModule,
     CourseModule,
