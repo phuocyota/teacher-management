@@ -6,6 +6,7 @@ export type GoldenBellStudent = {
   lastQuestionNo?: number;
   correctCount?: number;
   wrongCount?: number;
+  eliminatedReason?: 'wrong-answer' | 'timeout';
 };
 
 export type GoldenBellRoom = {
@@ -16,6 +17,9 @@ export type GoldenBellRoom = {
   questionNo?: number;
   usedQuestionIds?: string[];
   students?: GoldenBellStudent[];
+  questionStartedAt?: string;
+  questionDurationSeconds?: number;
+  questionEndedAt?: string | null;
 };
 
 export type GoldenBellCreateRoomPayload = {
