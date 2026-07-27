@@ -9,7 +9,7 @@ import { PDFDocument, rgb, type PDFFont } from 'pdf-lib';
 import fontkit from '@pdf-lib/fontkit';
 import { promises as fs } from 'fs';
 import * as path from 'path';
-import { In, Repository } from 'typeorm';
+import { In, IsNull, Repository } from 'typeorm';
 import { AttemptEntity } from './attempt.entity';
 import { StudentService } from 'src/student/student.service';
 import { StudentEntity } from 'src/student/student.entity';
@@ -53,6 +53,7 @@ import {
   EndAttemptResponseDto,
   StartAttemptDto,
   StartAttemptResponseDto,
+  StartPublicAttemptDto,
 } from './dto/attempt-session.dto';
 import { ContentTypes } from 'src/common/enum/content-type.enum';
 
@@ -163,6 +164,51 @@ export class AttemptService {
     };
   }
 
+  async startPublic(
+    dto: StartPublicAttemptDto,
+  ): Promise<StartAttemptResponseDto> {
+    const guestName = dto.guestName?.trim();
+    if (!guestName) {
+      throw new BadRequestException('Tên người làm bài không được để trống');
+    }
+
+    const questionBank = await this.questionBankService.findOne(
+      dto.questionBankId,
+    );
+    const examSet = dto.examSetId
+      ? await this.examSetService.findOne(dto.examSetId)
+      : null;
+    if (dto.examSetId) {
+      await this.validateExamSetQuestionBank(dto.examSetId, dto.questionBankId);
+    }
+
+    const record = this.attemptRepo.create({
+      studentId: null,
+      guestName,
+      questionBankId: dto.questionBankId,
+      examSetId: dto.examSetId,
+      status: AttemptStatus.DOING,
+      startedAt: new Date(),
+    });
+
+    const savedAttempt = await this.attemptRepo.save(record);
+    const questions = await this.getExamQuestions(dto.questionBankId);
+
+    return {
+      attemptId: savedAttempt.id,
+      status: savedAttempt.status,
+      startedAt: savedAttempt.startedAt,
+      studentId: null,
+      guestName: savedAttempt.guestName,
+      questionBankId: savedAttempt.questionBankId,
+      questionBankName: questionBank.name,
+      examSetId: savedAttempt.examSetId ?? null,
+      examSetName: examSet?.name ?? null,
+      examName: questionBank.name,
+      questions,
+    };
+  }
+
   async end(
     id: string,
     dto: EndAttemptDto,
@@ -181,6 +227,33 @@ export class AttemptService {
       throw new ForbiddenException(ERROR_MESSAGES.NO_PERMISSION_SUBMIT_ATTEMPT);
     }
 
+    return this.submitAttempt(attempt, dto);
+  }
+
+  async endPublic(
+    id: string,
+    dto: EndAttemptDto,
+  ): Promise<EndAttemptResponseDto> {
+    const attempt = await this.attemptRepo.findOne({
+      where: {
+        id,
+        studentId: IsNull(),
+        status: AttemptStatus.DOING,
+      },
+      relations: ['questionBank', 'examSet'],
+    });
+
+    if (!attempt) {
+      throw new ForbiddenException(ERROR_MESSAGES.NO_PERMISSION_SUBMIT_ATTEMPT);
+    }
+
+    return this.submitAttempt(attempt, dto);
+  }
+
+  private async submitAttempt(
+    attempt: AttemptEntity,
+    dto: EndAttemptDto,
+  ): Promise<EndAttemptResponseDto> {
     const questionLinks = await this.questionBankQuestionRepo.find({
       where: { questionBankId: attempt.questionBankId },
       order: { orderNo: 'ASC' },
@@ -550,7 +623,7 @@ export class AttemptService {
     return {
       attemptId: attempt.id,
       status: attempt.status,
-      studentId: attempt.studentId,
+      studentId: attempt.studentId!,
       questionBankId: attempt.questionBankId,
       examSetId: attempt.examSetId,
       submittedAt: attempt.submittedAt ?? null,
@@ -628,6 +701,10 @@ export class AttemptService {
     attempt: AttemptEntity,
     user: JwtPayload,
   ): Promise<void> {
+    if (!attempt.studentId) {
+      throw new ForbiddenException('Bài làm khách không hỗ trợ xuất PDF');
+    }
+
     if (user.userType === UserType.ADMIN) {
       return;
     }
@@ -758,7 +835,7 @@ export class AttemptService {
     return {
       attemptId: attempt.id,
       status: attempt.status,
-      studentId: attempt.studentId,
+      studentId: attempt.studentId!,
       questionBankId: attempt.questionBankId,
       examSetId: attempt.examSetId,
       submittedAt: attempt.submittedAt ?? null,

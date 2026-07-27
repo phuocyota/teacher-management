@@ -15,6 +15,7 @@ import { ExamSetQuestionBankModule } from 'src/exam-set-question-bank/exam-set-q
 import { UserEntity } from 'src/user/user.entity';
 import { StudentGroupEntity } from 'src/student-group/student-group.entity';
 import { SchoolEntity } from 'src/school/school.entity';
+import { PublicAttemptController } from './public-attempt.controller';
 
 @Module({
   imports: [
@@ -35,7 +36,7 @@ import { SchoolEntity } from 'src/school/school.entity';
     ExamSetQuestionBankModule,
   ],
   providers: [AttemptService],
-  controllers: [AttemptController],
+  controllers: [AttemptController, PublicAttemptController],
   exports: [AttemptService],
 })
 export class AttemptModule {}

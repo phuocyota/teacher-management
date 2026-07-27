@@ -7,12 +7,15 @@ import { ExamSetEntity } from 'src/exam-set/exam-set.entity';
 
 @Entity('attempt')
 export class AttemptEntity extends BaseEntity {
-  @Column({ name: 'student_id', type: 'uuid', nullable: false })
-  studentId!: string;
+  @Column({ name: 'student_id', type: 'uuid', nullable: true })
+  studentId!: string | null;
 
-  @ManyToOne(() => StudentEntity, { onDelete: 'CASCADE' })
+  @ManyToOne(() => StudentEntity, { onDelete: 'CASCADE', nullable: true })
   @JoinColumn({ name: 'student_id' })
-  student!: StudentEntity;
+  student?: StudentEntity | null;
+
+  @Column({ name: 'guest_name', type: 'varchar', length: 150, nullable: true })
+  guestName?: string | null;
 
   @Column({ name: 'question_bank_id', type: 'uuid', nullable: false })
   questionBankId!: string;

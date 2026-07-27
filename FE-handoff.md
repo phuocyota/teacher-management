@@ -593,3 +593,224 @@ Luu y:
 - Cac field lop/truong co the la `null` neu hoc sinh chua duoc gan lop/truong.
 - Khi FE goi `studentId=all`, nen lay ten hoc sinh/lop/truong tu tung item trong `attempts[]`.
 - FE can 3 field chinh thi doc `className`, `shoolName`, `studentName`.
+
+---
+
+# Luồng làm đề thi thử public
+
+Base path: `/public-attempt`
+
+Luồng này dành cho người dùng bên ngoài hệ thống. Người làm bài chỉ cần nhập tên và chọn đề thi, không cần đăng nhập và không gửi Bearer token.
+
+## 1. Bắt đầu làm bài
+
+```http
+POST /public-attempt/start
+Content-Type: application/json
+```
+
+Request:
+
+```json
+{
+  "guestName": "Nguyễn Văn A",
+  "questionBankId": "3233abe3-1961-4af5-a482-542f1227d844",
+  "examSetId": "4233abe3-1961-4af5-a482-542f1227d844"
+}
+```
+
+| Field            | Bắt buộc | Kiểu     | Ghi chú                                                        |
+| ---------------- | -------- | -------- | -------------------------------------------------------------- |
+| `guestName`      | Có       | `string` | Tên người làm bài, từ 1 đến 150 ký tự                           |
+| `questionBankId` | Có       | `UUID`   | ID đề thi được chọn                                            |
+| `examSetId`      | Không    | `UUID`   | ID bộ đề; nếu gửi thì đề thi phải thuộc đúng bộ đề này          |
+
+Response `201`:
+
+```json
+{
+  "success": true,
+  "message": "Thành công",
+  "data": {
+    "attemptId": "9233abe3-1961-4af5-a482-542f1227d844",
+    "status": "DOING",
+    "startedAt": "2026-07-27T05:00:00.000Z",
+    "studentId": null,
+    "guestName": "Nguyễn Văn A",
+    "questionBankId": "3233abe3-1961-4af5-a482-542f1227d844",
+    "questionBankName": "Đề thi thử số 1",
+    "examSetId": "4233abe3-1961-4af5-a482-542f1227d844",
+    "examSetName": "Bộ đề thi thử",
+    "examName": "Đề thi thử số 1",
+    "questions": [
+      {
+        "id": "5233abe3-1961-4af5-a482-542f1227d844",
+        "orderNo": 1,
+        "points": 1,
+        "type": "SINGLE_CHOICE",
+        "contentType": "TEXT",
+        "content": "Nội dung câu hỏi",
+        "nextContent": null,
+        "chain": [
+          {
+            "id": "5233abe3-1961-4af5-a482-542f1227d844",
+            "type": "SINGLE_CHOICE",
+            "contentType": "TEXT",
+            "content": "Nội dung câu hỏi",
+            "nextContent": null
+          }
+        ],
+        "answers": [
+          {
+            "id": "6233abe3-1961-4af5-a482-542f1227d844",
+            "contentType": "TEXT",
+            "content": "Đáp án A",
+            "nextContent": null,
+            "chain": [
+              {
+                "id": "6233abe3-1961-4af5-a482-542f1227d844",
+                "contentType": "TEXT",
+                "content": "Đáp án A",
+                "nextContent": null
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  }
+}
+```
+
+Lưu ý:
+
+- Response câu hỏi không trả field `isCorrect`.
+- FE phải lưu `data.attemptId` để dùng khi nộp bài.
+- `examSetId`, `examSetName` có thể là `null`.
+- Nếu người dùng nhập tên có khoảng trắng ở đầu hoặc cuối, backend sẽ tự loại bỏ.
+
+## 2. Nộp bài
+
+```http
+POST /public-attempt/:attemptId/end
+Content-Type: application/json
+```
+
+Có thể gửi theo format ngắn:
+
+```json
+{
+  "answers": ["1A", "2B", "3C"]
+}
+```
+
+Trong đó `1A` nghĩa là câu có `orderNo = 1` chọn đáp án A.
+
+Hoặc gửi format đầy đủ:
+
+```json
+{
+  "answers": [
+    {
+      "questionId": "5233abe3-1961-4af5-a482-542f1227d844",
+      "answerId": "6233abe3-1961-4af5-a482-542f1227d844",
+      "timeSpentSec": 45
+    },
+    {
+      "questionId": "7233abe3-1961-4af5-a482-542f1227d844",
+      "selectedAnswerIds": [
+        "8233abe3-1961-4af5-a482-542f1227d844",
+        "9233abe3-1961-4af5-a482-542f1227d844"
+      ],
+      "timeSpentSec": 60
+    },
+    {
+      "questionId": "a233abe3-1961-4af5-a482-542f1227d844",
+      "textValue": "Nội dung trả lời tự luận",
+      "description": "Ghi chú thêm",
+      "timeSpentSec": 90
+    }
+  ]
+}
+```
+
+Response `200`:
+
+```json
+{
+  "success": true,
+  "message": "Thành công",
+  "data": {
+    "attemptId": "9233abe3-1961-4af5-a482-542f1227d844",
+    "status": "SUBMITTED",
+    "submittedAt": "2026-07-27T05:30:00.000Z",
+    "score": 8,
+    "totalQuestions": 10,
+    "answeredQuestions": 9
+  }
+}
+```
+
+Lưu ý:
+
+- Chỉ nộp được lượt public có `status = DOING`.
+- Một `attemptId` chỉ nộp thành công một lần.
+- `answerId` và `selectedAnswerIds` phải thuộc đúng `questionId`.
+- Có thể gửi `{ "answers": [] }` khi hết giờ mà người dùng chưa trả lời câu nào.
+
+## 3. Luồng tích hợp FE đề xuất
+
+1. Hiển thị form nhập `guestName` và chọn đề thi.
+2. Gọi `POST /public-attempt/start`.
+3. Lưu `attemptId`, `startedAt` và danh sách `questions` vào state.
+4. Render câu hỏi theo `orderNo`; lưu lựa chọn bằng `questionId` và `answerId`.
+5. Khi người dùng bấm nộp hoặc hết thời gian, gọi `POST /public-attempt/:attemptId/end`.
+6. Sau khi nộp thành công, khóa nút nộp và hiển thị `score`.
+
+Ví dụ:
+
+```ts
+const startResponse = await api.post('/public-attempt/start', {
+  guestName,
+  questionBankId,
+  examSetId: examSetId || undefined,
+});
+
+const attempt = startResponse.data.data;
+
+const endResponse = await api.post(
+  `/public-attempt/${attempt.attemptId}/end`,
+  {
+    answers,
+  },
+);
+
+const result = endResponse.data.data;
+```
+
+Không thêm header `Authorization` cho hai request trên.
+
+## 4. Xử lý lỗi
+
+| HTTP status | Trường hợp thường gặp                                               | FE xử lý đề xuất                                      |
+| ----------- | ------------------------------------------------------------------ | ----------------------------------------------------- |
+| `400`       | Tên trống/quá dài, UUID sai, đề không thuộc bộ đề, đáp án sai mapping | Hiển thị `message`, giữ dữ liệu form để người dùng sửa |
+| `403`       | `attemptId` không phải lượt public đang làm hoặc bài đã được nộp   | Khóa nút nộp, yêu cầu bắt đầu lượt mới                |
+| `404`       | Không tìm thấy đề thi hoặc bộ đề                                   | Quay lại màn hình chọn đề                             |
+
+Format lỗi:
+
+```json
+{
+  "statusCode": 400,
+  "message": "Nội dung lỗi",
+  "error": "Bad Request",
+  "timestamp": "2026-07-27T05:00:00.000Z",
+  "path": "/public-attempt/start",
+  "method": "POST"
+}
+```
+
+## 5. CORS
+
+Nếu trang thi thử được chạy từ một domain mới, domain đó phải được backend thêm vào danh sách CORS. Việc API không yêu cầu token không đồng nghĩa trình duyệt tự bỏ qua kiểm tra CORS.

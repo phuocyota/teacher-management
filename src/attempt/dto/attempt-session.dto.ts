@@ -6,6 +6,7 @@ import {
   IsOptional,
   IsString,
   IsUUID,
+  Length,
   Min,
 } from 'class-validator';
 import { AttemptStatus } from '../enum/attempt-status.enum';
@@ -28,6 +29,16 @@ export class StartAttemptDto {
     nullable: true,
   })
   examSetId?: string | null;
+}
+
+export class StartPublicAttemptDto extends StartAttemptDto {
+  @IsString()
+  @Length(1, 150)
+  @ApiProperty({
+    description: 'Tên người làm bài từ bên ngoài hệ thống',
+    example: 'Nguyễn Văn A',
+  })
+  guestName!: string;
 }
 
 export class EndAttemptAnswerDto {
@@ -170,8 +181,11 @@ export class StartAttemptResponseDto {
   @ApiProperty()
   startedAt!: Date;
 
-  @ApiProperty()
-  studentId!: string;
+  @ApiProperty({ required: false, nullable: true })
+  studentId!: string | null;
+
+  @ApiProperty({ required: false, nullable: true })
+  guestName?: string | null;
 
   @ApiProperty()
   questionBankId!: string;

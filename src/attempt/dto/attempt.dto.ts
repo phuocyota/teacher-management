@@ -7,8 +7,17 @@ export class AttemptResponseDto extends BaseDto {
   @ApiProperty({
     description: 'ID hoc sinh lam bai',
     example: '2233abe3-1961-4af5-a482-542f1227d844',
+    nullable: true,
   })
-  studentId!: string;
+  studentId!: string | null;
+
+  @ApiProperty({
+    description: 'Tên người làm bài từ bên ngoài hệ thống',
+    example: 'Nguyễn Văn A',
+    required: false,
+    nullable: true,
+  })
+  guestName?: string | null;
 
   @ApiProperty({
     description: 'ID de thi thuoc question bank',
