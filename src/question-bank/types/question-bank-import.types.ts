@@ -78,6 +78,7 @@ export interface ParsedAnswerOption {
 export interface ParsedQuestionBlock {
   number: number;
   pageNumber: number;
+  sectionOrderNo?: number;
   stemParts: ImportedContentPart[];
   answers: ParsedAnswerOption[];
   kind: ImportedQuestionKind;
@@ -86,8 +87,15 @@ export interface ParsedQuestionBlock {
   answerKey?: AnswerKeyOption;
 }
 
+export interface ParsedSection {
+  orderNo: number;
+  title: string;
+  instruction?: string;
+}
+
 export interface ParsedDocumentResult {
   questions: ParsedQuestionBlock[];
+  sections?: ParsedSection[];
   answerKey: Record<number, AnswerKeyOption>;
 }
 

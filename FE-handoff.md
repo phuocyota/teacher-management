@@ -814,3 +814,432 @@ Format lỗi:
 ## 5. CORS
 
 Nếu trang thi thử được chạy từ một domain mới, domain đó phải được backend thêm vào danh sách CORS. Việc API không yêu cầu token không đồng nghĩa trình duyệt tự bỏ qua kiểm tra CORS.
+
+---
+
+# FE Handoff: Section trong ngân hàng câu hỏi
+
+Section biểu diễn các phần của đề, ví dụ `PART I: VOCABULARY`, `PART II: GRAMMAR`.
+
+Section là optional:
+
+- Đề không chia phần: `sections = []`, mọi `questions[].sectionId = null`; FE giữ UI cũ.
+- Đề có chia phần: câu thuộc phần có `sectionId`.
+- Một đề có thể chứa cả câu có section và câu không có section.
+- `questions` phẳng vẫn được giữ trong response để tương thích ngược.
+- Xóa section không xóa câu; `sectionId` của câu được chuyển thành `null`.
+
+## 1. TypeScript model
+
+```ts
+interface QuestionBankSection {
+  id: string;
+  questionBankId: string;
+  title: string;
+  instruction: string | null;
+  orderNo: number;
+  meta: Record<string, unknown> | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+interface QuestionBankQuestion {
+  id: string;
+  questionBankId: string;
+  sectionId: string | null;
+  content: string;
+  contentType: 'TEXT' | 'IMAGE';
+  orderNo: number;
+  point: number;
+  type:
+    | 'SINGLE_CHOICE'
+    | 'MULTIPLE_CHOICE'
+    | 'TEXT_INPUT'
+    | 'MATCHING'
+    | 'ORDERING';
+  answers: QuestionBankAnswer[];
+}
+
+interface QuestionBankSectionWithQuestions {
+  id: string;
+  title: string;
+  instruction: string | null;
+  orderNo: number;
+  meta: Record<string, unknown> | null;
+  questions: QuestionBankQuestion[];
+}
+```
+
+## 2. API CRUD section
+
+Base path:
+
+```text
+/question-bank-section
+```
+
+Các API này yêu cầu:
+
+```http
+Authorization: Bearer <token>
+```
+
+### 2.1 Tạo section
+
+```http
+POST /question-bank-section
+Content-Type: application/json
+```
+
+```json
+{
+  "questionBankId": "3233abe3-1961-4af5-a482-542f1227d844",
+  "title": "PART I: VOCABULARY",
+  "instruction": "Choose the best answer.",
+  "orderNo": 1,
+  "meta": {
+    "source": "manual"
+  }
+}
+```
+
+| Field            | Bắt buộc | Kiểu     | Ghi chú                                      |
+| ---------------- | -------- | -------- | -------------------------------------------- |
+| `questionBankId` | Có       | UUID     | ID ngân hàng câu hỏi                         |
+| `title`          | Có       | string   | Tối đa 255 ký tự                             |
+| `instruction`    | Không    | string   | Hướng dẫn hoặc nội dung chung của phần      |
+| `orderNo`        | Có       | integer  | Từ 1, không trùng trong cùng question bank  |
+| `meta`           | Không    | object   | Metadata mở rộng                             |
+
+Response:
+
+```json
+{
+  "success": true,
+  "message": "Thành công",
+  "data": {
+    "id": "4233abe3-1961-4af5-a482-542f1227d844",
+    "questionBankId": "3233abe3-1961-4af5-a482-542f1227d844",
+    "title": "PART I: VOCABULARY",
+    "instruction": "Choose the best answer.",
+    "orderNo": 1,
+    "meta": {
+      "source": "manual"
+    },
+    "createdAt": "2026-07-27T07:00:00.000Z",
+    "updatedAt": "2026-07-27T07:00:00.000Z"
+  }
+}
+```
+
+### 2.2 Danh sách section của đề
+
+```http
+GET /question-bank-section?questionBankId=:questionBankId
+```
+
+`data` là mảng được sắp xếp tăng dần theo `orderNo`.
+
+### 2.3 Chi tiết section
+
+```http
+GET /question-bank-section/:sectionId
+```
+
+### 2.4 Cập nhật section
+
+```http
+PATCH /question-bank-section/:sectionId
+Content-Type: application/json
+```
+
+Chỉ gửi field thay đổi:
+
+```json
+{
+  "title": "PART I: VOCABULARY AND PRONUNCIATION",
+  "instruction": "Choose one correct answer.",
+  "orderNo": 1,
+  "meta": {
+    "color": "#2563EB"
+  }
+}
+```
+
+Không gửi `questionBankId` khi sửa. Backend không cho chuyển section sang question bank khác.
+
+### 2.5 Xóa section
+
+```http
+DELETE /question-bank-section/:sectionId
+```
+
+Câu hỏi không bị xóa; các câu của section đó trở thành câu không có section.
+
+## 3. Gắn section vào câu hỏi
+
+`sectionId` không bắt buộc.
+
+### Thêm câu vào question bank
+
+```http
+POST /question-bank/:questionBankId/questions
+Content-Type: application/json
+```
+
+Có section:
+
+```json
+{
+  "questionId": "5233abe3-1961-4af5-a482-542f1227d844",
+  "sectionId": "4233abe3-1961-4af5-a482-542f1227d844",
+  "orderNo": 1,
+  "points": 0.5
+}
+```
+
+Không có section:
+
+```json
+{
+  "questionId": "5233abe3-1961-4af5-a482-542f1227d844",
+  "orderNo": 1,
+  "points": 0.5
+}
+```
+
+Backend kiểm tra section phải thuộc đúng `questionBankId`.
+
+### Cập nhật liên kết câu hỏi
+
+```http
+PATCH /question-bank-question/:questionBankQuestionId
+Content-Type: application/json
+```
+
+Gắn section:
+
+```json
+{
+  "sectionId": "4233abe3-1961-4af5-a482-542f1227d844"
+}
+```
+
+Bỏ khỏi section:
+
+```json
+{
+  "sectionId": null
+}
+```
+
+## 4. Response chi tiết question bank
+
+```http
+GET /question-bank/:questionBankId/questions
+```
+
+Endpoint này vẫn public như trước. Response trả cả danh sách phẳng và danh sách đã group:
+
+```json
+{
+  "success": true,
+  "message": "Thành công",
+  "data": {
+    "id": "3233abe3-1961-4af5-a482-542f1227d844",
+    "code": "QB-1001",
+    "name": "English Practice Test",
+    "questions": [
+      {
+        "id": "5233abe3-1961-4af5-a482-542f1227d844",
+        "questionBankId": "3233abe3-1961-4af5-a482-542f1227d844",
+        "sectionId": "4233abe3-1961-4af5-a482-542f1227d844",
+        "content": "My mother bought me a new ________.",
+        "contentType": "TEXT",
+        "orderNo": 1,
+        "point": 0.5,
+        "type": "SINGLE_CHOICE",
+        "answers": []
+      },
+      {
+        "id": "6233abe3-1961-4af5-a482-542f1227d844",
+        "questionBankId": "3233abe3-1961-4af5-a482-542f1227d844",
+        "sectionId": null,
+        "content": "Câu hỏi không thuộc phần.",
+        "contentType": "TEXT",
+        "orderNo": 2,
+        "point": 0.5,
+        "type": "SINGLE_CHOICE",
+        "answers": []
+      }
+    ],
+    "sections": [
+      {
+        "id": "4233abe3-1961-4af5-a482-542f1227d844",
+        "title": "PART I: VOCABULARY",
+        "instruction": "Choose the best answer.",
+        "orderNo": 1,
+        "meta": null,
+        "questions": [
+          {
+            "id": "5233abe3-1961-4af5-a482-542f1227d844",
+            "questionBankId": "3233abe3-1961-4af5-a482-542f1227d844",
+            "sectionId": "4233abe3-1961-4af5-a482-542f1227d844",
+            "content": "My mother bought me a new ________.",
+            "contentType": "TEXT",
+            "orderNo": 1,
+            "point": 0.5,
+            "type": "SINGLE_CHOICE",
+            "answers": []
+          }
+        ]
+      }
+    ]
+  }
+}
+```
+
+FE nên:
+
+- Dùng `data.sections` để render phần.
+- Dùng `data.questions` để tìm các câu không có section.
+- Sắp xếp section theo `section.orderNo`.
+- Sắp xếp câu theo `question.orderNo`.
+
+Ví dụ:
+
+```ts
+const detail = response.data.data;
+
+const sectionedQuestionIds = new Set(
+  detail.sections.flatMap((section) =>
+    section.questions.map((question) => question.id),
+  ),
+);
+
+const unsectionedQuestions = detail.questions.filter(
+  (question) => !sectionedQuestionIds.has(question.id),
+);
+
+const sortedSections = [...detail.sections]
+  .sort((a, b) => a.orderNo - b.orderNo)
+  .map((section) => ({
+    ...section,
+    questions: [...section.questions].sort(
+      (a, b) => a.orderNo - b.orderNo,
+    ),
+  }));
+```
+
+## 5. Response bắt đầu làm bài
+
+Áp dụng cho:
+
+```http
+POST /attempt/start
+POST /public-attempt/start
+```
+
+Mỗi item trong `data.questions` có thêm:
+
+```ts
+sectionId: string | null;
+sectionTitle: string | null;
+sectionInstruction: string | null;
+sectionOrderNo: number | null;
+```
+
+Câu có section:
+
+```json
+{
+  "id": "5233abe3-1961-4af5-a482-542f1227d844",
+  "orderNo": 1,
+  "points": 0.5,
+  "sectionId": "4233abe3-1961-4af5-a482-542f1227d844",
+  "sectionTitle": "PART I: VOCABULARY",
+  "sectionInstruction": "Choose the best answer.",
+  "sectionOrderNo": 1,
+  "type": "SINGLE_CHOICE",
+  "contentType": "TEXT",
+  "content": "My mother bought me a new ________.",
+  "chain": [],
+  "answers": []
+}
+```
+
+Câu không có section:
+
+```json
+{
+  "id": "6233abe3-1961-4af5-a482-542f1227d844",
+  "orderNo": 2,
+  "points": 0.5,
+  "sectionId": null,
+  "sectionTitle": null,
+  "sectionInstruction": null,
+  "sectionOrderNo": null,
+  "type": "SINGLE_CHOICE",
+  "contentType": "TEXT",
+  "content": "Câu hỏi không thuộc phần.",
+  "chain": [],
+  "answers": []
+}
+```
+
+FE không cần gọi API section riêng trong lúc làm bài.
+
+Logic tương thích:
+
+```ts
+const hasSection = questions.some((question) => question.sectionId);
+
+if (!hasSection) {
+  // Render UI danh sách câu hỏi hiện tại.
+} else {
+  // Group theo sectionId; các câu sectionId = null đưa vào nhóm riêng.
+}
+```
+
+## 6. Import PDF
+
+Endpoint không đổi:
+
+```http
+POST /question-bank/:questionBankId/import-pdf
+Content-Type: multipart/form-data
+Authorization: Bearer <token>
+```
+
+Backend:
+
+- Nhận diện `PART I`, `PART II`, `PART III`, `PART IV` và `PHẦN I`, `PHẦN II`...
+- Tự tạo/cập nhật section theo số phần.
+- Gắn các câu sau tiêu đề phần vào section tương ứng.
+- Không tạo section nếu file không có PART/PHẦN.
+- Câu trước PART đầu tiên có `sectionId = null`.
+- Nhận đáp án dạng `1.A`, `Question 1: A` hoặc danh sách tuần tự chỉ gồm `A`, `B`, `C`, `D`.
+
+Hiện tại endpoint chỉ nhận PDF, chưa nhận trực tiếp DOCX.
+
+## 7. Lỗi cần xử lý
+
+| HTTP     | Trường hợp                                           | FE xử lý đề xuất                         |
+| -------- | ---------------------------------------------------- | ---------------------------------------- |
+| `400`    | Trùng `orderNo` trong cùng question bank            | Yêu cầu chọn thứ tự khác                 |
+| `400`    | Section không thuộc đúng question bank              | Reload section theo `questionBankId`     |
+| `400`    | Cố chuyển section sang question bank khác           | Không gửi `questionBankId` khi PATCH     |
+| `400`    | UUID hoặc request không hợp lệ                      | Hiển thị `message` từ backend            |
+| `404`    | Không tìm thấy section hoặc question bank           | Reload dữ liệu hoặc quay lại danh sách   |
+| `401/403`| Thiếu token hoặc không có quyền                     | Yêu cầu đăng nhập lại                    |
+
+## 8. Checklist FE
+
+- [ ] Thêm model `QuestionBankSection`.
+- [ ] Thêm `sectionId?: string | null` vào model liên kết câu hỏi.
+- [ ] Màn hình chi tiết đề đọc thêm `data.sections`.
+- [ ] Form thêm/sửa câu cho chọn section nhưng không bắt buộc.
+- [ ] Có lựa chọn “Không thuộc phần”, gửi `sectionId: null`.
+- [ ] Màn hình làm bài hiển thị `sectionTitle` và `sectionInstruction`.
+- [ ] Nếu tất cả `sectionId = null`, tiếp tục dùng UI cũ.
+- [ ] Không đọc `isCorrect` từ response bắt đầu làm bài.

@@ -68,6 +68,8 @@ import { ZoneEntity } from './zone/zone.entity';
 import { GoodsEntity } from './goods/goods.entity';
 import { OrderEntity } from './order/order.entity';
 import { GoldenBellRoomStateEntity } from './socket/golden-bell-room-state.entity';
+import { QuestionBankSectionEntity } from './question-bank-section/question-bank-section.entity';
+import { QuestionBankSectionModule } from './question-bank-section/question-bank-section.module';
 
 @Module({
   imports: [
@@ -111,6 +113,7 @@ import { GoldenBellRoomStateEntity } from './socket/golden-bell-room-state.entit
           AnswerEntity,
           TokenEntity,
           QuestionBankQuestionEntity,
+          QuestionBankSectionEntity,
           AttemptEntity,
           StudentAnswerEntity,
           GradeEntity,
@@ -145,6 +148,7 @@ import { GoldenBellRoomStateEntity } from './socket/golden-bell-room-state.entit
     StudentGroupModule,
     StudentAnswerModule,
     QuestionBankQuestionModule,
+    QuestionBankSectionModule,
     AttemptModule,
     GradeModule,
     SubjectModule,

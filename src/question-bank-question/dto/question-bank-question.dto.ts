@@ -26,6 +26,13 @@ export class QuestionBankQuestionResponseDto extends BaseDto {
     example: 2.5,
   })
   points!: number;
+
+  @ApiProperty({
+    description: 'ID phần đề thi chứa câu hỏi',
+    required: false,
+    nullable: true,
+  })
+  sectionId?: string | null;
 }
 
 export class QuestionBankQuestionListResponseDto extends PaginationResponseDto<QuestionBankQuestionResponseDto> {

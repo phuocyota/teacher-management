@@ -20,6 +20,7 @@ import {
 import { PaginationResponseDto } from 'src/common/dto/pagination.dto';
 import { QuestionBankQuestionResponseDto } from './dto/question-bank-question.dto';
 import { autoMapListToDto } from 'src/common/utils/auto-map.util';
+import { QuestionBankSectionService } from 'src/question-bank-section/question-bank-section.service';
 
 @Injectable()
 export class QuestionBankQuestionService {
@@ -30,6 +31,7 @@ export class QuestionBankQuestionService {
     private readonly questionBankService: QuestionBankService,
     @Inject(forwardRef(() => QuestionService))
     private readonly questionService: QuestionService,
+    private readonly questionBankSectionService: QuestionBankSectionService,
   ) {}
 
   async create(
@@ -37,6 +39,12 @@ export class QuestionBankQuestionService {
   ): Promise<QuestionBankQuestionEntity> {
     await this.questionBankService.findOne(dto.questionBankId);
     await this.questionService.findOne(dto.questionId);
+    if (dto.sectionId) {
+      await this.questionBankSectionService.ensureBelongsToQuestionBank(
+        dto.sectionId,
+        dto.questionBankId,
+      );
+    }
 
     const record = this.questionBankQuestionRepo.create(dto);
     return this.questionBankQuestionRepo.save(record);
@@ -107,6 +115,7 @@ export class QuestionBankQuestionService {
 
     if (existingLink) {
       existingLink.questionBankId = questionBankId;
+      existingLink.sectionId = null;
       return this.questionBankQuestionRepo.save(existingLink);
     }
 
@@ -129,6 +138,16 @@ export class QuestionBankQuestionService {
     dto: UpdateQuestionBankQuestionDto,
   ): Promise<QuestionBankQuestionEntity> {
     const record = await this.findOne(id);
+    const finalQuestionBankId = dto.questionBankId ?? record.questionBankId;
+    const finalSectionId =
+      dto.sectionId !== undefined ? dto.sectionId : record.sectionId;
+
+    if (finalSectionId) {
+      await this.questionBankSectionService.ensureBelongsToQuestionBank(
+        finalSectionId,
+        finalQuestionBankId,
+      );
+    }
 
     if (dto.questionBankId !== undefined) {
       await this.questionBankService.findOne(dto.questionBankId);
@@ -146,6 +165,10 @@ export class QuestionBankQuestionService {
 
     if (dto.points !== undefined) {
       record.points = dto.points;
+    }
+
+    if (dto.sectionId !== undefined) {
+      record.sectionId = dto.sectionId;
     }
 
     return this.questionBankQuestionRepo.save(record);

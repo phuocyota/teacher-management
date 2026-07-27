@@ -107,7 +107,10 @@ export class EndAttemptDto {
     description:
       'Danh sach cau tra loi hoc sinh nop bai. Ho tro ca object day du lieu va format FE nhu ["1A", "2B"]',
     oneOf: [
-      { type: 'array', items: { $ref: '#/components/schemas/EndAttemptAnswerDto' } },
+      {
+        type: 'array',
+        items: { $ref: '#/components/schemas/EndAttemptAnswerDto' },
+      },
       { type: 'array', items: { type: 'string', example: '1A' } },
     ],
     example: ['1A', '2B'],
@@ -163,6 +166,18 @@ export class AttemptQuestionItemDto extends AttemptQuestionChainItemDto {
 
   @ApiProperty()
   points!: number;
+
+  @ApiProperty({ required: false, nullable: true })
+  sectionId?: string | null;
+
+  @ApiProperty({ required: false, nullable: true })
+  sectionTitle?: string | null;
+
+  @ApiProperty({ required: false, nullable: true })
+  sectionInstruction?: string | null;
+
+  @ApiProperty({ required: false, nullable: true })
+  sectionOrderNo?: number | null;
 
   @ApiProperty({ type: [AttemptQuestionChainItemDto] })
   chain!: AttemptQuestionChainItemDto[];

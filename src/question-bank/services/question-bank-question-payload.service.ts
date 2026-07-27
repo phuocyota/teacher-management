@@ -27,6 +27,7 @@ export class QuestionBankQuestionPayloadService {
   ): Promise<QuestionBankQuestionPayload> {
     const links = await this.questionBankQuestionRepo.find({
       where: { questionBankId },
+      relations: ['section'],
       order: { orderNo: 'ASC' },
     });
     const questionIds = links.map((item) => item.questionId);

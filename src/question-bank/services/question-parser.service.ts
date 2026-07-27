@@ -10,6 +10,7 @@ import {
   ParsedAnswerOption,
   ParsedDocumentResult,
   ParsedQuestionBlock,
+  ParsedSection,
 } from '../types/question-bank-import.types';
 import {
   AnswerSegment,
@@ -17,6 +18,7 @@ import {
   extractAnswerKeyEntries,
   extractAnswerSegments,
   extractQuestionStart,
+  extractSectionStart,
   isAnswerKeyStart,
   QuestionStartMatch,
   sanitizeCommonPdfLine,
@@ -28,6 +30,7 @@ import { classifyQuestionType } from '../utils/question-type-classifier.utils';
 interface DraftQuestionBlock {
   number: number;
   pageNumber: number;
+  sectionOrderNo?: number;
   stemParts: ImportedContentPart[];
   answers: ParsedAnswerOption[];
   currentAnswer: ParsedAnswerOption | null;
@@ -36,7 +39,9 @@ interface DraftQuestionBlock {
 
 interface ParserRuntimeState {
   currentQuestion: DraftQuestionBlock | null;
+  currentSection: ParsedSection | null;
   parsedQuestions: ParsedQuestionBlock[];
+  parsedSections: ParsedSection[];
   answerKey: Record<number, AnswerKeyOption>;
 }
 
@@ -73,7 +78,9 @@ export class QuestionParserService {
   async parsePages(pages: PageContent[]): Promise<ParsedDocumentResult> {
     const runtimeState: ParserRuntimeState = {
       currentQuestion: null,
+      currentSection: null,
       parsedQuestions: [],
+      parsedSections: [],
       answerKey: {},
     };
     const flattenedLines = pages.flatMap((page) =>
@@ -103,13 +110,16 @@ export class QuestionParserService {
 
       runtimeState.answerKey = {
         ...runtimeState.answerKey,
-        ...this.parseAnswerKeySection([
-          ...inlineAnswerKeyLines,
-          ...flattenedLines.slice(index + 1).map((entry) => ({
-            pageNumber: entry.pageNumber,
-            text: this.composeTextLine(entry.line),
-          })),
-        ]),
+        ...this.parseAnswerKeySection(
+          [
+            ...inlineAnswerKeyLines,
+            ...flattenedLines.slice(index + 1).map((entry) => ({
+              pageNumber: entry.pageNumber,
+              text: this.composeTextLine(entry.line),
+            })),
+          ],
+          runtimeState.parsedQuestions.map((question) => question.number),
+        ),
       };
       break;
     }
@@ -118,6 +128,7 @@ export class QuestionParserService {
 
     return {
       questions: runtimeState.parsedQuestions,
+      sections: runtimeState.parsedSections,
       answerKey: runtimeState.answerKey,
     };
   }
@@ -212,6 +223,21 @@ export class QuestionParserService {
       return { shouldEnterAnswerKey: false };
     }
 
+    const sectionStart = extractSectionStart(normalizedLine);
+    if (sectionStart) {
+      this.finalizeCurrentQuestion(runtimeState);
+      const existingSection = runtimeState.parsedSections.find(
+        (section) => section.orderNo === sectionStart.orderNo,
+      );
+      runtimeState.currentSection = existingSection ?? sectionStart;
+
+      if (!existingSection) {
+        runtimeState.parsedSections.push(sectionStart);
+      }
+
+      return { shouldEnterAnswerKey: false };
+    }
+
     const inlineAnswerKey = splitInlineAnswerKeyLine(normalizedLine);
     if (inlineAnswerKey) {
       if (inlineAnswerKey.questionText) {
@@ -236,6 +262,20 @@ export class QuestionParserService {
 
     if (isAnswerKeyStart(normalizedLine)) {
       return { shouldEnterAnswerKey: true };
+    }
+
+    if (
+      !runtimeState.currentQuestion &&
+      runtimeState.currentSection &&
+      !extractQuestionStart(normalizedLine)
+    ) {
+      runtimeState.currentSection.instruction = [
+        runtimeState.currentSection.instruction,
+        normalizedLine,
+      ]
+        .filter(Boolean)
+        .join('\n');
+      return { shouldEnterAnswerKey: false };
     }
 
     if (
@@ -324,6 +364,7 @@ export class QuestionParserService {
       runtimeState.currentQuestion = {
         number: event.number,
         pageNumber,
+        sectionOrderNo: runtimeState.currentSection?.orderNo,
         stemParts: [],
         answers: [],
         currentAnswer: null,
@@ -474,6 +515,7 @@ export class QuestionParserService {
     const parsedQuestion: ParsedQuestionBlock = {
       number: currentQuestion.number,
       pageNumber: currentQuestion.pageNumber,
+      sectionOrderNo: currentQuestion.sectionOrderNo,
       stemParts: currentQuestion.stemParts,
       answers: currentQuestion.answers,
       kind: classification.kind,
@@ -545,8 +587,10 @@ export class QuestionParserService {
 
   private parseAnswerKeySection(
     lines: Array<{ pageNumber: number; text: string }>,
+    questionNumbers: number[],
   ): Record<number, AnswerKeyOption> {
     const answerKey: Record<number, AnswerKeyOption> = {};
+    let standaloneAnswerIndex = 0;
 
     for (const line of lines) {
       const normalizedLine = sanitizeCommonPdfLine(line.text, line.pageNumber);
@@ -555,7 +599,32 @@ export class QuestionParserService {
         continue;
       }
 
-      Object.assign(answerKey, extractAnswerKeyEntries(normalizedLine));
+      const explicitEntries = extractAnswerKeyEntries(normalizedLine);
+      if (Object.keys(explicitEntries).length > 0) {
+        Object.assign(answerKey, explicitEntries);
+        continue;
+      }
+
+      const standaloneAnswer = normalizedLine.match(/^([A-Da-d])[\s.)]*$/);
+      if (!standaloneAnswer) {
+        continue;
+      }
+
+      while (
+        standaloneAnswerIndex < questionNumbers.length &&
+        answerKey[questionNumbers[standaloneAnswerIndex]]
+      ) {
+        standaloneAnswerIndex++;
+      }
+
+      const questionNumber = questionNumbers[standaloneAnswerIndex];
+      if (questionNumber === undefined) {
+        continue;
+      }
+
+      answerKey[questionNumber] =
+        standaloneAnswer[1].toUpperCase() as AnswerKeyOption;
+      standaloneAnswerIndex++;
     }
 
     return answerKey;

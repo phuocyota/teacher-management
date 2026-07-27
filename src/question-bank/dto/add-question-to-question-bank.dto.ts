@@ -29,4 +29,13 @@ export class AddQuestionToQuestionBankDto {
     required: false,
   })
   points?: number;
+
+  @IsUUID()
+  @IsOptional()
+  @ApiProperty({
+    description: 'ID phần đề thi chứa câu hỏi',
+    required: false,
+    nullable: true,
+  })
+  sectionId?: string | null;
 }

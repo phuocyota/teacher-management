@@ -105,6 +105,9 @@ export class QuestionBankDetailQuestionDto {
   @ApiProperty()
   questionBankId!: string;
 
+  @ApiProperty({ required: false, nullable: true })
+  sectionId?: string | null;
+
   @ApiProperty()
   content!: string;
 
@@ -124,6 +127,26 @@ export class QuestionBankDetailQuestionDto {
   answers!: QuestionBankDetailAnswerDto[];
 }
 
+export class QuestionBankDetailSectionDto {
+  @ApiProperty()
+  id!: string;
+
+  @ApiProperty()
+  title!: string;
+
+  @ApiProperty({ required: false, nullable: true })
+  instruction?: string | null;
+
+  @ApiProperty()
+  orderNo!: number;
+
+  @ApiProperty({ required: false, nullable: true, type: Object })
+  meta?: Record<string, unknown> | null;
+
+  @ApiProperty({ type: [QuestionBankDetailQuestionDto] })
+  questions!: QuestionBankDetailQuestionDto[];
+}
+
 export class QuestionBankDetailResponseDto {
   @ApiProperty()
   id!: string;
@@ -136,4 +159,7 @@ export class QuestionBankDetailResponseDto {
 
   @ApiProperty({ type: [QuestionBankDetailQuestionDto] })
   questions!: QuestionBankDetailQuestionDto[];
+
+  @ApiProperty({ type: [QuestionBankDetailSectionDto] })
+  sections!: QuestionBankDetailSectionDto[];
 }

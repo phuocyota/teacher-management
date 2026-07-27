@@ -29,6 +29,7 @@ import {
 import { autoMapListToDto } from 'src/common/utils/auto-map.util';
 import { ImportExamResultDto } from '../dto/import-exam.dto';
 import { QuestionBankQuestionEntity } from 'src/question-bank-question/question-bank-question.entity';
+import { QuestionBankSectionEntity } from 'src/question-bank-section/question-bank-section.entity';
 import { QuestionBankImportService } from './question-bank-import.service';
 import { QuestionService } from 'src/question/question.service';
 import { QuestionEntity } from 'src/question/question.entity';
@@ -186,9 +187,15 @@ export class QuestionBankService {
     const questionBank = await this.findOne(id);
     const links = await this.questionBankQuestionRepo.find({
       where: { questionBankId: id },
-      relations: ['question'],
+      relations: ['question', 'section'],
       order: { orderNo: 'ASC' },
     });
+    const sections = await this.entityManager
+      .getRepository(QuestionBankSectionEntity)
+      .find({
+        where: { questionBankId: id },
+        order: { orderNo: 'ASC' },
+      });
     const questionIds = links
       .map((item) => item.questionId)
       .filter((questionId): questionId is string => Boolean(questionId));
@@ -208,30 +215,43 @@ export class QuestionBankService {
       new Map(),
     );
 
+    const questions = links
+      .filter((item) => Boolean(item.question))
+      .map((item) => ({
+        id: item.question.id,
+        questionBankId: item.questionBankId,
+        sectionId: item.sectionId ?? null,
+        content: item.question.content,
+        contentType: item.question.contentType,
+        orderNo: item.orderNo,
+        point: item.points,
+        type: item.question.type,
+        answers: (answersByQuestionId.get(item.questionId) ?? []).map(
+          (answer) => ({
+            id: answer.id,
+            questionId: answer.questionId,
+            content: answer.content,
+            contentType: answer.contentType,
+            isCorrect: answer.isCorrect ?? null,
+          }),
+        ),
+      }));
+
     return {
       id: questionBank.id,
       code: questionBank.code,
       name: questionBank.name,
-      questions: links
-        .filter((item) => Boolean(item.question))
-        .map((item) => ({
-          id: item.question.id,
-          questionBankId: item.questionBankId,
-          content: item.question.content,
-          contentType: item.question.contentType,
-          orderNo: item.orderNo,
-          point: item.points,
-          type: item.question.type,
-          answers: (answersByQuestionId.get(item.questionId) ?? []).map(
-            (answer) => ({
-              id: answer.id,
-              questionId: answer.questionId,
-              content: answer.content,
-              contentType: answer.contentType,
-              isCorrect: answer.isCorrect ?? null,
-            }),
-          ),
-        })),
+      questions,
+      sections: sections.map((section) => ({
+        id: section.id,
+        title: section.title,
+        instruction: section.instruction ?? null,
+        orderNo: section.orderNo,
+        meta: section.meta ?? null,
+        questions: questions.filter(
+          (question) => question.sectionId === section.id,
+        ),
+      })),
     };
   }
 
@@ -476,6 +496,18 @@ export class QuestionBankService {
     await this.findOne(questionBankId);
     await this.questionService.findOne(dto.questionId);
 
+    if (dto.sectionId) {
+      const section = await this.entityManager
+        .getRepository(QuestionBankSectionEntity)
+        .findOne({ where: { id: dto.sectionId } });
+
+      if (!section || section.questionBankId !== questionBankId) {
+        throw new BadRequestException(
+          'Phần đề thi không thuộc ngân hàng câu hỏi đã chọn',
+        );
+      }
+    }
+
     const existed = await this.questionBankQuestionRepo.findOne({
       where: {
         questionBankId,
@@ -496,6 +528,7 @@ export class QuestionBankService {
     const record = this.questionBankQuestionRepo.create({
       questionBankId,
       questionId: dto.questionId,
+      sectionId: dto.sectionId ?? null,
       orderNo: dto.orderNo ?? totalInBank + 1,
       points: dto.points ?? 1,
     });
@@ -514,6 +547,9 @@ export class QuestionBankService {
   async removeResource(id: string): Promise<void> {
     const record = await this.findOne(id);
     await this.removeLinkedQuestions(id);
+    await this.entityManager
+      .getRepository(QuestionBankSectionEntity)
+      .delete({ questionBankId: id });
     await this.clearRandomQuestionHistory(id);
 
     record.totalQuestions = 0;

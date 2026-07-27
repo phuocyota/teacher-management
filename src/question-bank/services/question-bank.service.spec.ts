@@ -127,7 +127,12 @@ function createServiceDependencies() {
     examSetRepo: {
       find: jest.fn(),
     },
-    entityManager: {},
+    questionBankSectionRepo: {
+      delete: jest.fn(),
+    },
+    entityManager: {
+      getRepository: jest.fn(),
+    },
     classService: {
       findOne: jest.fn(),
     },
@@ -144,6 +149,10 @@ function createServiceDependencies() {
 function createService(
   deps: ReturnType<typeof createServiceDependencies>,
 ): QuestionBankService {
+  deps.entityManager.getRepository.mockReturnValue(
+    deps.questionBankSectionRepo,
+  );
+
   return new QuestionBankService(
     deps.questionBankRepo as any,
     deps.questionBankQuestionRepo as any,

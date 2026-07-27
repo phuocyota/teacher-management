@@ -297,7 +297,10 @@ describe('QuestionParserService', () => {
       questionType: QuestionType.SINGLE_CHOICE,
     });
     expect(result.questions[0].stemParts).toEqual([
-      { content: 'Sap xep cac buoc theo thu tu dung 1. Buoc mot 2. Buoc hai', contentType: ContentTypes.TEXT },
+      {
+        content: 'Sap xep cac buoc theo thu tu dung 1. Buoc mot 2. Buoc hai',
+        contentType: ContentTypes.TEXT,
+      },
     ]);
     expect(result.questions[0].answers).toEqual([
       {
@@ -333,7 +336,12 @@ describe('QuestionParserService', () => {
     const pageContent: PageContent = {
       pageNumber: 2,
       lines: [
-        createTextLine(2, 0, 10, 'Cau 4. Hanh dong nao the hien em yeu thuong gia dinh?'),
+        createTextLine(
+          2,
+          0,
+          10,
+          'Cau 4. Hanh dong nao the hien em yeu thuong gia dinh?',
+        ),
         createTextLine(
           2,
           1,
@@ -350,18 +358,26 @@ describe('QuestionParserService', () => {
     expect(result.questions[0].answers).toEqual([
       {
         label: 'A',
-        parts: [{ content: 'Giup bo me viec nha', contentType: ContentTypes.TEXT }],
+        parts: [
+          { content: 'Giup bo me viec nha', contentType: ContentTypes.TEXT },
+        ],
       },
       {
         label: 'B',
         parts: [
-          { content: 'Gianh do choi voi em nho', contentType: ContentTypes.TEXT },
+          {
+            content: 'Gianh do choi voi em nho',
+            contentType: ContentTypes.TEXT,
+          },
         ],
       },
       {
         label: 'C',
         parts: [
-          { content: 'Bo di choi khong xin phep', contentType: ContentTypes.TEXT },
+          {
+            content: 'Bo di choi khong xin phep',
+            contentType: ContentTypes.TEXT,
+          },
         ],
       },
     ]);
@@ -415,12 +431,19 @@ describe('QuestionParserService', () => {
           },
           {
             label: 'C',
-            parts: [{ content: 'Khong ro nguon goc.', contentType: ContentTypes.TEXT }],
+            parts: [
+              {
+                content: 'Khong ro nguon goc.',
+                contentType: ContentTypes.TEXT,
+              },
+            ],
           },
         ],
         currentAnswer: {
           label: 'C',
-          parts: [{ content: 'Khong ro nguon goc.', contentType: ContentTypes.TEXT }],
+          parts: [
+            { content: 'Khong ro nguon goc.', contentType: ContentTypes.TEXT },
+          ],
         },
         pendingAnswerAnchors: [],
         pendingAnswerLastY: null,
@@ -452,7 +475,12 @@ describe('QuestionParserService', () => {
     const pageContent: PageContent = {
       pageNumber: 1,
       lines: [
-        createTextLine(1, 0, 10, 'Cau 8. Em hay giup Ro bot di chuyen den dich'),
+        createTextLine(
+          1,
+          0,
+          10,
+          'Cau 8. Em hay giup Ro bot di chuyen den dich',
+        ),
         createImageLine(1, 1, 20, 'maze-image'),
         createTextLine(1, 2, 30, 'A.'),
         createImageLine(1, 3, 40, 'up-arrow'),
@@ -495,7 +523,12 @@ describe('QuestionParserService', () => {
     const pageContent: PageContent = {
       pageNumber: 4,
       lines: [
-        createTextLine(4, 0, 10, 'Cau 8. Em hay giup Ro bot di chuyen den dich'),
+        createTextLine(
+          4,
+          0,
+          10,
+          'Cau 8. Em hay giup Ro bot di chuyen den dich',
+        ),
         createImageLine(4, 1, 20, 'maze-image'),
         createTextFragmentsLine(4, 30, [
           { order: 2, x: 80, content: 'A.' },
@@ -532,7 +565,12 @@ describe('QuestionParserService', () => {
     const pageContent: PageContent = {
       pageNumber: 4,
       lines: [
-        createTextLine(4, 0, 10, 'Cau 8. Em hay giup Ro bot di chuyen den dich'),
+        createTextLine(
+          4,
+          0,
+          10,
+          'Cau 8. Em hay giup Ro bot di chuyen den dich',
+        ),
         createImageLine(4, 1, 20, 'maze-image'),
         createTextFragmentsLine(4, 30, [
           { order: 2, x: 80, content: 'A.' },
@@ -573,7 +611,12 @@ describe('QuestionParserService', () => {
         createTextLine(5, 0, 10, 'Cau 7. Hay chon hinh co hanh vi dung?'),
         createTextFragmentsLine(5, 20, [
           { order: 1, x: 80, width: 140, content: 'A. Su dung dien thoai qua' },
-          { order: 2, x: 235, width: 145, content: 'B. Binh tinh tim loi thoat' },
+          {
+            order: 2,
+            x: 235,
+            width: 145,
+            content: 'B. Binh tinh tim loi thoat',
+          },
           { order: 3, x: 390, width: 130, content: 'C. Tu y be canh, be hoa.' },
         ]),
         createTextFragmentsLine(5, 30, [
@@ -606,7 +649,9 @@ describe('QuestionParserService', () => {
       },
       {
         label: 'C',
-        parts: [{ content: 'Tu y be canh, be hoa.', contentType: ContentTypes.TEXT }],
+        parts: [
+          { content: 'Tu y be canh, be hoa.', contentType: ContentTypes.TEXT },
+        ],
       },
     ]);
   });
@@ -617,7 +662,12 @@ describe('QuestionParserService', () => {
       lines: [
         createTextLine(6, 0, 10, 'Cau 7. Hay chon hinh co hanh vi dung?'),
         createTextLine(6, 1, 20, 'A. Su dung dien thoai qua nhieu.'),
-        createTextLine(6, 2, 30, 'B. Binh tinh tim loi thoat hiem khi co chay.'),
+        createTextLine(
+          6,
+          2,
+          30,
+          'B. Binh tinh tim loi thoat hiem khi co chay.',
+        ),
         createTextLine(6, 3, 40, 'C. Tu y be canh, be hoa.'),
       ],
     };
@@ -646,7 +696,9 @@ describe('QuestionParserService', () => {
       },
       {
         label: 'C',
-        parts: [{ content: 'Tu y be canh, be hoa.', contentType: ContentTypes.TEXT }],
+        parts: [
+          { content: 'Tu y be canh, be hoa.', contentType: ContentTypes.TEXT },
+        ],
       },
     ]);
   });
@@ -708,6 +760,64 @@ describe('QuestionParserService', () => {
         ],
       },
     ]);
+  });
+
+  it('groups English questions by PART without appending headings to the previous answer', async () => {
+    const pageContent: PageContent = {
+      pageNumber: 1,
+      lines: [
+        createTextLine(1, 0, 10, 'PART I: VOCABULARY'),
+        createTextLine(1, 1, 20, 'Choose the best answer.'),
+        createTextLine(1, 2, 30, 'Question 1. First question'),
+        createTextLine(1, 3, 40, 'A. One'),
+        createTextLine(1, 4, 50, 'B. Two'),
+        createTextLine(1, 5, 60, 'PART II: GRAMMAR'),
+        createTextLine(1, 6, 70, 'Question 2. Second question'),
+        createTextLine(1, 7, 80, 'A. Three'),
+        createTextLine(1, 8, 90, 'B. Four'),
+      ],
+    };
+
+    const result = await service.parsePages([pageContent]);
+
+    expect(result.sections).toEqual([
+      {
+        orderNo: 1,
+        title: 'PART I: VOCABULARY',
+        instruction: 'Choose the best answer.',
+      },
+      {
+        orderNo: 2,
+        title: 'PART II: GRAMMAR',
+      },
+    ]);
+    expect(result.questions.map((question) => question.sectionOrderNo)).toEqual(
+      [1, 2],
+    );
+    expect(result.questions[0].answers[1].parts).toEqual([
+      { content: 'Two', contentType: ContentTypes.TEXT },
+    ]);
+  });
+
+  it('maps standalone answer-key letters to parsed questions in order', async () => {
+    const pageContent: PageContent = {
+      pageNumber: 1,
+      lines: [
+        createTextLine(1, 0, 10, 'Question 1. First question'),
+        createTextLine(1, 1, 20, 'A. One'),
+        createTextLine(1, 2, 30, 'B. Two'),
+        createTextLine(1, 3, 40, 'Question 2. Second question'),
+        createTextLine(1, 4, 50, 'A. Three'),
+        createTextLine(1, 5, 60, 'B. Four'),
+        createTextLine(1, 6, 70, 'Answer Key:'),
+        createTextLine(1, 7, 80, 'B'),
+        createTextLine(1, 8, 90, 'A'),
+      ],
+    };
+
+    const result = await service.parsePages([pageContent]);
+
+    expect(result.answerKey).toEqual({ 1: 'B', 2: 'A' });
   });
 
   it('does not assign the next left-aligned question line into pending column answers', () => {

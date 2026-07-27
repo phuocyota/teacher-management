@@ -10,6 +10,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { QuestionBankEntity } from '../question-bank.entity';
 import { QuestionBankQuestionEntity } from 'src/question-bank-question/question-bank-question.entity';
+import { QuestionBankSectionEntity } from 'src/question-bank-section/question-bank-section.entity';
 import { QuestionService } from 'src/question/question.service';
 import { AnswerService } from 'src/answer/answer.service';
 import { ContentTypes } from 'src/common/enum/content-type.enum';
@@ -30,6 +31,7 @@ import {
   PageContent,
   ParsedDocumentResult,
   ParsedQuestionBlock,
+  ParsedSection,
   PdfArtifactRule,
 } from '../types/question-bank-import.types';
 import { PdfImageExtractorService } from './pdf-image-extractor.service';
@@ -76,6 +78,8 @@ export class QuestionBankImportService {
     private readonly questionBankRepo: Repository<QuestionBankEntity>,
     @InjectRepository(QuestionBankQuestionEntity)
     private readonly questionBankQuestionRepo: Repository<QuestionBankQuestionEntity>,
+    @InjectRepository(QuestionBankSectionEntity)
+    private readonly questionBankSectionRepo: Repository<QuestionBankSectionEntity>,
     @Inject(forwardRef(() => QuestionService))
     private readonly questionService: QuestionService,
     @Inject(forwardRef(() => AnswerService))
@@ -427,6 +431,10 @@ export class QuestionBankImportService {
     pointsPerQuestion: number,
   ): Promise<PdfImportProcessingResult> {
     const createdQuestions: CreatedQuestionSummary[] = [];
+    const sectionIdsByOrder = await this.persistSections(
+      questionBankId,
+      parsedDocument.sections ?? [],
+    );
     let totalAnswers = 0;
 
     for (const question of parsedDocument.questions) {
@@ -436,6 +444,9 @@ export class QuestionBankImportService {
         createdQuestions,
         parsedDocument.answerKey,
         pointsPerQuestion,
+        question.sectionOrderNo
+          ? sectionIdsByOrder.get(question.sectionOrderNo)
+          : undefined,
       );
 
       totalAnswers += persistResult.totalAnswers;
@@ -455,6 +466,7 @@ export class QuestionBankImportService {
     createdQuestions: CreatedQuestionSummary[],
     answerKey: Record<number, AnswerKeyOption>,
     pointsPerQuestion: number,
+    sectionId?: string,
   ): Promise<{ totalAnswers: number }> {
     this.logger.debug(
       `Persisting question ${question.number}: ${question.stemParts.length} question parts, ${question.answers.length} answers`,
@@ -494,6 +506,7 @@ export class QuestionBankImportService {
       rootQuestion.id,
       question.number,
       pointsPerQuestion,
+      sectionId,
     );
 
     createdQuestions.push(
@@ -541,7 +554,10 @@ export class QuestionBankImportService {
 
       const inlineAnswerKey = splitInlineAnswerKeyLine(text);
       if (inlineAnswerKey) {
-        Object.assign(answerKey, extractAnswerKeyEntries(inlineAnswerKey.answerText));
+        Object.assign(
+          answerKey,
+          extractAnswerKeyEntries(inlineAnswerKey.answerText),
+        );
 
         if (inlineAnswerKey.questionText) {
           sanitizedParts.push({
@@ -908,15 +924,50 @@ export class QuestionBankImportService {
     questionId: string,
     orderNo: number,
     points = 1,
+    sectionId?: string,
   ): Promise<void> {
     const link = this.questionBankQuestionRepo.create({
       questionBankId,
       questionId,
+      sectionId,
       orderNo,
       points,
     });
 
     await this.questionBankQuestionRepo.save(link);
+  }
+
+  private async persistSections(
+    questionBankId: string,
+    sections: ParsedSection[],
+  ): Promise<Map<number, string>> {
+    const sectionIdsByOrder = new Map<number, string>();
+
+    for (const section of sections) {
+      let entity = await this.questionBankSectionRepo.findOne({
+        where: {
+          questionBankId,
+          orderNo: section.orderNo,
+        },
+      });
+
+      if (entity) {
+        entity.title = section.title;
+        entity.instruction = section.instruction ?? null;
+      } else {
+        entity = this.questionBankSectionRepo.create({
+          questionBankId,
+          title: section.title,
+          instruction: section.instruction ?? null,
+          orderNo: section.orderNo,
+        });
+      }
+
+      const savedSection = await this.questionBankSectionRepo.save(entity);
+      sectionIdsByOrder.set(section.orderNo, savedSection.id);
+    }
+
+    return sectionIdsByOrder;
   }
 
   private calculatePointsPerQuestion(

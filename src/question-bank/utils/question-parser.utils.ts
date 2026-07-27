@@ -6,6 +6,7 @@ import {
   ANSWER_SEGMENT_PATTERN,
   FIGURE_LABEL_PATTERNS,
   QUESTION_START_PATTERNS,
+  SECTION_START_PATTERN,
 } from '../constants/question-bank-import-patterns.constant';
 import {
   AnswerKeyOption,
@@ -30,6 +31,11 @@ export interface QuestionStartMatch {
   content: string;
 }
 
+export interface SectionStartMatch {
+  orderNo: number;
+  title: string;
+}
+
 export interface AnswerSegment {
   label: AnswerOptionLabel;
   content: string;
@@ -40,6 +46,57 @@ const INLINE_ANSWER_KEY_MARKER_PATTERN =
 
 export function isAnswerKeyStart(line: string): boolean {
   return matchesAnyPattern(line.trim(), ANSWER_KEY_START_PATTERNS);
+}
+
+export function extractSectionStart(line: string): SectionStartMatch | null {
+  const normalizedLine = normalizeImportText(line);
+  const match = normalizedLine.match(SECTION_START_PATTERN);
+
+  if (!match) {
+    return null;
+  }
+
+  const orderNo = parseSectionOrder(match[1]);
+  if (!orderNo) {
+    return null;
+  }
+
+  return {
+    orderNo,
+    title: normalizedLine,
+  };
+}
+
+function parseSectionOrder(value: string): number | null {
+  if (/^\d+$/.test(value)) {
+    const orderNo = Number.parseInt(value, 10);
+    return orderNo > 0 ? orderNo : null;
+  }
+
+  const romanValues: Record<string, number> = {
+    I: 1,
+    V: 5,
+    X: 10,
+    L: 50,
+    C: 100,
+    D: 500,
+    M: 1000,
+  };
+  const roman = value.toUpperCase();
+  let result = 0;
+
+  for (let index = 0; index < roman.length; index++) {
+    const current = romanValues[roman[index]];
+    const next = romanValues[roman[index + 1]] ?? 0;
+
+    if (!current) {
+      return null;
+    }
+
+    result += current < next ? -current : current;
+  }
+
+  return result > 0 ? result : null;
 }
 
 export function extractAnswerKeyEntries(
@@ -310,7 +367,10 @@ function stripTrailingPageNumber(line: string, pageNumber: number): string {
     return line;
   }
 
-  const trailingPageNumberPattern = new RegExp(`^(.*\\S)\\s+${pageNumber}$`, 'u');
+  const trailingPageNumberPattern = new RegExp(
+    `^(.*\\S)\\s+${pageNumber}$`,
+    'u',
+  );
   const match = line.match(trailingPageNumberPattern);
 
   if (!match) {
@@ -327,7 +387,10 @@ function stripTrailingPageNumber(line: string, pageNumber: number): string {
 }
 
 function normalizeQuestionContent(content: string): string {
-  return content.trim().replace(/^[\s:.\-\u2013\u2014]+/, '').trim();
+  return content
+    .trim()
+    .replace(/^[\s:.\-\u2013\u2014]+/, '')
+    .trim();
 }
 
 function matchesAnyPattern(line: string, patterns: RegExp[]): boolean {

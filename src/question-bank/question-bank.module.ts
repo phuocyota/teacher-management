@@ -15,12 +15,14 @@ import { UploadModule } from 'src/upload/upload.module';
 import { QuestionEntity } from 'src/question/question.entity';
 import { AnswerEntity } from 'src/answer/answer.entity';
 import { QuestionBankQuestionPayloadService } from './services/question-bank-question-payload.service';
+import { QuestionBankSectionEntity } from 'src/question-bank-section/question-bank-section.entity';
 
 @Module({
   imports: [
     TypeOrmModule.forFeature([
       QuestionBankEntity,
       QuestionBankQuestionEntity,
+      QuestionBankSectionEntity,
       ExamSetEntity,
       QuestionEntity,
       AnswerEntity,

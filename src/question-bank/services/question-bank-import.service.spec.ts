@@ -38,7 +38,9 @@ describe('QuestionBankImportService', () => {
         answers: [
           {
             label: 'A',
-            parts: [{ content: 'iVBORw0KGgo=', contentType: ContentTypes.IMAGE }],
+            parts: [
+              { content: 'iVBORw0KGgo=', contentType: ContentTypes.IMAGE },
+            ],
           },
         ],
       }),
@@ -207,6 +209,61 @@ describe('QuestionBankImportService', () => {
     );
   });
 
+  it('persists parsed sections and links questions to their section', async () => {
+    const deps = createServiceDependencies();
+    deps.questionBankRepo.findOne.mockResolvedValue({
+      id: 'question-bank-1',
+      totalMarks: 10,
+    });
+    deps.questionBankQuestionRepo.count.mockResolvedValue(1);
+    deps.questionService.createBulk.mockResolvedValue([
+      {
+        id: 'question-1',
+        content: 'Question 1',
+        contentType: ContentTypes.TEXT,
+        type: QuestionType.SINGLE_CHOICE,
+      },
+    ]);
+    deps.answerService.createBulk.mockResolvedValue([{ id: 'answer-1' }]);
+    deps.questionParser.parsePages.mockResolvedValue({
+      sections: [
+        {
+          orderNo: 1,
+          title: 'PART I: VOCABULARY',
+          instruction: 'Choose the best answer.',
+        },
+      ],
+      questions: [
+        createParsedQuestionBlock({
+          sectionOrderNo: 1,
+        }),
+      ],
+      answerKey: { 1: 'A' },
+    } satisfies ParsedDocumentResult);
+    const service = createService(deps);
+    jest
+      .spyOn(service as any, 'readPdfPages')
+      .mockResolvedValue([createPage(1, ['PART I: VOCABULARY'])]);
+
+    await service.importExamFromPdf('question-bank-1', Buffer.from('pdf'));
+
+    expect(deps.questionBankSectionRepo.save).toHaveBeenCalledWith(
+      expect.objectContaining({
+        questionBankId: 'question-bank-1',
+        title: 'PART I: VOCABULARY',
+        instruction: 'Choose the best answer.',
+        orderNo: 1,
+      }),
+    );
+    expect(deps.questionBankQuestionRepo.save).toHaveBeenCalledWith(
+      expect.objectContaining({
+        questionBankId: 'question-bank-1',
+        questionId: 'question-1',
+        sectionId: 'section-1',
+      }),
+    );
+  });
+
   it('filters repeated headers and footers without removing unique content', () => {
     const service = createService(createServiceDependencies());
     const filtered = (service as any).filterPageArtifacts([
@@ -269,7 +326,8 @@ describe('QuestionBankImportService', () => {
             label: 'A',
             parts: [
               {
-                content: 'Thiet ke theo trinh tu vi day la bai thuyet trinh nghiem tuc',
+                content:
+                  'Thiet ke theo trinh tu vi day la bai thuyet trinh nghiem tuc',
                 contentType: ContentTypes.TEXT,
               },
             ],
@@ -289,16 +347,13 @@ describe('QuestionBankImportService', () => {
       answerKey,
     );
 
-    expect(deps.answerService.createBulk).toHaveBeenNthCalledWith(
-      2,
-      [
-        expect.objectContaining({
-          content: 'Lua chon B',
-          contentType: ContentTypes.TEXT,
-          meta: { importOptionLabel: 'B' },
-        }),
-      ],
-    );
+    expect(deps.answerService.createBulk).toHaveBeenNthCalledWith(2, [
+      expect.objectContaining({
+        content: 'Lua chon B',
+        contentType: ContentTypes.TEXT,
+        meta: { importOptionLabel: 'B' },
+      }),
+    ]);
     expect(answerKey).toEqual({
       1: 'C',
       2: 'B',
@@ -363,7 +418,9 @@ describe('QuestionBankImportService', () => {
     const service = createService(deps);
     jest
       .spyOn(service as any, 'readPdfPages')
-      .mockResolvedValue([createPage(1, ['Cau 9. Em hay noi cot A voi cot B'])]);
+      .mockResolvedValue([
+        createPage(1, ['Cau 9. Em hay noi cot A voi cot B']),
+      ]);
 
     await expect(
       service.importExamFromPdf('question-bank-1', Buffer.from('pdf')),
@@ -389,6 +446,14 @@ function createServiceDependencies() {
       create: jest.fn((value) => value),
       save: jest.fn(),
       count: jest.fn(),
+    },
+    questionBankSectionRepo: {
+      findOne: jest.fn(),
+      create: jest.fn((value) => ({
+        id: `section-${value.orderNo}`,
+        ...value,
+      })),
+      save: jest.fn((value) => Promise.resolve(value)),
     },
     questionService: {
       createBulk: jest.fn(),
@@ -416,6 +481,7 @@ function createService(
   return new QuestionBankImportService(
     deps.questionBankRepo as any,
     deps.questionBankQuestionRepo as any,
+    deps.questionBankSectionRepo as any,
     deps.questionService as any,
     deps.answerService as any,
     deps.pdfImageExtractor as any,
