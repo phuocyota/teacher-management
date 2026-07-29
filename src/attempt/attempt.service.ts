@@ -9,7 +9,9 @@ import { PDFDocument, rgb, type PDFFont } from 'pdf-lib';
 import fontkit from '@pdf-lib/fontkit';
 import { promises as fs } from 'fs';
 import * as path from 'path';
-import { In, IsNull, Repository } from 'typeorm';
+import { randomUUID } from 'crypto';
+import * as bcrypt from 'bcryptjs';
+import { In, Not, IsNull, Repository } from 'typeorm';
 import { AttemptEntity } from './attempt.entity';
 import { StudentService } from 'src/student/student.service';
 import { StudentEntity } from 'src/student/student.entity';
@@ -56,6 +58,13 @@ import {
   StartPublicAttemptDto,
 } from './dto/attempt-session.dto';
 import { ContentTypes } from 'src/common/enum/content-type.enum';
+import { Status } from 'src/user/enum/status.enum';
+import { runInTransaction } from 'src/common/database/transaction.utils';
+
+const PUBLIC_ATTEMPT_SCHOOL_CODE = 'di-ichi';
+const PUBLIC_ATTEMPT_STUDENT_GROUP_NAME = 'test tiếng anh đầu vào';
+const PUBLIC_STUDENT_CODE_PREFIX = 'PUBLIC-';
+const PUBLIC_STUDENT_USERNAME_PREFIX = 'public_';
 
 const PDF_STANDARD_FONT_DIR = path.join(
   process.cwd(),
@@ -182,23 +191,81 @@ export class AttemptService {
       await this.validateExamSetQuestionBank(dto.examSetId, dto.questionBankId);
     }
 
-    const record = this.attemptRepo.create({
-      studentId: null,
-      guestName,
-      questionBankId: dto.questionBankId,
-      examSetId: dto.examSetId,
-      status: AttemptStatus.DOING,
-      startedAt: new Date(),
-    });
+    const savedAttempt = await runInTransaction(
+      this.attemptRepo.manager,
+      async (manager) => {
+        const schoolRepo = manager.getRepository(SchoolEntity);
+        const studentGroupRepo = manager.getRepository(StudentGroupEntity);
+        const userRepo = manager.getRepository(UserEntity);
+        const studentRepo = manager.getRepository(StudentEntity);
+        const attemptRepo = manager.getRepository(AttemptEntity);
 
-    const savedAttempt = await this.attemptRepo.save(record);
+        const school = await schoolRepo.findOne({
+          where: { code: PUBLIC_ATTEMPT_SCHOOL_CODE },
+        });
+        if (!school) {
+          throw new NotFoundException(
+            `Không tìm thấy trường ${PUBLIC_ATTEMPT_SCHOOL_CODE}`,
+          );
+        }
+
+        const studentGroup = await studentGroupRepo.findOne({
+          where: {
+            name: PUBLIC_ATTEMPT_STUDENT_GROUP_NAME,
+            schoolId: school.id,
+          },
+        });
+        if (!studentGroup) {
+          throw new NotFoundException(
+            `Không tìm thấy lớp ${PUBLIC_ATTEMPT_STUDENT_GROUP_NAME} thuộc trường ${school.name}`,
+          );
+        }
+
+        const publicStudentId = randomUUID();
+        const publicStudentKey = publicStudentId.replaceAll('-', '');
+        const hashPassword = await bcrypt.hash(randomUUID(), 10);
+
+        await userRepo.save(
+          userRepo.create({
+            id: publicStudentId,
+            userName: `${PUBLIC_STUDENT_USERNAME_PREFIX}${publicStudentKey}`,
+            hashPassword,
+            fullName: guestName,
+            userType: UserType.STUDENT,
+            status: Status.INACTIVE,
+            isDisabled: true,
+            note: 'Được tạo tự động từ bài kiểm tra ngoài luồng',
+          }),
+        );
+
+        await studentRepo.save(
+          studentRepo.create({
+            id: publicStudentId,
+            studentGroupId: studentGroup.id,
+            schoolId: school.id,
+            code: `${PUBLIC_STUDENT_CODE_PREFIX}${publicStudentId}`,
+          }),
+        );
+
+        return attemptRepo.save(
+          attemptRepo.create({
+            studentId: publicStudentId,
+            guestName,
+            questionBankId: dto.questionBankId,
+            examSetId: dto.examSetId,
+            status: AttemptStatus.DOING,
+            startedAt: new Date(),
+          }),
+        );
+      },
+    );
     const questions = await this.getExamQuestions(dto.questionBankId);
 
     return {
       attemptId: savedAttempt.id,
       status: savedAttempt.status,
       startedAt: savedAttempt.startedAt,
-      studentId: null,
+      studentId: savedAttempt.studentId,
       guestName: savedAttempt.guestName,
       questionBankId: savedAttempt.questionBankId,
       questionBankName: questionBank.name,
@@ -237,7 +304,7 @@ export class AttemptService {
     const attempt = await this.attemptRepo.findOne({
       where: {
         id,
-        studentId: IsNull(),
+        guestName: Not(IsNull()),
         status: AttemptStatus.DOING,
       },
       relations: ['questionBank', 'examSet'],

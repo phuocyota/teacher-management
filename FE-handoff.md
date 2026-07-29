@@ -635,7 +635,7 @@ Response `201`:
     "attemptId": "9233abe3-1961-4af5-a482-542f1227d844",
     "status": "DOING",
     "startedAt": "2026-07-27T05:00:00.000Z",
-    "studentId": null,
+    "studentId": "a233abe3-1961-4af5-a482-542f1227d844",
     "guestName": "Nguyễn Văn A",
     "questionBankId": "3233abe3-1961-4af5-a482-542f1227d844",
     "questionBankName": "Đề thi thử số 1",
@@ -688,6 +688,8 @@ Lưu ý:
 - FE phải lưu `data.attemptId` để dùng khi nộp bài.
 - `examSetId`, `examSetName` có thể là `null`.
 - Nếu người dùng nhập tên có khoảng trắng ở đầu hoặc cuối, backend sẽ tự loại bỏ.
+- `guestName` được lưu làm họ tên học sinh. Backend tự tạo học sinh thuộc lớp `test tiếng anh đầu vào` của trường `Di-ichi` và trả ID tại `studentId`.
+- Mỗi lần gọi API start sẽ tạo một học sinh mới; backend không gộp theo họ tên vì nhiều học sinh có thể trùng tên.
 
 ## 2. Nộp bài
 
