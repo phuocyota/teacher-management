@@ -6,8 +6,6 @@ import {
   forwardRef,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { promises as fs } from 'fs';
-import { dirname, join } from 'path';
 import { EntityManager, In, Repository } from 'typeorm';
 import { QuestionBankEntity } from '../question-bank.entity';
 import {
@@ -38,17 +36,8 @@ import { ExamSetEntity } from 'src/exam-set/exam-set.entity';
 import { ExamSetQuestionBankEntity } from 'src/exam-set-question-bank/exam-set-question-bank.entity';
 import { runInTransaction } from 'src/common/database/transaction.utils';
 
-type RandomQuestionHistory = Record<string, string[]>;
-
 @Injectable()
 export class QuestionBankService {
-  private readonly randomHistoryFilePath = join(
-    process.cwd(),
-    'data',
-    'question-bank-random-history.json',
-  );
-  private randomHistoryQueue: Promise<void> = Promise.resolve();
-
   constructor(
     @InjectRepository(QuestionBankEntity)
     private readonly questionBankRepo: Repository<QuestionBankEntity>,
@@ -175,11 +164,9 @@ export class QuestionBankService {
     questionBankId: string,
     excludeQuestionIds: string[] = [],
   ): Promise<QuestionEntity> {
-    return this.withRandomHistoryLock(() =>
-      this.findRandomQuestionWithoutDuplicate(
-        questionBankId,
-        excludeQuestionIds,
-      ),
+    return this.findRandomQuestionWithoutDuplicate(
+      questionBankId,
+      excludeQuestionIds,
     );
   }
 
@@ -260,11 +247,7 @@ export class QuestionBankService {
     excludeQuestionIds: string[] = [],
   ): Promise<QuestionEntity> {
     await this.findOne(questionBankId);
-    const history = await this.readRandomQuestionHistory();
-    const usedQuestionIds = history[questionBankId] ?? [];
-    const skippedQuestionIds = [
-      ...new Set([...excludeQuestionIds, ...usedQuestionIds]),
-    ];
+    const skippedQuestionIds = [...new Set(excludeQuestionIds)];
 
     const qb = this.questionRepo
       .createQueryBuilder('question')
@@ -291,10 +274,6 @@ export class QuestionBankService {
     }
 
     (question as any).questionBankId = questionBankId;
-    await this.saveRandomQuestionHistory({
-      ...history,
-      [questionBankId]: [...new Set([...usedQuestionIds, question.id])],
-    });
 
     question.answers = await this.getAnswersWithDetails(question.id);
 
@@ -316,67 +295,6 @@ export class QuestionBankService {
     }
 
     return question;
-  }
-
-  private async withRandomHistoryLock<T>(task: () => Promise<T>): Promise<T> {
-    const runTask = this.randomHistoryQueue.then(task, task);
-    this.randomHistoryQueue = runTask.then(
-      () => undefined,
-      () => undefined,
-    );
-    return runTask;
-  }
-
-  private async readRandomQuestionHistory(): Promise<RandomQuestionHistory> {
-    try {
-      const content = await fs.readFile(this.randomHistoryFilePath, 'utf8');
-      const parsed = JSON.parse(content) as unknown;
-
-      if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
-        return {};
-      }
-
-      return Object.entries(parsed).reduce<RandomQuestionHistory>(
-        (history, [questionBankId, questionIds]) => {
-          if (Array.isArray(questionIds)) {
-            history[questionBankId] = questionIds.filter(
-              (questionId): questionId is string =>
-                typeof questionId === 'string',
-            );
-          }
-          return history;
-        },
-        {},
-      );
-    } catch (error) {
-      if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
-        return {};
-      }
-      throw error;
-    }
-  }
-
-  private async saveRandomQuestionHistory(
-    history: RandomQuestionHistory,
-  ): Promise<void> {
-    await fs.mkdir(dirname(this.randomHistoryFilePath), { recursive: true });
-    const tmpFilePath = `${this.randomHistoryFilePath}.tmp`;
-    await fs.writeFile(tmpFilePath, JSON.stringify(history, null, 2), 'utf8');
-    await fs.rename(tmpFilePath, this.randomHistoryFilePath);
-  }
-
-  private async clearRandomQuestionHistory(
-    questionBankId: string,
-  ): Promise<void> {
-    await this.withRandomHistoryLock(async () => {
-      const history = await this.readRandomQuestionHistory();
-      if (!history[questionBankId]) {
-        return;
-      }
-
-      delete history[questionBankId];
-      await this.saveRandomQuestionHistory(history);
-    });
   }
 
   private async getAnswersWithDetails(
@@ -539,7 +457,6 @@ export class QuestionBankService {
   async remove(id: string): Promise<void> {
     const record = await this.findOne(id);
     await this.removeLinkedQuestions(id);
-    await this.clearRandomQuestionHistory(id);
 
     await this.questionBankRepo.remove(record);
   }
@@ -550,7 +467,6 @@ export class QuestionBankService {
     await this.entityManager
       .getRepository(QuestionBankSectionEntity)
       .delete({ questionBankId: id });
-    await this.clearRandomQuestionHistory(id);
 
     record.totalQuestions = 0;
     await this.questionBankRepo.save(record);

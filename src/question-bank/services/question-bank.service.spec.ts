@@ -1,6 +1,3 @@
-import { promises as fs } from 'fs';
-import { tmpdir } from 'os';
-import { join } from 'path';
 import { QuestionBankService } from './question-bank.service';
 
 describe('QuestionBankService', () => {
@@ -62,16 +59,8 @@ describe('QuestionBankService', () => {
     });
   });
 
-  it('stores random question ids in a json file and skips used questions', async () => {
+  it('skips only question ids supplied by the current room', async () => {
     const deps = createServiceDependencies();
-    const tempDir = await fs.mkdtemp(join(tmpdir(), 'question-bank-history-'));
-    const historyFilePath = join(tempDir, 'question-bank-random-history.json');
-    await fs.writeFile(
-      historyFilePath,
-      JSON.stringify({ 'bank-1': ['question-1'] }, null, 2),
-      'utf8',
-    );
-
     deps.questionBankRepo.findOne.mockResolvedValue({ id: 'bank-1' });
     deps.answerRepo.find.mockResolvedValue([]);
 
@@ -90,19 +79,17 @@ describe('QuestionBankService', () => {
     deps.questionRepo.createQueryBuilder.mockReturnValue(queryBuilder);
 
     const service = createService(deps);
-    (service as any).randomHistoryFilePath = historyFilePath;
 
-    const question = await service.findRandomQuestion('bank-1', ['question-3']);
-    const history = JSON.parse(await fs.readFile(historyFilePath, 'utf8'));
+    const question = await service.findRandomQuestion('bank-1', [
+      'question-3',
+      'question-3',
+    ]);
 
     expect(question.id).toBe('question-2');
     expect(queryBuilder.andWhere).toHaveBeenCalledWith(
       'question.id NOT IN (:...excludeQuestionIds)',
-      { excludeQuestionIds: ['question-3', 'question-1'] },
+      { excludeQuestionIds: ['question-3'] },
     );
-    expect(history).toEqual({ 'bank-1': ['question-1', 'question-2'] });
-
-    await fs.rm(tempDir, { recursive: true, force: true });
   });
 });
 
