@@ -16,6 +16,9 @@ import { QuestionEntity } from 'src/question/question.entity';
 import { AnswerEntity } from 'src/answer/answer.entity';
 import { QuestionBankQuestionPayloadService } from './services/question-bank-question-payload.service';
 import { QuestionBankSectionEntity } from 'src/question-bank-section/question-bank-section.entity';
+import { ExamZipReaderService } from './services/exam-zip-reader.service';
+import { StructuredExamParserService } from './services/structured-exam-parser.service';
+import { QuestionBankZipImportService } from './services/question-bank-zip-import.service';
 
 @Module({
   imports: [
@@ -38,6 +41,9 @@ import { QuestionBankSectionEntity } from 'src/question-bank-section/question-ba
     QuestionBankImportService,
     PdfImageExtractorService,
     QuestionParserService,
+    ExamZipReaderService,
+    StructuredExamParserService,
+    QuestionBankZipImportService,
   ],
   controllers: [QuestionBankController],
   exports: [QuestionBankService, QuestionBankQuestionPayloadService],

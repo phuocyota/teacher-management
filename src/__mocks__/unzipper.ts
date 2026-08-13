@@ -5,4 +5,8 @@ export const Extract = () => {
   return handler;
 };
 
-export default { Extract };
+export const Open = {
+  buffer: jest.fn(),
+};
+
+export default { Extract, Open };

@@ -35,7 +35,10 @@ import {
   QuestionBankResponseDto,
 } from './dto/question-bank.dto';
 import { PaginationResponseDto } from 'src/common/dto/pagination.dto';
-import { ImportExamResultDto } from './dto/import-exam.dto';
+import {
+  ImportExamResultDto,
+  ImportZipExamResultDto,
+} from './dto/import-exam.dto';
 import { QuestionBankQuestionResponseDto } from 'src/question-bank-question/dto/question-bank-question.dto';
 import { QuestionResponseDto } from 'src/question/dto/question.dto';
 import { Public } from 'src/common/decorator/public.decorator';
@@ -188,6 +191,58 @@ export class QuestionBankController {
       throw new Error('No file uploaded');
     }
     return this.questionBankService.importExamFromPdf(
+      questionBankId,
+      file.buffer,
+    );
+  }
+
+  @Post(':id/import-zip')
+  @ApiOperation({
+    summary: 'Import và thay toàn bộ đề thi từ ZIP chứa một PDF và audio',
+  })
+  @ApiConsumes('multipart/form-data')
+  @ApiBody({
+    schema: {
+      type: 'object',
+      properties: {
+        file: {
+          type: 'string',
+          format: 'binary',
+          description:
+            'File ZIP dạng phẳng, chứa đúng một PDF và các file audio ở thư mục gốc',
+        },
+      },
+      required: ['file'],
+    },
+  })
+  @ApiOkResponse({ type: ImportZipExamResultDto })
+  @UseInterceptors(
+    FileInterceptor('file', {
+      limits: { fileSize: 500 * 1024 * 1024 },
+      fileFilter: (_request, file, callback) => {
+        const isZipMime = [
+          'application/zip',
+          'application/x-zip-compressed',
+          'application/octet-stream',
+        ].includes(file.mimetype);
+        const isZipName = file.originalname.toLowerCase().endsWith('.zip');
+        callback(
+          isZipMime && isZipName
+            ? null
+            : new BadRequestException('Chỉ chấp nhận file .zip'),
+          isZipMime && isZipName,
+        );
+      },
+    }),
+  )
+  async importZip(
+    @Param('id', ParseUUIDPipe) questionBankId: string,
+    @UploadedFile() file: Express.Multer.File,
+  ): Promise<ImportZipExamResultDto> {
+    if (!file?.buffer) {
+      throw new BadRequestException('Không có file ZIP được tải lên');
+    }
+    return this.questionBankService.importExamFromZip(
       questionBankId,
       file.buffer,
     );

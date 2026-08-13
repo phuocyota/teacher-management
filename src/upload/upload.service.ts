@@ -6,7 +6,7 @@ import {
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, In } from 'typeorm';
+import { EntityManager, Repository, In } from 'typeorm';
 import {
   existsSync,
   mkdirSync,
@@ -222,6 +222,7 @@ export class UploadService {
       description?: string;
       folderPath?: string;
       storedPathPrefix?: string;
+      manager?: EntityManager;
     },
   ): Promise<UploadFileResponseDto> {
     if (!buffer || buffer.length === 0) {
@@ -248,19 +249,29 @@ export class UploadService {
       ? `${prefix}/${normalizedRelativePath}`
       : `${this.uploadDir.replace(/\\/g, '/')}/${normalizedRelativePath}`;
 
-    const saved = await this.fileRepo.save(
-      this.fileRepo.create({
-        originalName,
-        filename: storedFilename,
-        path: storedPath,
-        mimetype: options.mimetype,
-        size: buffer.length,
-        fileType: options.fileType ?? FileType.NORMAL,
-        description: options.description,
-        createdBy: options.uploadedBy,
-        uploadedBy: options.uploadedBy,
-      }),
-    );
+    const fileRepo =
+      options.manager?.getRepository(FileEntity) ?? this.fileRepo;
+    let saved: FileEntity;
+    try {
+      saved = await fileRepo.save(
+        fileRepo.create({
+          originalName,
+          filename: storedFilename,
+          path: storedPath,
+          mimetype: options.mimetype,
+          size: buffer.length,
+          fileType: options.fileType ?? FileType.NORMAL,
+          description: options.description,
+          createdBy: options.uploadedBy,
+          uploadedBy: options.uploadedBy,
+        }),
+      );
+    } catch (error) {
+      if (existsSync(diskPath)) {
+        rmSync(diskPath);
+      }
+      throw error;
+    }
 
     return UploadFileResponseDto.fromEntity(saved);
   }
@@ -767,9 +778,7 @@ export class UploadService {
           candidatePaths.add(`${uploadPrefix}/${relativePath}`);
 
           if (normalizedPublicBaseUrl) {
-            candidatePaths.add(
-              `${normalizedPublicBaseUrl}/${relativePath}`,
-            );
+            candidatePaths.add(`${normalizedPublicBaseUrl}/${relativePath}`);
           }
         }
       }

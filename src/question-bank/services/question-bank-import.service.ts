@@ -113,8 +113,7 @@ export class QuestionBankImportService {
     const questionBank = await this.findQuestionBankById(questionBankId);
 
     try {
-      const pages = await this.readPdfPages(pdfBuffer);
-      const filteredPages = this.filterPageArtifacts(pages);
+      const filteredPages = await this.readFilteredPdfPages(pdfBuffer);
       const parsedDocument =
         await this.parseStrictMultipleChoicePages(filteredPages);
       const pointsPerQuestion = this.calculatePointsPerQuestion(
@@ -171,7 +170,16 @@ export class QuestionBankImportService {
     }
   }
 
-  private async readPdfPages(pdfBuffer: Buffer): Promise<PageContent[]> {
+  async readFilteredPdfPages(pdfBuffer: Buffer): Promise<PageContent[]> {
+    const pages = await this.readPdfPages(pdfBuffer);
+    return this.filterPageArtifacts(pages);
+  }
+
+  private readPdfPages(pdfBuffer: Buffer): Promise<PageContent[]> {
+    return this.readRawPdfPages(pdfBuffer);
+  }
+
+  async readRawPdfPages(pdfBuffer: Buffer): Promise<PageContent[]> {
     let pdfDocument: any = null;
     let loadingTask: any = null;
 
@@ -954,12 +962,14 @@ export class QuestionBankImportService {
       if (entity) {
         entity.title = section.title;
         entity.instruction = section.instruction ?? null;
+        entity.meta = section.meta ?? null;
       } else {
         entity = this.questionBankSectionRepo.create({
           questionBankId,
           title: section.title,
           instruction: section.instruction ?? null,
           orderNo: section.orderNo,
+          meta: section.meta ?? null,
         });
       }
 

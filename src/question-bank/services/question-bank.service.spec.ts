@@ -126,6 +126,9 @@ function createServiceDependencies() {
     questionBankImportService: {
       importExamFromPdf: jest.fn(),
     },
+    questionBankZipImportService: {
+      importExamFromZip: jest.fn(),
+    },
     questionService: {
       remove: jest.fn(),
       findOne: jest.fn(),
@@ -149,6 +152,7 @@ function createService(
     deps.entityManager as any,
     deps.classService as any,
     deps.questionBankImportService as any,
+    deps.questionBankZipImportService as any,
     deps.questionService as any,
   );
 }

@@ -91,6 +91,7 @@ export interface ParsedSection {
   orderNo: number;
   title: string;
   instruction?: string;
+  meta?: Record<string, unknown> | null;
 }
 
 export interface ParsedDocumentResult {

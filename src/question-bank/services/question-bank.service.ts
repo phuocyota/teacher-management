@@ -25,7 +25,10 @@ import {
   QuestionBankResponseDto,
 } from '../dto/question-bank.dto';
 import { autoMapListToDto } from 'src/common/utils/auto-map.util';
-import { ImportExamResultDto } from '../dto/import-exam.dto';
+import {
+  ImportExamResultDto,
+  ImportZipExamResultDto,
+} from '../dto/import-exam.dto';
 import { QuestionBankQuestionEntity } from 'src/question-bank-question/question-bank-question.entity';
 import { QuestionBankSectionEntity } from 'src/question-bank-section/question-bank-section.entity';
 import { QuestionBankImportService } from './question-bank-import.service';
@@ -35,6 +38,7 @@ import { AnswerEntity } from 'src/answer/answer.entity';
 import { ExamSetEntity } from 'src/exam-set/exam-set.entity';
 import { ExamSetQuestionBankEntity } from 'src/exam-set-question-bank/exam-set-question-bank.entity';
 import { runInTransaction } from 'src/common/database/transaction.utils';
+import { QuestionBankZipImportService } from './question-bank-zip-import.service';
 
 @Injectable()
 export class QuestionBankService {
@@ -52,6 +56,7 @@ export class QuestionBankService {
     private readonly entityManager: EntityManager,
     private readonly classService: ClassService,
     private readonly questionBankImportService: QuestionBankImportService,
+    private readonly questionBankZipImportService: QuestionBankZipImportService,
     @Inject(forwardRef(() => QuestionService))
     private readonly questionService: QuestionService,
   ) {}
@@ -479,6 +484,16 @@ export class QuestionBankService {
     return this.questionBankImportService.importExamFromPdf(
       questionBankId,
       pdfBuffer,
+    );
+  }
+
+  async importExamFromZip(
+    questionBankId: string,
+    zipBuffer: Buffer,
+  ): Promise<ImportZipExamResultDto> {
+    return this.questionBankZipImportService.importExamFromZip(
+      questionBankId,
+      zipBuffer,
     );
   }
 

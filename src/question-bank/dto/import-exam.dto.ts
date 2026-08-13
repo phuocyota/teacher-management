@@ -80,3 +80,54 @@ export class ImportExamResultDto {
   })
   answerKey?: Record<string, AnswerKeyOption>;
 }
+
+export class ImportZipAudioFileDto {
+  @ApiProperty()
+  id!: string;
+
+  @ApiProperty({ example: 'Audio 001' })
+  label!: string;
+
+  @ApiProperty({ example: 'Audio 001.mp3' })
+  originalName!: string;
+
+  @ApiProperty({ example: '/uploads/question-banks/id/audio.mp3' })
+  path!: string;
+
+  @ApiProperty({ example: 'audio/mpeg' })
+  mimetype!: string;
+
+  @ApiProperty()
+  size!: number;
+
+  @ApiProperty()
+  sectionId!: string;
+}
+
+export class ImportZipSectionDto {
+  @ApiProperty()
+  id!: string;
+
+  @ApiProperty({ example: 'NHÓM Câu 21-25' })
+  title!: string;
+
+  @ApiProperty({ required: false, nullable: true })
+  instruction?: string | null;
+
+  @ApiProperty()
+  orderNo!: number;
+
+  @ApiProperty({ required: false, nullable: true, type: Object })
+  meta?: Record<string, unknown> | null;
+}
+
+export class ImportZipExamResultDto extends ImportExamResultDto {
+  @ApiProperty({ type: [ImportZipSectionDto] })
+  sections!: ImportZipSectionDto[];
+
+  @ApiProperty({ type: [ImportZipAudioFileDto] })
+  audioFiles!: ImportZipAudioFileDto[];
+
+  @ApiProperty({ type: [String] })
+  warnings!: string[];
+}
