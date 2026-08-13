@@ -46,6 +46,7 @@ import {
   AttemptAnswerChainItemDto,
   AttemptAnswerOptionDto,
   AttemptQuestionChainItemDto,
+  AttemptQuestionGroupDto,
   AttemptQuestionItemDto,
   AttemptReviewAnswerOptionDto,
   AttemptReviewQuestionItemDto,
@@ -55,6 +56,7 @@ import {
   EndAttemptResponseDto,
   StartAttemptDto,
   StartAttemptResponseDto,
+  StartGroupedAttemptResponseDto,
   StartPublicAttemptDto,
 } from './dto/attempt-session.dto';
 import { ContentTypes } from 'src/common/enum/content-type.enum';
@@ -173,6 +175,19 @@ export class AttemptService {
     };
   }
 
+  async startGrouped(
+    dto: StartAttemptDto,
+    user: JwtPayload,
+  ): Promise<StartGroupedAttemptResponseDto> {
+    const { questions, ...attempt } = await this.start(dto, user);
+    const groups = await this.getExamQuestionGroups(
+      dto.questionBankId,
+      questions,
+    );
+
+    return { ...attempt, groups };
+  }
+
   async startPublic(
     dto: StartPublicAttemptDto,
   ): Promise<StartAttemptResponseDto> {
@@ -274,6 +289,18 @@ export class AttemptService {
       examName: questionBank.name,
       questions,
     };
+  }
+
+  async startPublicGrouped(
+    dto: StartPublicAttemptDto,
+  ): Promise<StartGroupedAttemptResponseDto> {
+    const { questions, ...attempt } = await this.startPublic(dto);
+    const groups = await this.getExamQuestionGroups(
+      dto.questionBankId,
+      questions,
+    );
+
+    return { ...attempt, groups };
   }
 
   async end(
@@ -1046,9 +1073,12 @@ export class AttemptService {
   ): Promise<Buffer> {
     const pdfDoc = await PDFDocument.create();
     pdfDoc.registerFontkit(fontkit);
-    const font = await pdfDoc.embedFont(await fs.readFile(PDF_REGULAR_FONT_PATH), {
-      subset: false,
-    });
+    const font = await pdfDoc.embedFont(
+      await fs.readFile(PDF_REGULAR_FONT_PATH),
+      {
+        subset: false,
+      },
+    );
     const boldFont = await pdfDoc.embedFont(
       await fs.readFile(PDF_BOLD_FONT_PATH),
       { subset: false },
@@ -1118,25 +1148,21 @@ export class AttemptService {
       },
     ) => {
       if (this.shouldTreatAsImage(item)) {
-        const imageRendered = await this.tryDrawPdfImage(
-          pdfDoc,
-          item.content,
-          {
-            ensureSpace,
-            getPage: () => page,
-            setPage: (nextPage) => {
-              page = nextPage;
-            },
-            getY: () => y,
-            setY: (nextY) => {
-              y = nextY;
-            },
-            margin,
-            pageSize,
-            maxWidth: contentWidth - (options?.indent ?? 0),
-            indent: options?.indent ?? 0,
+        const imageRendered = await this.tryDrawPdfImage(pdfDoc, item.content, {
+          ensureSpace,
+          getPage: () => page,
+          setPage: (nextPage) => {
+            page = nextPage;
           },
-        );
+          getY: () => y,
+          setY: (nextY) => {
+            y = nextY;
+          },
+          margin,
+          pageSize,
+          maxWidth: contentWidth - (options?.indent ?? 0),
+          indent: options?.indent ?? 0,
+        });
 
         if (imageRendered) {
           y -= options?.gapAfter ?? 4;
@@ -1291,7 +1317,10 @@ export class AttemptService {
     return trimmed;
   }
 
-  private shouldTreatAsImage(item: { contentType: string; content: string }): boolean {
+  private shouldTreatAsImage(item: {
+    contentType: string;
+    content: string;
+  }): boolean {
     return (
       item.contentType === ContentTypes.IMAGE ||
       /^\/?uploads\//i.test(item.content ?? '') ||
@@ -1348,7 +1377,9 @@ export class AttemptService {
     }
   }
 
-  private async resolvePdfImageBuffer(rawContent: string): Promise<Buffer | null> {
+  private async resolvePdfImageBuffer(
+    rawContent: string,
+  ): Promise<Buffer | null> {
     const trimmed = (rawContent ?? '').trim();
     if (!trimmed) {
       return null;
@@ -1442,7 +1473,9 @@ export class AttemptService {
       return `${rawLabel}.`;
     }
 
-    const answerIndex = question.answers.findIndex((item) => item.id === answer.id);
+    const answerIndex = question.answers.findIndex(
+      (item) => item.id === answer.id,
+    );
     if (answerIndex >= 0 && answerIndex < 26) {
       return `${String.fromCharCode(65 + answerIndex)}.`;
     }
@@ -1634,6 +1667,10 @@ export class AttemptService {
         id: rootQuestion.id,
         orderNo: link.orderNo,
         points: link.points,
+        sectionId: link.sectionId ?? null,
+        sectionTitle: link.section?.title ?? null,
+        sectionInstruction: link.section?.instruction ?? null,
+        sectionOrderNo: link.section?.orderNo ?? null,
         type: rootQuestion.type,
         contentType: rootQuestion.contentType,
         content: rootQuestion.content,
@@ -1644,6 +1681,52 @@ export class AttemptService {
     }
 
     return result;
+  }
+
+  private async getExamQuestionGroups(
+    questionBankId: string,
+    questions: AttemptQuestionItemDto[],
+  ): Promise<AttemptQuestionGroupDto[]> {
+    const links = await this.questionBankQuestionRepo.find({
+      where: { questionBankId },
+      relations: ['section'],
+      order: { orderNo: 'ASC' },
+    });
+    const questionMap = new Map(
+      questions.map((question) => [question.id, question]),
+    );
+    const groupMap = new Map<string, AttemptQuestionGroupDto>();
+    const ungroupedKey = '__ungrouped__';
+
+    for (const link of links) {
+      const question = questionMap.get(link.questionId);
+      if (!question) {
+        continue;
+      }
+
+      const key = link.sectionId ?? ungroupedKey;
+      let group = groupMap.get(key);
+      if (!group) {
+        group = {
+          sectionId: link.sectionId ?? null,
+          title: link.section?.title ?? null,
+          instruction: link.section?.instruction ?? null,
+          orderNo: link.section?.orderNo ?? null,
+          meta: link.section?.meta ?? null,
+          questions: [],
+        };
+        groupMap.set(key, group);
+      }
+
+      group.questions.push(question);
+    }
+
+    return [...groupMap.values()].sort((left, right) => {
+      if (left.orderNo === null && right.orderNo === null) return 0;
+      if (left.orderNo === null) return 1;
+      if (right.orderNo === null) return -1;
+      return left.orderNo - right.orderNo;
+    });
   }
 
   private async loadQuestionChain(id: string): Promise<QuestionEntity[]> {

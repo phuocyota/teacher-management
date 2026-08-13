@@ -19,6 +19,7 @@ import {
   EndAttemptDto,
   EndAttemptResponseDto,
   StartAttemptResponseDto,
+  StartGroupedAttemptResponseDto,
   StartPublicAttemptDto,
 } from './dto/attempt-session.dto';
 
@@ -36,6 +37,15 @@ export class PublicAttemptController {
   @ApiCreatedResponse({ type: StartAttemptResponseDto })
   start(@Body() dto: StartPublicAttemptDto) {
     return this.attemptService.startPublic(dto);
+  }
+
+  @Post('start-with-group')
+  @ApiOperation({
+    summary: 'Bat dau lam de thi thu va tra cau hoi theo tung nhom',
+  })
+  @ApiCreatedResponse({ type: StartGroupedAttemptResponseDto })
+  startGrouped(@Body() dto: StartPublicAttemptDto) {
+    return this.attemptService.startPublicGrouped(dto);
   }
 
   @Post(':id/end')

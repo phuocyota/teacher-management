@@ -9,6 +9,89 @@ import { StudentGroupEntity } from 'src/student-group/student-group.entity';
 import { SchoolEntity } from 'src/school/school.entity';
 
 describe('AttemptService', () => {
+  it('groups attempt questions by section and exposes section audio metadata', async () => {
+    const deps = createServiceDependencies();
+    const service = createService(deps);
+    const questions = [
+      { id: 'question-1', orderNo: 1 },
+      { id: 'question-2', orderNo: 2 },
+      { id: 'question-3', orderNo: 3 },
+    ];
+
+    deps.questionBankQuestionRepo.find.mockResolvedValue([
+      {
+        questionId: 'question-1',
+        sectionId: 'section-1',
+        orderNo: 1,
+        section: {
+          id: 'section-1',
+          title: 'NHOM Cau 1-2',
+          instruction: 'Nghe va chon dap an dung',
+          orderNo: 1,
+          meta: {
+            audio: {
+              fileId: 'audio-1',
+              path: '/uploads/question-banks/bank-1/audio-001.mp3',
+            },
+          },
+        },
+      },
+      {
+        questionId: 'question-2',
+        sectionId: 'section-1',
+        orderNo: 2,
+        section: {
+          id: 'section-1',
+          title: 'NHOM Cau 1-2',
+          instruction: 'Nghe va chon dap an dung',
+          orderNo: 1,
+          meta: {
+            audio: {
+              fileId: 'audio-1',
+              path: '/uploads/question-banks/bank-1/audio-001.mp3',
+            },
+          },
+        },
+      },
+      {
+        questionId: 'question-3',
+        sectionId: null,
+        orderNo: 3,
+        section: null,
+      },
+    ]);
+
+    const groups = await (service as any).getExamQuestionGroups(
+      'bank-1',
+      questions,
+    );
+
+    expect(deps.questionBankQuestionRepo.find).toHaveBeenCalledWith({
+      where: { questionBankId: 'bank-1' },
+      relations: ['section'],
+      order: { orderNo: 'ASC' },
+    });
+    expect(groups).toHaveLength(2);
+    expect(groups[0]).toEqual(
+      expect.objectContaining({
+        sectionId: 'section-1',
+        title: 'NHOM Cau 1-2',
+        orderNo: 1,
+        meta: expect.objectContaining({
+          audio: expect.objectContaining({ fileId: 'audio-1' }),
+        }),
+        questions: [questions[0], questions[1]],
+      }),
+    );
+    expect(groups[1]).toEqual(
+      expect.objectContaining({
+        sectionId: null,
+        meta: null,
+        questions: [questions[2]],
+      }),
+    );
+  });
+
   it('maps nextContent from loaded chain when root entity nextContent is missing', () => {
     const service = createService();
 

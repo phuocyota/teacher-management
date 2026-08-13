@@ -23,6 +23,7 @@ import { QuestionBankQuestionEntity } from 'src/question-bank-question/question-
 import { JwtPayload } from 'src/common/interface/jwt-payload.interface';
 import { ExamSetClassEntity } from 'src/exam-set-class/exam-set-class.entity';
 import { ClassEntity } from 'src/class/class.entity';
+import { QuestionBankSectionEntity } from 'src/question-bank-section/question-bank-section.entity';
 
 @Injectable()
 export class ExamSetService {
@@ -33,6 +34,8 @@ export class ExamSetService {
     private readonly examSetQuestionBankRepo: Repository<ExamSetQuestionBankEntity>,
     @InjectRepository(QuestionBankQuestionEntity)
     private readonly questionBankQuestionRepo: Repository<QuestionBankQuestionEntity>,
+    @InjectRepository(QuestionBankSectionEntity)
+    private readonly questionBankSectionRepo: Repository<QuestionBankSectionEntity>,
     @InjectRepository(ExamSetClassEntity)
     private readonly examSetClassRepo: Repository<ExamSetClassEntity>,
     private readonly classService: ClassService,
@@ -183,6 +186,10 @@ export class ExamSetService {
       questionBankIds.length > 0
         ? await this.getQuestionCountsByBankIds(questionBankIds)
         : new Map<string, number>();
+    const sectionCounts =
+      questionBankIds.length > 0
+        ? await this.getSectionCountsByBankIds(questionBankIds)
+        : new Map<string, number>();
 
     const questionBanks = links
       .filter((item) => Boolean(item.questionBank))
@@ -197,6 +204,7 @@ export class ExamSetService {
               : null,
           totalQuestions:
             qb.totalQuestions ?? questionCounts.get(qb.id) ?? null,
+          sectionCount: sectionCounts.get(qb.id) ?? 0,
           maxAttempts: qb.maxAttempts ?? null,
           totalPoints: qb.totalMarks ?? null,
           difficulty: null,
@@ -304,6 +312,27 @@ export class ExamSetService {
       rows.map((row) => [
         row.questionBankId,
         Number.parseInt(row.totalQuestions, 10) || 0,
+      ]),
+    );
+  }
+
+  private async getSectionCountsByBankIds(
+    questionBankIds: string[],
+  ): Promise<Map<string, number>> {
+    const rows = await this.questionBankSectionRepo
+      .createQueryBuilder('section')
+      .select('section.questionBankId', 'questionBankId')
+      .addSelect('COUNT(*)', 'sectionCount')
+      .where('section.questionBankId IN (:...questionBankIds)', {
+        questionBankIds,
+      })
+      .groupBy('section.questionBankId')
+      .getRawMany<{ questionBankId: string; sectionCount: string }>();
+
+    return new Map(
+      rows.map((row) => [
+        row.questionBankId,
+        Number.parseInt(row.sectionCount, 10) || 0,
       ]),
     );
   }

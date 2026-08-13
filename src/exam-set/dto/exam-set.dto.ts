@@ -78,6 +78,12 @@ export class ExamSetDetailQuestionBankDto {
   totalQuestions!: number | null;
 
   @ApiProperty({
+    description: 'So luong nhom cau hoi (section) cua de thi',
+    example: 6,
+  })
+  sectionCount!: number;
+
+  @ApiProperty({
     description: 'So lan lam bai toi da',
     example: 3,
     nullable: true,

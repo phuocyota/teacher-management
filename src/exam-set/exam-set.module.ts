@@ -7,6 +7,7 @@ import { ClassModule } from 'src/class/class.module';
 import { ExamSetQuestionBankEntity } from 'src/exam-set-question-bank/exam-set-question-bank.entity';
 import { QuestionBankQuestionEntity } from 'src/question-bank-question/question-bank-question.entity';
 import { ExamSetClassEntity } from 'src/exam-set-class/exam-set-class.entity';
+import { QuestionBankSectionEntity } from 'src/question-bank-section/question-bank-section.entity';
 
 @Module({
   imports: [
@@ -14,6 +15,7 @@ import { ExamSetClassEntity } from 'src/exam-set-class/exam-set-class.entity';
       ExamSetEntity,
       ExamSetQuestionBankEntity,
       QuestionBankQuestionEntity,
+      QuestionBankSectionEntity,
       ExamSetClassEntity,
     ]),
     ClassModule,

@@ -37,6 +37,7 @@ import {
   EndAttemptResponseDto,
   StartAttemptDto,
   StartAttemptResponseDto,
+  StartGroupedAttemptResponseDto,
 } from './dto/attempt-session.dto';
 import { User } from 'src/common/decorator/user.decorator';
 import type { JwtPayload } from 'src/common/interface/jwt-payload.interface';
@@ -64,6 +65,17 @@ export class AttemptController {
   @ApiCreatedResponse({ type: StartAttemptResponseDto })
   start(@Body() dto: StartAttemptDto, @User() user: JwtPayload) {
     return this.attemptService.start(dto, user);
+  }
+
+  @Post('start-with-group')
+  @UseGuards(RolesGuard)
+  @Roles(UserType.STUDENT)
+  @ApiOperation({
+    summary: 'Start attempt and return questions grouped by section',
+  })
+  @ApiCreatedResponse({ type: StartGroupedAttemptResponseDto })
+  startGrouped(@Body() dto: StartAttemptDto, @User() user: JwtPayload) {
+    return this.attemptService.startGrouped(dto, user);
   }
 
   @Post(':id/end')

@@ -1,4 +1,4 @@
-import { ApiProperty } from '@nestjs/swagger';
+import { ApiProperty, OmitType } from '@nestjs/swagger';
 import {
   ArrayMinSize,
   IsArray,
@@ -219,6 +219,34 @@ export class StartAttemptResponseDto {
 
   @ApiProperty({ type: [AttemptQuestionItemDto] })
   questions!: AttemptQuestionItemDto[];
+}
+
+export class AttemptQuestionGroupDto {
+  @ApiProperty({ required: false, nullable: true })
+  sectionId!: string | null;
+
+  @ApiProperty({ required: false, nullable: true })
+  title!: string | null;
+
+  @ApiProperty({ required: false, nullable: true })
+  instruction!: string | null;
+
+  @ApiProperty({ required: false, nullable: true })
+  orderNo!: number | null;
+
+  @ApiProperty({ required: false, nullable: true, type: Object })
+  meta!: Record<string, unknown> | null;
+
+  @ApiProperty({ type: [AttemptQuestionItemDto] })
+  questions!: AttemptQuestionItemDto[];
+}
+
+export class StartGroupedAttemptResponseDto extends OmitType(
+  StartAttemptResponseDto,
+  ['questions'] as const,
+) {
+  @ApiProperty({ type: [AttemptQuestionGroupDto] })
+  groups!: AttemptQuestionGroupDto[];
 }
 
 export class EndAttemptResponseDto {
