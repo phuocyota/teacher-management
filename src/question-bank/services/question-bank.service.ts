@@ -6,7 +6,7 @@ import {
   forwardRef,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { EntityManager, In, Repository } from 'typeorm';
+import { EntityManager, In, Not, Repository } from 'typeorm';
 import { QuestionBankEntity } from '../question-bank.entity';
 import {
   CreateQuestionBankDto,
@@ -39,6 +39,12 @@ import { ExamSetEntity } from 'src/exam-set/exam-set.entity';
 import { ExamSetQuestionBankEntity } from 'src/exam-set-question-bank/exam-set-question-bank.entity';
 import { runInTransaction } from 'src/common/database/transaction.utils';
 import { QuestionBankZipImportService } from './question-bank-zip-import.service';
+import { UploadService } from 'src/upload/upload.service';
+import { ContentTypes } from 'src/common/enum/content-type.enum';
+
+interface QuestionBankResourceCleanup {
+  filePaths: string[];
+}
 
 @Injectable()
 export class QuestionBankService {
@@ -59,6 +65,7 @@ export class QuestionBankService {
     private readonly questionBankZipImportService: QuestionBankZipImportService,
     @Inject(forwardRef(() => QuestionService))
     private readonly questionService: QuestionService,
+    private readonly uploadService: UploadService,
   ) {}
 
   async create(dto: CreateQuestionBankDto): Promise<QuestionBankEntity> {
@@ -467,14 +474,16 @@ export class QuestionBankService {
   }
 
   async removeResource(id: string): Promise<void> {
-    const record = await this.findOne(id);
-    await this.removeLinkedQuestions(id);
-    await this.entityManager
-      .getRepository(QuestionBankSectionEntity)
-      .delete({ questionBankId: id });
+    const cleanup = await runInTransaction(
+      this.entityManager,
+      async (manager) => this.removeResourcesInTransaction(id, manager),
+    );
 
-    record.totalQuestions = 0;
-    await this.questionBankRepo.save(record);
+    await Promise.allSettled(
+      [...new Set(cleanup.filePaths)].map((path) =>
+        this.uploadService.deleteFileByPath(path),
+      ),
+    );
   }
 
   async importExamFromPdf(
@@ -582,5 +591,111 @@ export class QuestionBankService {
     for (const questionId of uniqueQuestionIds) {
       await this.questionService.remove(questionId);
     }
+  }
+
+  private async removeResourcesInTransaction(
+    questionBankId: string,
+    manager: EntityManager,
+  ): Promise<QuestionBankResourceCleanup> {
+    const questionBankRepo = manager.getRepository(QuestionBankEntity);
+    const linkRepo = manager.getRepository(QuestionBankQuestionEntity);
+    const sectionRepo = manager.getRepository(QuestionBankSectionEntity);
+    const questionRepo = manager.getRepository(QuestionEntity);
+    const answerRepo = manager.getRepository(AnswerEntity);
+    const record = await questionBankRepo.findOne({
+      where: { id: questionBankId },
+      lock: { mode: 'pessimistic_write' },
+    });
+
+    if (!record) {
+      throw new NotFoundException(
+        ERROR_MESSAGES.NOT_FOUND_WITH_ID(
+          ENTITY_NAMES.QUESTION_BANK,
+          questionBankId,
+        ),
+      );
+    }
+
+    const [links, sections] = await Promise.all([
+      linkRepo.find({ where: { questionBankId } }),
+      sectionRepo.find({ where: { questionBankId } }),
+    ]);
+    const filePaths = sections
+      .map((section) => {
+        const audio = section.meta?.audio as { path?: unknown } | undefined;
+        return typeof audio?.path === 'string' ? audio.path : null;
+      })
+      .filter((path): path is string => Boolean(path));
+    const deletableQuestionIds: string[] = [];
+
+    for (const rootQuestionId of [
+      ...new Set(links.map((link) => link.questionId)),
+    ]) {
+      const chainIds = await this.collectQuestionChainIds(
+        questionRepo,
+        rootQuestionId,
+      );
+      const externalReferences = await linkRepo.count({
+        where: {
+          questionId: In(chainIds),
+          questionBankId: Not(questionBankId),
+        },
+      });
+
+      if (externalReferences === 0) {
+        deletableQuestionIds.push(...chainIds);
+      }
+    }
+
+    const uniqueQuestionIds = [...new Set(deletableQuestionIds)];
+    if (uniqueQuestionIds.length > 0) {
+      const [questions, answers] = await Promise.all([
+        questionRepo.find({ where: { id: In(uniqueQuestionIds) } }),
+        answerRepo.find({ where: { questionId: In(uniqueQuestionIds) } }),
+      ]);
+      filePaths.push(
+        ...questions
+          .filter((question) => question.contentType === ContentTypes.IMAGE)
+          .map((question) => question.content),
+        ...answers
+          .filter((answer) => answer.contentType === ContentTypes.IMAGE)
+          .map((answer) => answer.content),
+      );
+    }
+
+    await linkRepo.delete({ questionBankId });
+    await sectionRepo.delete({ questionBankId });
+    if (uniqueQuestionIds.length > 0) {
+      await questionRepo.delete({ id: In(uniqueQuestionIds) });
+    }
+
+    record.totalQuestions = 0;
+    await questionBankRepo.save(record);
+
+    return { filePaths };
+  }
+
+  private async collectQuestionChainIds(
+    questionRepo: Repository<QuestionEntity>,
+    rootQuestionId: string,
+  ): Promise<string[]> {
+    const ids: string[] = [];
+    const visited = new Set<string>();
+    let currentId: string | undefined = rootQuestionId;
+
+    while (currentId && !visited.has(currentId)) {
+      const question = await questionRepo.findOne({
+        where: { id: currentId },
+      });
+      if (!question) {
+        break;
+      }
+
+      ids.push(question.id);
+      visited.add(question.id);
+      currentId = question.nextContent;
+    }
+
+    return ids;
   }
 }
