@@ -8,6 +8,7 @@ import {
   CreateLectureUserDto,
   UpdateLectureUserDto,
   BulkCreateLectureUserDto,
+  BulkExcludeLectureUserDto,
 } from '../dto/lecture_user.dto';
 import { diffArray } from 'src/common/utils/array-diff.utils';
 import { JwtPayload } from 'src/common/interface/jwt-payload.interface';
@@ -134,6 +135,29 @@ export class LectureUserService {
 
         // Lưu tất cả entities
         await repo.save(entities);
+      },
+    );
+  }
+
+  async bulkExclude(
+    dto: BulkExcludeLectureUserDto,
+  ): Promise<{ deletedCount: number }> {
+    if (!dto.userIds?.length || !dto.lectureIds?.length) {
+      throw new BadRequestException(
+        'Danh sách người dùng và bài giảng không được để trống',
+      );
+    }
+
+    return runInTransaction(
+      this.LectureUserRepository.manager,
+      async (manager) => {
+        const repo = manager.getRepository(LectureUserEntity);
+        const result = await repo.delete({
+          userId: In(dto.userIds),
+          lectureId: In(dto.lectureIds),
+        });
+
+        return { deletedCount: result.affected ?? 0 };
       },
     );
   }

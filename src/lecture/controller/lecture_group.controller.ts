@@ -1,4 +1,12 @@
-import { Body, Controller, Post } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  HttpCode,
+  HttpStatus,
+  Post,
+  UsePipes,
+  ValidationPipe,
+} from '@nestjs/common';
 import {
   ApiBearerAuth,
   ApiOperation,
@@ -35,17 +43,29 @@ export class LectureGroupController {
   }
 
   @Post('bulk/exclude')
+  @HttpCode(HttpStatus.OK)
+  @UsePipes(new ValidationPipe({ transform: true, whitelist: true }))
   @ApiOperation({
     summary: 'Bulk remove: Remove multiple lectures from distributed groups',
   })
   @ApiResponse({
     status: 200,
-    description: 'Lecture-group relations removed successfully',
+    description: 'Gỡ phân công bài giảng thành công',
   })
+  @ApiResponse({ status: 400, description: 'Danh sách đầu vào không hợp lệ' })
   async bulkExcludeLectureGroups(
     @Body() dto: BulkExcludeLectureGroupDto,
-    @User() user: JwtPayload,
-  ): Promise<{ deletedCount: number }> {
-    return this.lectureGroupService.bulkExclude(dto, user);
+  ): Promise<{
+    success: true;
+    message: string;
+    data: { deletedCount: number };
+  }> {
+    const data = await this.lectureGroupService.bulkExclude(dto);
+
+    return {
+      success: true,
+      message: 'Gỡ phân công bài giảng thành công',
+      data,
+    };
   }
 }

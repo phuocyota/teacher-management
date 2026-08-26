@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { BadRequestException, Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { In, Repository } from 'typeorm';
 import { LectureGroupEntity } from '../entity/lecture_group.entity';
@@ -46,19 +46,20 @@ export class LectureGroupService {
 
   async bulkExclude(
     dto: BulkExcludeLectureGroupDto,
-    _user: JwtPayload,
   ): Promise<{ deletedCount: number }> {
+    if (!dto.groupIds?.length || !dto.lectureIds?.length) {
+      throw new BadRequestException(
+        'Danh sách nhóm và bài giảng không được để trống',
+      );
+    }
+
     return runInTransaction(
       this.LectureGroupRepository.manager,
       async (manager) => {
         const repo = manager.getRepository(LectureGroupEntity);
-
-        if (!dto.excludeLectureIds.length) {
-          return { deletedCount: 0 };
-        }
-
         const result = await repo.delete({
-          lectureId: In(dto.excludeLectureIds),
+          groupId: In(dto.groupIds),
+          lectureId: In(dto.lectureIds),
         });
 
         return {

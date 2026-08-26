@@ -1245,3 +1245,173 @@ Hiện tại endpoint chỉ nhận PDF, chưa nhận trực tiếp DOCX.
 - [ ] Màn hình làm bài hiển thị `sectionTitle` và `sectionInstruction`.
 - [ ] Nếu tất cả `sectionId = null`, tiếp tục dùng UI cũ.
 - [ ] Không đọc `isCorrect` từ response bắt đầu làm bài.
+
+---
+
+# FE Handoff: API Phân công & Gỡ bài giảng hàng loạt (Lecture Bulk Assignment & Exclusion)
+
+Tài liệu này hướng dẫn tích hợp các API phân công bài giảng hàng loạt (`bulk`) và gỡ phân công bài giảng hàng loạt (`bulk/exclude`) cho nhóm (`group`) và người dùng (`user`).
+
+Xác thực:
+- `Authorization: Bearer <token>`
+
+---
+
+## 1. Phân công & Gỡ phân công bài giảng cho Nhóm (`/lecture/group`)
+
+Base Path: `/lecture/group`
+
+### 1.1. Phân công nhiều bài giảng cho nhiều nhóm (`POST /lecture/group/bulk`)
+
+Gán cùng lúc danh sách bài giảng cho danh sách các nhóm.
+
+- **Endpoint**: `POST /lecture/group/bulk`
+- **Header**: `Authorization: Bearer <token>`
+- **Content-Type**: `application/json`
+
+**Request Body**:
+```json
+{
+  "lectureIds": [
+    "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+    "b2c3d4e5-f6g7-8901-bcde-fg2345678901"
+  ],
+  "groupIds": [
+    "c3d4e5f6-g7h8-9012-cdef-gh3456789012",
+    "d4e5f6g7-h8i9-0123-defg-hi4567890123"
+  ]
+}
+```
+
+**Response (`201 Created`)**:
+```json
+{
+  "statusCode": 201,
+  "message": "All lecture-group relations created successfully"
+}
+```
+
+---
+
+### 1.2. Gỡ phân công nhiều bài giảng khỏi nhiều nhóm (`POST /lecture/group/bulk/exclude`)
+
+Hủy gán danh sách bài giảng khỏi danh sách các nhóm đã chọn.
+
+- **Endpoint**: `POST /lecture/group/bulk/exclude`
+- **Header**: `Authorization: Bearer <token>`
+- **Content-Type**: `application/json`
+
+**Request Body**:
+```json
+{
+  "groupIds": [
+    "c3d4e5f6-a7b8-4012-cdef-ab3456789012",
+    "d4e5f6a7-b8c9-4123-defa-bc4567890123"
+  ],
+  "lectureIds": [
+    "a1b2c3d4-e5f6-4890-abcd-ef1234567890",
+    "b2c3d4e5-f6a7-4901-bcde-fa2345678901"
+  ]
+}
+```
+
+| Trường | Bắt buộc | Kiểu | Mô tả |
+| --- | --- | --- | --- |
+| `groupIds` | Có | `string[]` | Danh sách UUID của nhóm cần gỡ bài giảng (không được rỗng) |
+| `lectureIds` | Có | `string[]` | Danh sách UUID của bài giảng cần gỡ khỏi nhóm (không được rỗng) |
+
+**Response (`200 OK`)**:
+```json
+{
+  "success": true,
+  "message": "Gỡ phân công bài giảng thành công",
+  "data": {
+    "deletedCount": 2
+  }
+}
+```
+
+---
+
+## 2. Phân công & Gỡ phân công bài giảng cho Người dùng (`/lecture/user`)
+
+Base Path: `/lecture/user`
+
+### 2.1. Phân công nhiều bài giảng cho nhiều người dùng (`POST /lecture/user/bulk`)
+
+- **Endpoint**: `POST /lecture/user/bulk`
+- **Header**: `Authorization: Bearer <token>`
+- **Content-Type**: `application/json`
+
+**Request Body**:
+```json
+{
+  "lectureIds": [
+    "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+    "b2c3d4e5-f6g7-8901-bcde-fg2345678901"
+  ],
+  "userIds": [
+    "c3d4e5f6-g7h8-9012-cdef-gh3456789012",
+    "d4e5f6g7-h8i9-0123-defg-hi4567890123"
+  ]
+}
+```
+
+**Response (`201 Created`)**:
+```json
+{
+  "statusCode": 201,
+  "message": "All lecture-user relations created successfully"
+}
+```
+
+---
+
+### 2.2. Gỡ phân công nhiều bài giảng khỏi nhiều người dùng (`POST /lecture/user/bulk/exclude`)
+
+Hủy gán danh sách bài giảng khỏi danh sách các người dùng đã chọn.
+
+- **Endpoint**: `POST /lecture/user/bulk/exclude`
+- **Header**: `Authorization: Bearer <token>`
+- **Content-Type**: `application/json`
+
+**Request Body**:
+```json
+{
+  "userIds": [
+    "c3d4e5f6-a7b8-4012-cdef-ab3456789012",
+    "d4e5f6a7-b8c9-4123-defa-bc4567890123"
+  ],
+  "lectureIds": [
+    "a1b2c3d4-e5f6-4890-abcd-ef1234567890",
+    "b2c3d4e5-f6a7-4901-bcde-fa2345678901"
+  ]
+}
+```
+
+| Trường | Bắt buộc | Kiểu | Mô tả |
+| --- | --- | --- | --- |
+| `userIds` | Có | `string[]` | Danh sách UUID của người dùng cần gỡ bài giảng (không được rỗng) |
+| `lectureIds` | Có | `string[]` | Danh sách UUID của bài giảng cần gỡ (không được rỗng) |
+
+**Response (`200 OK`)**:
+```json
+{
+  "success": true,
+  "message": "Gỡ phân công bài giảng thành công",
+  "data": {
+    "deletedCount": 2
+  }
+}
+```
+
+---
+
+## 3. Xử lý lỗi (Error Responses)
+
+| Mã HTTP | Nguyên nhân | Xử lý FE đề xuất |
+| --- | --- | --- |
+| `400 Bad Request` | `groupIds`, `userIds` hoặc `lectureIds` rỗng, không phải mảng, hoặc chứa phần tử không phải UUID hợp lệ | Check frontend validation trước khi gửi request |
+| `401 Unauthorized` | Thiếu token hoặc token hết hạn | Chuyển hướng người dùng sang trang đăng nhập |
+| `403 Forbidden` | Người dùng không đủ thẩm quyền | Hạn chế thao tác trên UI |
+

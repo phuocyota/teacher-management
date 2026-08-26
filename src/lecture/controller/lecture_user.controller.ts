@@ -1,4 +1,13 @@
-import { Body, Controller, Post, Put } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  HttpCode,
+  HttpStatus,
+  Post,
+  Put,
+  UsePipes,
+  ValidationPipe,
+} from '@nestjs/common';
 import {
   ApiBearerAuth,
   ApiOperation,
@@ -12,6 +21,7 @@ import {
   CreateLectureUserDto,
   UpdateLectureUserDto,
   BulkCreateLectureUserDto,
+  BulkExcludeLectureUserDto,
 } from 'src/lecture/dto/lecture_user.dto';
 
 @ApiTags('Lecture Users')
@@ -53,5 +63,30 @@ export class LectureUserController {
     @User() user: JwtPayload,
   ): Promise<void> {
     await this.lectureUserService.bulkCreate(dto, user);
+  }
+
+  @Post('bulk/exclude')
+  @HttpCode(HttpStatus.OK)
+  @UsePipes(new ValidationPipe({ transform: true, whitelist: true }))
+  @ApiOperation({ summary: 'Gỡ nhiều bài giảng khỏi nhiều người dùng' })
+  @ApiResponse({
+    status: 200,
+    description: 'Gỡ phân công bài giảng thành công',
+  })
+  @ApiResponse({ status: 400, description: 'Danh sách đầu vào không hợp lệ' })
+  async bulkExcludeLectureUsers(
+    @Body() dto: BulkExcludeLectureUserDto,
+  ): Promise<{
+    success: true;
+    message: string;
+    data: { deletedCount: number };
+  }> {
+    const data = await this.lectureUserService.bulkExclude(dto);
+
+    return {
+      success: true,
+      message: 'Gỡ phân công bài giảng thành công',
+      data,
+    };
   }
 }
