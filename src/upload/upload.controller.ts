@@ -158,6 +158,45 @@ export class UploadController {
     );
   }
 
+  @Post('ichiteacher/mac')
+  @ApiOperation({
+    summary: 'Upload hoặc cập nhật file cài đặt IchiTeacher cho macOS',
+  })
+  @ApiConsumes('multipart/form-data')
+  @ApiBody({
+    schema: {
+      type: 'object',
+      required: ['file'],
+      properties: {
+        file: {
+          type: 'string',
+          format: 'binary',
+          description: 'File cần lưu vào uploads/ichiteacher/mac',
+        },
+        description: {
+          type: 'string',
+          description: 'Mô tả file',
+        },
+      },
+    },
+  })
+  @ApiResponse({
+    status: 201,
+    description: 'Upload hoặc cập nhật file thành công',
+    type: UploadFileResponseDto,
+  })
+  @ApiResponse({ status: 400, description: 'File không hợp lệ' })
+  @UseInterceptors(
+    FileInterceptor('file', { limits: { fileSize: 2147483648 } }),
+  )
+  async uploadIchiTeacherMacFile(
+    @UploadedFile() file: MulterFile,
+    @User() user: JwtPayload,
+    @Body('description') description?: string,
+  ): Promise<UploadFileResponseDto> {
+    return this.uploadService.uploadIchiTeacherMacFile(file, user, description);
+  }
+
   @Post('multiple')
   @ApiOperation({ summary: 'Upload nhiều file (tối đa 10 file)' })
   @ApiConsumes('multipart/form-data')

@@ -70,6 +70,8 @@ import { OrderEntity } from './order/order.entity';
 import { GoldenBellRoomStateEntity } from './socket/golden-bell-room-state.entity';
 import { QuestionBankSectionEntity } from './question-bank-section/question-bank-section.entity';
 import { QuestionBankSectionModule } from './question-bank-section/question-bank-section.module';
+import { VersionEntity } from './version/version.entity';
+import { VersionModule } from './version/version.module';
 
 @Module({
   imports: [
@@ -127,6 +129,7 @@ import { QuestionBankSectionModule } from './question-bank-section/question-bank
           GoodsEntity,
           OrderEntity,
           GoldenBellRoomStateEntity,
+          VersionEntity,
         ],
         synchronize: true,
       }),
@@ -156,6 +159,7 @@ import { QuestionBankSectionModule } from './question-bank-section/question-bank
     ExamSetQuestionBankModule,
     ReportModule,
     ZoneModule,
+    VersionModule,
   ],
   providers: [
     AppService,

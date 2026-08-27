@@ -208,6 +208,89 @@ export class UploadService {
     return UploadFileResponseDto.fromEntity(saved);
   }
 
+  async uploadIchiTeacherMacFile(
+    file: MulterFile,
+    user: JwtPayload,
+    description?: string,
+  ): Promise<UploadFileResponseDto> {
+    if (!file) {
+      throw new BadRequestException('Không có file nào được upload');
+    }
+
+    const originalName = this.normalizeOriginalName(file.originalname);
+    const safeName = basename(originalName);
+    if (!safeName || safeName === '.' || safeName === '..') {
+      throw new BadRequestException('Tên file không hợp lệ');
+    }
+
+    const relativeDirectory = 'ichiteacher/mac';
+    const relativePath = `${relativeDirectory}/${safeName}`;
+    const uploadBasePath = isAbsolute(this.uploadDir)
+      ? resolve(this.uploadDir)
+      : resolve(process.cwd(), this.uploadDir);
+    const targetPath = resolve(uploadBasePath, relativePath);
+
+    if (!this.isPathInsideUploadDir(targetPath, uploadBasePath)) {
+      throw new BadRequestException('Đường dẫn file không hợp lệ');
+    }
+
+    const sourcePath = isAbsolute(file.path)
+      ? resolve(file.path)
+      : resolve(process.cwd(), file.path);
+    const storedPath = `/uploads/${relativePath}`;
+    const existing = await this.fileRepo.findOne({
+      where: { filename: safeName },
+    });
+
+    if (
+      existing &&
+      !existing.path.replace(/\\/g, '/').endsWith(`/${relativePath}`)
+    ) {
+      this.removeTemporaryUpload(sourcePath, targetPath);
+      throw new BadRequestException(
+        `Tên file ${safeName} đã được sử dụng ở thư mục khác`,
+      );
+    }
+
+    try {
+      mkdirSync(dirname(targetPath), { recursive: true });
+      if (existsSync(targetPath) && sourcePath !== targetPath) {
+        rmSync(targetPath);
+      }
+      if (sourcePath !== targetPath) {
+        renameSync(sourcePath, targetPath);
+      }
+    } catch (error) {
+      this.removeTemporaryUpload(sourcePath, targetPath);
+      throw new BadRequestException(
+        `Không thể lưu file: ${error instanceof Error ? error.message : error}`,
+      );
+    }
+
+    const entity = existing ?? this.fileRepo.create();
+    entity.originalName = originalName;
+    entity.filename = safeName;
+    entity.path = storedPath;
+    entity.mimetype = file.mimetype;
+    entity.size = file.size;
+    entity.fileType = FileType.NORMAL;
+    entity.description = description;
+    entity.uploadedBy = user.userId;
+    entity.updatedBy = user.userId;
+    if (!existing) {
+      entity.createdBy = user.userId;
+    }
+
+    const saved = await this.fileRepo.save(entity);
+    return UploadFileResponseDto.fromEntity(saved);
+  }
+
+  private removeTemporaryUpload(sourcePath: string, targetPath: string): void {
+    if (sourcePath !== targetPath && existsSync(sourcePath)) {
+      rmSync(sourcePath);
+    }
+  }
+
   /**
    * Save an in-memory buffer as a file on disk and persist file metadata.
    * Useful for generated assets such as extracted PDF images.
