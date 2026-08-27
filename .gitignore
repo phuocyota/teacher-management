@@ -65,5 +65,8 @@ uploads/
 # Scripts and exports
 script/
 scripts/
+!scripts/
+scripts/*
+!scripts/import_teachers.js
 export/
 exports/
