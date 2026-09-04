@@ -31,7 +31,7 @@ import { VersionEntity } from './version.entity';
 import { VersionService } from './version.service';
 
 @ApiTags('App Update')
-@Controller('api/app-update')
+@Controller('app-update')
 @UsePipes(new ValidationPipe({ transform: true, whitelist: true }))
 export class VersionController {
   constructor(private readonly versionService: VersionService) {}
