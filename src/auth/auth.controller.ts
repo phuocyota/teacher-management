@@ -46,7 +46,7 @@ export class AuthController {
 
   @Public()
   @Post('login/teacher')
-  @ApiOperation({ summary: 'Teacher login' })
+  @ApiOperation({ summary: 'Teacher login by username or email' })
   @ApiResponse({ status: 200, description: 'Login successful' })
   @ApiResponse({
     status: 401,

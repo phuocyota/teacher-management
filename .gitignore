@@ -68,5 +68,6 @@ scripts/
 !scripts/
 scripts/*
 !scripts/import_teachers.js
+!scripts/delete_lecture_resources.js
 export/
 exports/
