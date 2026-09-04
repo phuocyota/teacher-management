@@ -49,6 +49,35 @@ describe('VersionService', () => {
     });
   });
 
+  it('lấy danh sách phiên bản theo platform và sắp xếp theo tên ứng dụng', async () => {
+    const versions = [
+      {
+        id: '1',
+        platform: 'android',
+        version: '6.46.4',
+        url: 'https://domain.com/duolingo.apk',
+        mandatory: false,
+        note: 'Duolingo',
+      },
+    ];
+    repository.find.mockResolvedValue(versions);
+
+    await expect(service.getList('android')).resolves.toEqual([
+      {
+        id: '1',
+        platform: 'android',
+        version: '6.46.4',
+        url: 'https://domain.com/duolingo.apk',
+        mandatory: false,
+        name: 'Duolingo',
+      },
+    ]);
+    expect(repository.find).toHaveBeenCalledWith({
+      where: { platform: 'android' },
+      order: { note: 'ASC' },
+    });
+  });
+
   it('không trả URL khi ứng dụng đang dùng phiên bản mới nhất', async () => {
     repository.find.mockResolvedValue([
       {

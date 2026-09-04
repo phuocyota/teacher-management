@@ -20,10 +20,12 @@ import { Roles } from 'src/common/decorator/roles.decorator';
 import { UserType } from 'src/common/enum/user-type.enum';
 import { RolesGuard } from 'src/common/guard/roles.guard';
 import {
+  AppVersionListItemDto,
   AppVersionResponseDto,
   CheckAppVersionQueryDto,
   CheckAppVersionResponseDto,
   CreateAppVersionDto,
+  ListAppVersionsQueryDto,
 } from './dto/app-update.dto';
 import { VersionEntity } from './version.entity';
 import { VersionService } from './version.service';
@@ -42,6 +44,16 @@ export class VersionController {
   @ApiCreatedResponse({ type: AppVersionResponseDto })
   create(@Body() dto: CreateAppVersionDto): Promise<VersionEntity> {
     return this.versionService.create(dto);
+  }
+
+  @Get()
+  @Public()
+  @ApiOperation({ summary: 'Lấy danh sách phiên bản ứng dụng' })
+  @ApiOkResponse({ type: AppVersionListItemDto, isArray: true })
+  getList(
+    @Query() query: ListAppVersionsQueryDto,
+  ): Promise<AppVersionListItemDto[]> {
+    return this.versionService.getList(query.platform);
   }
 
   @Get('latest')

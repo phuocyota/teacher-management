@@ -1,5 +1,5 @@
 import { Transform, TransformFnParams } from 'class-transformer';
-import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+import { ApiProperty, ApiPropertyOptional, OmitType } from '@nestjs/swagger';
 import {
   IsBoolean,
   IsNotEmpty,
@@ -71,6 +71,16 @@ export class CheckAppVersionQueryDto {
   currentVersion!: string;
 }
 
+export class ListAppVersionsQueryDto {
+  @ApiPropertyOptional({ example: 'android' })
+  @Transform(normalizePlatform)
+  @IsOptional()
+  @IsString()
+  @IsNotEmpty()
+  @Matches(PLATFORM_PATTERN)
+  platform?: string;
+}
+
 export class AppVersionResponseDto {
   @ApiProperty({ example: 'ccdd8aae-dc37-4c03-9d3f-bdaab40f748f' })
   id!: string;
@@ -94,6 +104,19 @@ export class AppVersionResponseDto {
     nullable: true,
   })
   note!: string | null;
+}
+
+export class AppVersionListItemDto extends OmitType(AppVersionResponseDto, [
+  'note',
+] as const) {
+  @ApiPropertyOptional({ example: 'Duolingo', nullable: true })
+  name?: string | null;
+
+  @ApiPropertyOptional({
+    example: 'Sửa lỗi và cải thiện hiệu năng',
+    nullable: true,
+  })
+  note?: string | null;
 }
 
 export class CheckAppVersionResponseDto {

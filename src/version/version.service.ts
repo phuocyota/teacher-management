@@ -2,10 +2,13 @@ import { ConflictException, Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import {
+  AppVersionListItemDto,
   CheckAppVersionResponseDto,
   CreateAppVersionDto,
 } from './dto/app-update.dto';
 import { VersionEntity } from './version.entity';
+
+const ANDROID_PLATFORM = 'android';
 
 @Injectable()
 export class VersionService {
@@ -34,6 +37,22 @@ export class VersionService {
     });
 
     return this.versionRepository.save(entity);
+  }
+
+  async getList(platform?: string): Promise<AppVersionListItemDto[]> {
+    let versions: AppVersionListItemDto[] = await this.versionRepository.find({
+      where: platform ? { platform } : undefined,
+      order: { note: 'ASC' },
+    });
+
+    if (platform === ANDROID_PLATFORM) {
+      versions = versions.map(({ note, ...version }) => ({
+        ...version,
+        name: note,
+      }));
+    }
+
+    return versions;
   }
 
   async getLatest(
