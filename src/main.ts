@@ -62,41 +62,46 @@ async function bootstrap() {
 
   const LOCAL_UPLOADS = '/var/www/teacher-management/uploads';
 
-  const NAS_UPLOADS = '/mnt/nas-var/teacher-management/uploads';
+  const NAS_UPLOADS = '/var/www/teacher-management/uploads_backup';
 
-  app.use('/uploads', (req, res, next) => {
-    const relativePath = decodeURIComponent(req.path).replace(/^\/+/, '');
+  app.use('/uploads', (req, res) => {
+    try {
+      let relativePath = decodeURIComponent(req.path).replace(/^\/+/, '');
 
-    const localFile = path.resolve(LOCAL_UPLOADS, relativePath);
-    const nasFile = path.resolve(NAS_UPLOADS, relativePath);
+      const localRoot = path.resolve(LOCAL_UPLOADS);
+      const nasRoot = path.resolve(NAS_UPLOADS);
 
-    // Chống ../ path traversal
-    if (!localFile.startsWith(path.resolve(LOCAL_UPLOADS) + path.sep)) {
-      return res.status(403).send('Forbidden');
+      const localFile = path.resolve(localRoot, relativePath);
+      const nasFile = path.resolve(nasRoot, relativePath);
+
+      console.log('[UPLOAD] Request:', relativePath);
+      console.log('[UPLOAD] Local:', localFile);
+      console.log('[UPLOAD] NAS:', nasFile);
+
+      // ưu tiên local
+      if (fs.existsSync(localFile) && fs.statSync(localFile).isFile()) {
+        console.log('[UPLOAD] FOUND LOCAL');
+        return res.sendFile(localFile);
+      }
+
+      // fallback NAS / backup
+      if (fs.existsSync(nasFile) && fs.statSync(nasFile).isFile()) {
+        console.log('[UPLOAD] FOUND NAS');
+        return res.sendFile(nasFile);
+      }
+
+      return res.status(404).json({
+        statusCode: 404,
+        message: 'File not found',
+      });
+    } catch (error) {
+      console.error('[UPLOAD ERROR]', error);
+
+      return res.status(500).json({
+        statusCode: 500,
+        message: 'Error reading file',
+      });
     }
-
-    if (!nasFile.startsWith(path.resolve(NAS_UPLOADS) + path.sep)) {
-      return res.status(403).send('Forbidden');
-    }
-
-    // Ưu tiên LOCAL
-    if (fs.existsSync(localFile) && fs.statSync(localFile).isFile()) {
-      console.log(`[UPLOAD] LOCAL: ${localFile}`);
-      return res.sendFile(localFile);
-    }
-
-    // Không có local thì fallback NAS
-    if (fs.existsSync(nasFile) && fs.statSync(nasFile).isFile()) {
-      console.log(`[UPLOAD] NAS: ${nasFile}`);
-      return res.sendFile(nasFile);
-    }
-
-    console.log(`[UPLOAD] NOT FOUND: ${relativePath}`);
-
-    return res.status(404).json({
-      statusCode: 404,
-      message: 'File not found',
-    });
   });
 
   const port = process.env.PORT ?? 3001;
