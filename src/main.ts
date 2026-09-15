@@ -5,6 +5,9 @@ import { AppModule } from './app.module';
 import { SuccessResponseInterceptor } from './common/interceptors/success-response.interceptor';
 import { ResponseLoggerInterceptor } from './common/interceptors/response-logger.interceptor';
 import { NestExpressApplication } from '@nestjs/platform-express';
+import * as express from 'express';
+import * as fs from 'fs';
+import * as path from 'path';
 
 async function bootstrap() {
   const app = await NestFactory.create<NestExpressApplication>(AppModule);
@@ -38,14 +41,11 @@ async function bootstrap() {
       'http://localhost:5173',
       'https://localhost:5173',
       'http://160.250.132.143:5173',
-
       'https://fe.kidostudent.kidoedu.vn',
       'https://kidostudent.kidoedu.vn',
-
       'http://localhost:5174',
       'http://160.250.132.143:5174',
       'https://fe.kidocanteen.kidoedu.vn',
-
       'http://localhost:5171',
       'https://fe.parent.kidocanteen.kidoedu.vn',
     ],
@@ -60,17 +60,43 @@ async function bootstrap() {
   app.useGlobalInterceptors(new ResponseLoggerInterceptor());
   app.useGlobalInterceptors(new SuccessResponseInterceptor());
 
-  /**
-   * Serve static files
-   *
-   * File:
-   * /var/www/teacher-management/uploads/test.zip
-   *
-   * URL:
-   * http://IP:3001/uploads/test.zip
-   */
-  app.useStaticAssets('/var/www/teacher-management/uploads', {
-    prefix: '/uploads/',
+  const LOCAL_UPLOADS = '/var/www/teacher-management/uploads';
+
+  const NAS_UPLOADS = '/mnt/nas-var/teacher-management/uploads';
+
+  app.use('/uploads', (req, res, next) => {
+    const relativePath = decodeURIComponent(req.path).replace(/^\/+/, '');
+
+    const localFile = path.resolve(LOCAL_UPLOADS, relativePath);
+    const nasFile = path.resolve(NAS_UPLOADS, relativePath);
+
+    // Chống ../ path traversal
+    if (!localFile.startsWith(path.resolve(LOCAL_UPLOADS) + path.sep)) {
+      return res.status(403).send('Forbidden');
+    }
+
+    if (!nasFile.startsWith(path.resolve(NAS_UPLOADS) + path.sep)) {
+      return res.status(403).send('Forbidden');
+    }
+
+    // Ưu tiên LOCAL
+    if (fs.existsSync(localFile) && fs.statSync(localFile).isFile()) {
+      console.log(`[UPLOAD] LOCAL: ${localFile}`);
+      return res.sendFile(localFile);
+    }
+
+    // Không có local thì fallback NAS
+    if (fs.existsSync(nasFile) && fs.statSync(nasFile).isFile()) {
+      console.log(`[UPLOAD] NAS: ${nasFile}`);
+      return res.sendFile(nasFile);
+    }
+
+    console.log(`[UPLOAD] NOT FOUND: ${relativePath}`);
+
+    return res.status(404).json({
+      statusCode: 404,
+      message: 'File not found',
+    });
   });
 
   const port = process.env.PORT ?? 3001;
@@ -78,7 +104,6 @@ async function bootstrap() {
   await app.listen(port, '0.0.0.0');
 
   console.log(`Server running on port ${port}`);
-  console.log(`Uploads available at http://0.0.0.0:${port}/uploads/`);
 }
 
 bootstrap();
