@@ -5,10 +5,10 @@ import { AppModule } from './app.module';
 import { SuccessResponseInterceptor } from './common/interceptors/success-response.interceptor';
 import { ResponseLoggerInterceptor } from './common/interceptors/response-logger.interceptor';
 import { NestExpressApplication } from '@nestjs/platform-express';
-import { join } from 'path';
 
 async function bootstrap() {
   const app = await NestFactory.create<NestExpressApplication>(AppModule);
+
   const config = new DocumentBuilder()
     .setTitle('Teacher Management API')
     .setDescription('API for managing teachers and lectures')
@@ -38,13 +38,16 @@ async function bootstrap() {
       'http://localhost:5173',
       'https://localhost:5173',
       'http://160.250.132.143:5173',
-      'https://fe.kidostudent.kidoedu.vn/',
-      'https://kidostudent.kidoedu.vn/',
+
+      'https://fe.kidostudent.kidoedu.vn',
+      'https://kidostudent.kidoedu.vn',
+
       'http://localhost:5174',
       'http://160.250.132.143:5174',
-      'https://fe.kidocanteen.kidoedu.vn/',
+      'https://fe.kidocanteen.kidoedu.vn',
+
       'http://localhost:5171',
-      'https://fe.parent.kidocanteen.kidoedu.vn/',
+      'https://fe.parent.kidocanteen.kidoedu.vn',
     ],
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
@@ -57,7 +60,25 @@ async function bootstrap() {
   app.useGlobalInterceptors(new ResponseLoggerInterceptor());
   app.useGlobalInterceptors(new SuccessResponseInterceptor());
 
-  app.useStaticAssets(join(__dirname, '..', 'uploads'), { prefix: '/uploads' });
-  await app.listen(process.env.PORT ?? 3001, '0.0.0.0');
+  /**
+   * Serve static files
+   *
+   * File:
+   * /var/www/teacher-management/uploads/test.zip
+   *
+   * URL:
+   * http://IP:3001/uploads/test.zip
+   */
+  app.useStaticAssets('/var/www/teacher-management/uploads', {
+    prefix: '/uploads/',
+  });
+
+  const port = process.env.PORT ?? 3001;
+
+  await app.listen(port, '0.0.0.0');
+
+  console.log(`Server running on port ${port}`);
+  console.log(`Uploads available at http://0.0.0.0:${port}/uploads/`);
 }
+
 bootstrap();
