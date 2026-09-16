@@ -6,6 +6,7 @@ import {
 } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
 import { ROLES_KEY } from '../decorator/roles.decorator';
+import { isAdminUserType, UserType } from '../enum/user-type.enum';
 
 interface RequestWithUser extends Request {
   user?: {
@@ -28,7 +29,13 @@ export class RolesGuard implements CanActivate {
     const request = context.switchToHttp().getRequest<RequestWithUser>();
     const user = request.user;
 
-    if (!user || !requiredRoles.includes(user.userType)) {
+    const hasRequiredRole =
+      !!user &&
+      (requiredRoles.includes(user.userType) ||
+        (requiredRoles.includes(UserType.ADMIN) &&
+          isAdminUserType(user.userType as UserType)));
+
+    if (!hasRequiredRole) {
       throw new ForbiddenException('Bạn không có quyền');
     }
 

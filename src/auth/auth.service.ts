@@ -9,7 +9,7 @@ import { CardLoginDto, LoginDto } from './dto/login.dto';
 import { CreateUserDto } from 'src/user/dto/create.dto';
 import { UserService } from 'src/user/user.service';
 import { UserEntity } from 'src/user/user.entity';
-import { UserType } from 'src/common/enum/user-type.enum';
+import { isAdminUserType, UserType } from 'src/common/enum/user-type.enum';
 import { ERROR_MESSAGES } from 'src/common/constant/error-messages.constant';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
@@ -134,7 +134,7 @@ export class AuthService {
       throw new UnauthorizedException(ERROR_MESSAGES.INVALID_CREDENTIALS);
     }
 
-    if (user.userType !== UserType.ADMIN) {
+    if (!isAdminUserType(user.userType)) {
       throw new UnauthorizedException(ERROR_MESSAGES.ACCESS_DENIED_ADMIN);
     }
 

@@ -30,7 +30,7 @@ import { AttemptStatus } from './enum/attempt-status.enum';
 import { CreateAttemptDto, UpdateAttemptDto } from './dto/create-attempt.dto';
 import { ExamSetService } from 'src/exam-set/exam-set.service';
 import { JwtPayload } from 'src/common/interface/jwt-payload.interface';
-import { UserType } from 'src/common/enum/user-type.enum';
+import { isAdminUserType, UserType } from 'src/common/enum/user-type.enum';
 import { UserEntity } from 'src/user/user.entity';
 import { QuestionBankQuestionEntity } from 'src/question-bank-question/question-bank-question.entity';
 import { QuestionEntity } from 'src/question/question.entity';
@@ -803,7 +803,7 @@ export class AttemptService {
       throw new ForbiddenException('Bài làm khách không hỗ trợ xuất PDF');
     }
 
-    if (user.userType === UserType.ADMIN) {
+    if (isAdminUserType(user.userType)) {
       return;
     }
 

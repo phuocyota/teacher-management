@@ -41,7 +41,7 @@ import {
   UpdateVersionResponseDto,
 } from './dto/upload.dto';
 import { JwtPayload } from 'src/common/interface/jwt-payload.interface';
-import { UserType } from 'src/common/enum/user-type.enum';
+import { isAdminUserType, UserType } from 'src/common/enum/user-type.enum';
 import { ERROR_MESSAGES } from 'src/common/constant/error-messages.constant';
 import {
   PaginationRequestDto,
@@ -540,7 +540,7 @@ export class UploadService {
     // Chỉ owner hoặc admin mới có thể cấp quyền
     if (
       file.uploadedBy !== grantedBy.userId &&
-      grantedBy.userType !== UserType.ADMIN
+      !isAdminUserType(grantedBy.userType)
     ) {
       throw new ForbiddenException(
         'Bạn không có quyền cấp quyền truy cập file này',
@@ -609,7 +609,7 @@ export class UploadService {
     const file = await this.getFileById(fileId);
 
     // Chỉ owner hoặc admin mới xem được danh sách quyền
-    if (file.uploadedBy !== user.userId && user.userType !== UserType.ADMIN) {
+    if (file.uploadedBy !== user.userId && !isAdminUserType(user.userType)) {
       throw new ForbiddenException(
         'Bạn không có quyền xem danh sách quyền truy cập file này',
       );
@@ -670,10 +670,9 @@ export class UploadService {
     const size = dto.size ?? 10;
     const keyword = dto.search?.trim().toLowerCase();
 
-    const sourceFiles =
-      user.userType === UserType.ADMIN
-        ? await this.getAllFiles()
-        : await this.getAccessibleFiles(user);
+    const sourceFiles = isAdminUserType(user.userType)
+      ? await this.getAllFiles()
+      : await this.getAccessibleFiles(user);
 
     const filtered = keyword
       ? sourceFiles.filter((file) => this.matchesSearchTerm(file, keyword))
@@ -722,7 +721,7 @@ export class UploadService {
     const file = await this.getFileByFilename(filename);
 
     // Chỉ owner hoặc admin mới có thể xóa
-    if (file.uploadedBy !== user.userId && user.userType !== UserType.ADMIN) {
+    if (file.uploadedBy !== user.userId && !isAdminUserType(user.userType)) {
       throw new ForbiddenException('Bạn không có quyền xóa file này');
     }
 

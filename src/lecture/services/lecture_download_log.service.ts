@@ -12,7 +12,7 @@ import {
 } from '../dto/download-log.dto';
 import { PaginationResponseDto } from 'src/common/dto/pagination.dto';
 import { ERROR_MESSAGES } from 'src/common/constant/error-messages.constant';
-import { UserType } from 'src/common/enum/user-type.enum';
+import { isAdminUserType, UserType } from 'src/common/enum/user-type.enum';
 
 @Injectable()
 export class LectureDownloadLogService {
@@ -73,7 +73,7 @@ export class LectureDownloadLogService {
     }
 
     // Chỉ cho phép chủ sở hữu hoặc admin xóa
-    if (userType !== UserType.ADMIN && log.createdBy !== userId) {
+    if (!isAdminUserType(userType) && log.createdBy !== userId) {
       throw new ForbiddenException(
         'Bạn không có quyền xóa lịch sử tải xuống này',
       );

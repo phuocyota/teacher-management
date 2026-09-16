@@ -18,7 +18,7 @@ import {
   GroupResponseDto,
 } from '../group/dto/group.dto';
 import { JwtPayload } from 'src/common/interface/jwt-payload.interface';
-import { UserType } from 'src/common/enum/user-type.enum';
+import { isAdminUserType, UserType } from 'src/common/enum/user-type.enum';
 import { ERROR_MESSAGES } from 'src/common/constant/error-messages.constant';
 import { autoMapListToDto } from 'src/common/utils/auto-map.util';
 import { runInTransaction } from 'src/common/database/transaction.utils';
@@ -257,7 +257,7 @@ export class UserGroupService {
       // Kiểm tra quyền
       if (
         groupEntity.createdBy !== currentUser.userId &&
-        currentUser.userType !== UserType.ADMIN
+        !isAdminUserType(currentUser.userType)
       ) {
         throw new ForbiddenException(
           ERROR_MESSAGES.NO_PERMISSION_REMOVE_MEMBER,
@@ -297,7 +297,7 @@ export class UserGroupService {
       // Kiểm tra quyền
       if (
         groupEntity.createdBy !== currentUser.userId &&
-        currentUser.userType !== UserType.ADMIN
+        !isAdminUserType(currentUser.userType)
       ) {
         throw new ForbiddenException(
           ERROR_MESSAGES.NO_PERMISSION_REMOVE_MEMBER,
@@ -319,7 +319,7 @@ export class UserGroupService {
   ): Promise<void> {
     return runInTransaction(this.entityManager, async (manager) => {
       // Bước 1: ADMIN được phép luôn
-      const isAdmin = currentUser.userType === UserType.ADMIN;
+      const isAdmin = isAdminUserType(currentUser.userType);
 
       if (!isAdmin) {
         const currentMember = await manager.findOne(UserGroupEntity, {

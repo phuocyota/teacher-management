@@ -12,7 +12,7 @@ import {
   GroupWithMemberCountDto,
 } from './dto/group.dto';
 import { JwtPayload } from 'src/common/interface/jwt-payload.interface';
-import { UserType } from 'src/common/enum/user-type.enum';
+import { isAdminUserType, UserType } from 'src/common/enum/user-type.enum';
 import { ERROR_MESSAGES } from 'src/common/constant/error-messages.constant';
 import { GroupRepositoryService } from './services/group-repository.service';
 import { autoMapListToDto, autoMapToDto } from 'src/common/utils/auto-map.util';
@@ -23,6 +23,10 @@ export class GroupService {
     private readonly groupRepoService: GroupRepositoryService,
     private readonly entityManager: EntityManager,
   ) {}
+
+  private getOwnerScope(user: JwtPayload): string | undefined {
+    return user.userType === UserType.ADMIN_LONG_AN ? user.userId : undefined;
+  }
 
   async checkById(id: string): Promise<GroupResponseDto> {
     const group = await this.groupRepoService.findOneById(id);
@@ -52,16 +56,20 @@ export class GroupService {
   /**
    * Lấy tất cả groups
    */
-  async findAll(): Promise<GroupResponseDto[]> {
-    const groups = await this.groupRepoService.findAllGroups(true);
+  async findAll(user: JwtPayload): Promise<GroupResponseDto[]> {
+    const ownerId = this.getOwnerScope(user);
+    const groups = await this.groupRepoService.findAllGroups(true, ownerId);
     return autoMapListToDto(GroupResponseDto, groups);
   }
 
   /**
    * Lấy groups với số lượng members
    */
-  async findAllWithMemberCount(): Promise<GroupWithMemberCountDto[]> {
-    const groups = await this.groupRepoService.findAllWithMemberCount();
+  async findAllWithMemberCount(
+    user: JwtPayload,
+  ): Promise<GroupWithMemberCountDto[]> {
+    const ownerId = this.getOwnerScope(user);
+    const groups = await this.groupRepoService.findAllWithMemberCount(ownerId);
     return autoMapListToDto(GroupWithMemberCountDto, groups);
   }
 
@@ -76,7 +84,7 @@ export class GroupService {
     const group = await this.groupRepoService.findOneById(id);
 
     // Kiểm tra quyền - chỉ admin hoặc người tạo
-    if (group.createdBy !== user.userId && user.userType !== UserType.ADMIN) {
+    if (group.createdBy !== user.userId && !isAdminUserType(user.userType)) {
       throw new ForbiddenException(ERROR_MESSAGES.NO_PERMISSION_UPDATE_GROUP);
     }
 
@@ -93,7 +101,7 @@ export class GroupService {
     const group = await this.groupRepoService.findOneById(id);
 
     // Kiểm tra quyền - chỉ admin
-    if (user.userType !== UserType.ADMIN) {
+    if (!isAdminUserType(user.userType)) {
       throw new ForbiddenException(ERROR_MESSAGES.NO_PERMISSION_DELETE_GROUP);
     }
 
@@ -103,8 +111,9 @@ export class GroupService {
   /**
    * Tìm kiếm groups theo tên
    */
-  async search(keyword: string): Promise<GroupResponseDto[]> {
-    const groups = await this.groupRepoService.searchByName(keyword);
+  async search(keyword: string, user: JwtPayload): Promise<GroupResponseDto[]> {
+    const ownerId = this.getOwnerScope(user);
+    const groups = await this.groupRepoService.searchByName(keyword, ownerId);
     return autoMapListToDto(GroupResponseDto, groups);
   }
 

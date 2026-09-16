@@ -55,8 +55,8 @@ export class GroupController {
     description: 'Lấy danh sách thành công',
     type: [GroupResponseDto],
   })
-  async findAll(): Promise<GroupResponseDto[]> {
-    return this.groupService.findAll();
+  async findAll(@User() user: JwtPayload): Promise<GroupResponseDto[]> {
+    return this.groupService.findAll(user);
   }
 
   @Get('with-count')
@@ -66,8 +66,10 @@ export class GroupController {
     description: 'Lấy danh sách thành công',
     type: [GroupWithMemberCountDto],
   })
-  async findAllWithMemberCount(): Promise<GroupWithMemberCountDto[]> {
-    return this.groupService.findAllWithMemberCount();
+  async findAllWithMemberCount(
+    @User() user: JwtPayload,
+  ): Promise<GroupWithMemberCountDto[]> {
+    return this.groupService.findAllWithMemberCount(user);
   }
 
   @Get('search')
@@ -78,8 +80,11 @@ export class GroupController {
     description: 'Tìm kiếm thành công',
     type: [GroupResponseDto],
   })
-  async search(@Query('keyword') keyword: string): Promise<GroupResponseDto[]> {
-    return this.groupService.search(keyword);
+  async search(
+    @Query('keyword') keyword: string,
+    @User() user: JwtPayload,
+  ): Promise<GroupResponseDto[]> {
+    return this.groupService.search(keyword, user);
   }
 
   @Get('max-code')

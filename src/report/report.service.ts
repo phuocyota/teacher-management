@@ -24,7 +24,7 @@ import {
 import { JwtPayload } from 'src/common/interface/jwt-payload.interface';
 import { QuestionBankQuestionEntity } from 'src/question-bank-question/question-bank-question.entity';
 import { UserEntity } from 'src/user/user.entity';
-import { UserType } from 'src/common/enum/user-type.enum';
+import { isAdminUserType, UserType } from 'src/common/enum/user-type.enum';
 import { StudentEntity } from 'src/student/student.entity';
 import { StudentAnswerEntity } from 'src/student-answer/student-answer.entity';
 import { StudentGroupEntity } from 'src/student-group/student-group.entity';
@@ -733,7 +733,7 @@ export class ReportService {
     school: SchoolEntity,
     user: JwtPayload,
   ): Promise<SchoolReportAccessScope> {
-    if (user.userType === UserType.ADMIN) {
+    if (isAdminUserType(user.userType)) {
       return {};
     }
 
@@ -789,7 +789,7 @@ export class ReportService {
       );
     }
 
-    if (user.userType === UserType.ADMIN) {
+    if (isAdminUserType(user.userType)) {
       return;
     }
 
@@ -1674,7 +1674,7 @@ export class ReportService {
       .addOrderBy('COALESCE(user.full_name, user.user_name)', 'ASC')
       .addOrderBy('attempt.started_at', 'DESC');
 
-    if (user.userType !== UserType.ADMIN) {
+    if (!isAdminUserType(user.userType)) {
       qb.andWhere(
         this.canAccessStudentGroupCondition(),
         this.accessParams(user.userId),
@@ -2093,7 +2093,7 @@ export class ReportService {
       });
     }
 
-    if (user.userType !== UserType.ADMIN) {
+    if (!isAdminUserType(user.userType)) {
       qb.andWhere(
         this.canAccessStudentGroupCondition(),
         this.accessParams(user.userId),

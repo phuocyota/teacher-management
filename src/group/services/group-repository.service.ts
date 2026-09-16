@@ -33,8 +33,12 @@ export class GroupRepositoryService extends BaseService<GroupEntity> {
   /**
    * Lấy tất cả groups với relations
    */
-  async findAllGroups(includeMembers = true): Promise<GroupEntity[]> {
+  async findAllGroups(
+    includeMembers = true,
+    createdBy?: string,
+  ): Promise<GroupEntity[]> {
     return this.groupRepository.find({
+      where: createdBy ? { createdBy } : undefined,
       relations: includeMembers ? ['members', 'members.user'] : ['members'],
       order: { createdAt: 'DESC' },
     });
@@ -61,7 +65,9 @@ export class GroupRepositoryService extends BaseService<GroupEntity> {
   /**
    * Lấy tất cả groups với số lượng members (dùng raw SQL)
    */
-  async findAllWithMemberCount(): Promise<GroupWithCountDto[]> {
+  async findAllWithMemberCount(
+    createdBy?: string,
+  ): Promise<GroupWithCountDto[]> {
     const query = `
       SELECT
         g.id,
@@ -72,12 +78,13 @@ export class GroupRepositoryService extends BaseService<GroupEntity> {
         COUNT(ug.user_id) as "count"
       FROM "group" g
       LEFT JOIN user_group ug ON g.id = ug.group_id
+      WHERE ($1::uuid IS NULL OR g.created_by = $1::uuid)
       GROUP BY g.id
       ORDER BY g.created_at DESC
     `;
     return autoMapListToDto(
       GroupWithCountDto,
-      await this.groupRepository.query(query),
+      await this.groupRepository.query(query, [createdBy ?? null]),
     );
   }
 
@@ -107,18 +114,25 @@ export class GroupRepositoryService extends BaseService<GroupEntity> {
   /**
    * Tìm kiếm groups theo tên
    */
-  async searchByName(keyword: string): Promise<GroupEntity[]> {
+  async searchByName(
+    keyword: string,
+    createdBy?: string,
+  ): Promise<GroupEntity[]> {
     const query = `
       SELECT DISTINCT g.*
       FROM "group" g
       LEFT JOIN user_group ug ON g.id = ug.group_id
       LEFT JOIN "user" u ON ug.user_id = u.id
       WHERE LOWER(g.name) LIKE LOWER($1)
+        AND ($2::uuid IS NULL OR g.created_by = $2::uuid)
       ORDER BY g.name ASC
     `;
     return autoMapListToDto(
       GroupEntity,
-      await this.groupRepository.query(query, [`%${keyword}%`]),
+      await this.groupRepository.query(query, [
+        `%${keyword}%`,
+        createdBy ?? null,
+      ]),
     );
   }
 

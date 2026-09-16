@@ -18,7 +18,7 @@ import type {
   UpdateLectureDto,
 } from '../dto/lecture.request.dto';
 import { JwtPayload } from 'src/common/interface/jwt-payload.interface';
-import { UserType } from 'src/common/enum/user-type.enum';
+import { isAdminUserType, UserType } from 'src/common/enum/user-type.enum';
 import { ERROR_MESSAGES } from 'src/common/constant/error-messages.constant';
 import { Type, Source } from '../enum/lecture-resource.enum';
 import { GroupService } from 'src/group/group.service';
@@ -144,7 +144,7 @@ export class LectureService {
       .take(size)
       .distinct(true);
 
-    if (user.userType !== UserType.ADMIN) {
+    if (!isAdminUserType(user.userType)) {
       query.andWhere(
         `(
           lecture.id IN (
@@ -264,7 +264,7 @@ export class LectureService {
       );
     }
 
-    if (user.userType !== UserType.ADMIN) {
+    if (!isAdminUserType(user.userType)) {
       const hasAccess = await this.lectureRepository
         .createQueryBuilder('lecture')
         .where('lecture.id = :id', { id })
@@ -312,7 +312,7 @@ export class LectureService {
 
       if (
         lecture.createdBy !== user.userId &&
-        user.userType !== UserType.ADMIN
+        !isAdminUserType(user.userType)
       ) {
         throw new ForbiddenException(
           'Bạn không có quyền chỉnh sửa bài giảng này',
@@ -386,7 +386,7 @@ export class LectureService {
 
       if (
         lecture.createdBy !== user.userId &&
-        user.userType !== UserType.ADMIN
+        !isAdminUserType(user.userType)
       ) {
         throw new ForbiddenException('Bạn không có quyền xoá bài giảng này');
       }
@@ -407,9 +407,7 @@ export class LectureService {
     });
   }
 
-  async removeResources(
-    id: string,
-  ): Promise<{ deletedCount: number }> {
+  async removeResources(id: string): Promise<{ deletedCount: number }> {
     return runInTransaction(this.entityManager, async (manager) => {
       const lecture = await manager.findOne(LectureEntity, {
         where: { id },
