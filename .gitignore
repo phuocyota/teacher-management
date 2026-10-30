@@ -71,3 +71,5 @@ scripts/*
 !scripts/delete_lecture_resources.js
 export/
 exports/
+/output/
+/outputs/
