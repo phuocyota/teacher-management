@@ -48,6 +48,7 @@ async function bootstrap() {
       'https://fe.kidocanteen.kidoedu.vn',
       'http://localhost:5171',
       'https://fe.parent.kidocanteen.kidoedu.vn',
+      'https://localhost:5174',
     ],
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
