@@ -17,6 +17,7 @@ import {
   ApiOkResponse,
   ApiCreatedResponse,
   ApiOperation,
+  ApiExtraModels,
 } from '@nestjs/swagger';
 import { GradeService } from './grade.service';
 import { CreateGradeDto, UpdateGradeDto } from './dto/create-grade.dto';
@@ -33,6 +34,7 @@ import { UserType } from 'src/common/enum/user-type.enum';
 import { Public } from 'src/common/decorator/public.decorator';
 
 @ApiTags('Grade')
+@ApiExtraModels(GradeListResponseDto, GradeDetailListResponseDto)
 @ApiBearerAuth('access-token')
 @Controller('grade')
 export class GradeController {
@@ -64,7 +66,14 @@ export class GradeController {
     type: Boolean,
     description: 'Lay chi tiet mon hoc va bo de thi theo tung khoi',
   })
-  @ApiOkResponse({ type: GradeListResponseDto })
+  @ApiOkResponse({
+    schema: {
+      oneOf: [
+        { $ref: '#/components/schemas/GradeListResponseDto' },
+        { $ref: '#/components/schemas/GradeDetailListResponseDto' },
+      ],
+    },
+  })
   findAll(
     @Query('page') page?: number,
     @Query('size') size?: number,

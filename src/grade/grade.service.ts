@@ -33,24 +33,30 @@ export class GradeService {
     isGetAllDetail?: boolean | string,
   ): Promise<PaginationResponseDto<GradeResponseDto | GradeDetailResponseDto>> {
     const skip = (page - 1) * size;
+    const gradeOrder = `CASE
+      WHEN g.code ~ '^K[0-9]+$' THEN substring(g.code from 2)::integer
+      WHEN g.code = 'KM' THEN 13
+      WHEN g.code = 'KC' THEN 14
+      WHEN g.code = 'KL' THEN 15
+      ELSE 16 END`;
+    const qb = this.gradeRepo.createQueryBuilder('g');
+    if (search) {
+      qb.andWhere('(g.name ILIKE :search OR g.code ILIKE :search)', {
+        search: `%${search}%`,
+      });
+    }
+    qb.orderBy(gradeOrder, 'ASC').addOrderBy('g.code', 'ASC');
+    qb.skip(skip).take(size);
+    const [grades, total] = await qb.getManyAndCount();
     const shouldGetAllDetail =
       isGetAllDetail === true ||
       isGetAllDetail === 'true' ||
       isGetAllDetail === '1';
 
     if (shouldGetAllDetail) {
-      const params: Array<string | number> = [];
-      let whereClause = '';
-
-      if (search) {
-        params.push(`%${search}%`);
-        whereClause = 'WHERE g.name ILIKE $1 OR g.code ILIKE $1';
+      if (grades.length === 0) {
+        return { data: [], page, size, total };
       }
-
-      const limitParamIndex = params.length + 1;
-      params.push(size);
-      const offsetParamIndex = params.length + 1;
-      params.push(skip);
 
       const detailSql = `
         SELECT
@@ -64,43 +70,19 @@ export class GradeService {
           es.name AS "examSetTitle",
           es.image as "examSetImage"
         FROM grade g
-        INNER JOIN class c ON c.grade_id = g.id
+        LEFT JOIN class c ON c.grade_id = g.id
         LEFT JOIN subject s ON s.id = c.subject_id
-        LEFT JOIN exam_set_class esc ON esc.class_id = c.id
-        LEFT JOIN exam_set es ON es.id = esc.exam_set_id OR es.class_id = c.id
-        ${whereClause}
-        ORDER BY g.code ASC, s.name ASC, es.name ASC
-        LIMIT $${limitParamIndex}
-        OFFSET $${offsetParamIndex}
+        LEFT JOIN exam_set es ON es.class_id = c.id OR EXISTS (
+          SELECT 1 FROM exam_set_class esc
+          WHERE esc.class_id = c.id AND esc.exam_set_id = es.id
+        )
+        WHERE g.id = ANY($1::uuid[])
+        ORDER BY ${gradeOrder}, g.code ASC, s.name ASC, es.name ASC,
+          c.order_number ASC, c.id ASC, es.id ASC
       `;
-
-      let detailQueryString = detailSql;
-      params.forEach((value, index) => {
-        const placeholder = new RegExp(`\\$${index + 1}(?!\\d)`, 'g');
-        let formattedValue = 'NULL';
-
-        if (typeof value === 'string') {
-          formattedValue = `'${value.replace(/'/g, "''")}'`;
-        } else if (value !== null && value !== undefined) {
-          formattedValue = String(value);
-        }
-
-        detailQueryString = detailQueryString.replace(
-          placeholder,
-          formattedValue,
-        );
-      });
-
-      const rawDetails = await this.gradeRepo.query(detailSql, params as any[]);
-
-      if (rawDetails.length === 0) {
-        return {
-          data: [],
-          page,
-          size,
-          total: 0,
-        };
-      }
+      const rawDetails = await this.gradeRepo.query(detailSql, [
+        grades.map((grade) => grade.id),
+      ]);
 
       const detailMap = new Map<string, GradeDetailResponseDto>();
       const orderedGradeIds: string[] = [];
@@ -162,8 +144,6 @@ export class GradeService {
         }
       }
 
-      const total = Number(0);
-
       return {
         data: orderedGradeIds
           .map((gradeId) => detailMap.get(gradeId))
@@ -173,19 +153,6 @@ export class GradeService {
         total,
       };
     }
-
-    const qb = this.gradeRepo.createQueryBuilder('g');
-
-    if (search) {
-      qb.andWhere('g.name ILIKE :search OR g.code ILIKE :search', {
-        search: `%${search}%`,
-      });
-    }
-
-    qb.orderBy('g.code', 'ASC');
-    qb.skip(skip).take(size);
-
-    const [grades, total] = await qb.getManyAndCount();
 
     return {
       data: autoMapListToDto(GradeResponseDto, grades),
