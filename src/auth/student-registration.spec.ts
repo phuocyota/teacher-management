@@ -29,7 +29,6 @@ import { SchoolEntity } from 'src/school/school.entity';
 import { StudentGroupEntity } from 'src/student-group/student-group.entity';
 
 const dto: RegisterStudentDto = {
-  userName: 'student.new',
   password: 'a-password',
   fullName: 'Nguyễn Văn An',
   schoolId: '2233abe3-1961-4af5-a482-542f1227d844',
@@ -89,7 +88,7 @@ describe('Public student registration HTTP', () => {
     );
   });
   it.each([
-    { ...dto, userName: 'bad name' },
+    { ...dto, userName: 'x'.repeat(51) },
     { ...dto, password: '123' },
     { ...dto, schoolId: 'invalid' },
     { ...dto, classId: 'invalid' },
@@ -108,6 +107,42 @@ describe('Public student registration HTTP', () => {
       dto as unknown as Record<string, string>,
       Buffer.alloc(5 * 1024 * 1024 + 1),
     ).expect(413);
+    expect(registration.register).not.toHaveBeenCalled();
+  });
+  it('accepts typed school and class names without IDs', async () => {
+    const student = { ...dto };
+    delete student.schoolId;
+    delete student.classId;
+    registration.register.mockResolvedValue({ accessToken: 'session' });
+    await submit({
+      ...student,
+      schoolName: '  School  ',
+      className: '  5A  ',
+    }).expect(201);
+    expect(registration.register).toHaveBeenCalledWith(
+      expect.objectContaining({ schoolName: 'School', className: '5A' }),
+      expect.anything(),
+    );
+  });
+  it.each(['school', 'class'])(
+    'requires either an ID or a name for %s',
+    async (field) => {
+      const values = { ...dto } as Record<string, string>;
+      delete values[`${field}Id`];
+      await submit(values).expect(400);
+      expect(registration.register).not.toHaveBeenCalled();
+    },
+  );
+  it('rejects whitespace-only and oversized typed names', async () => {
+    const student = { ...dto };
+    delete student.schoolId;
+    delete student.classId;
+    await submit({ ...student, schoolName: '  ', className: '5A' }).expect(400);
+    await submit({
+      ...student,
+      schoolName: 'School',
+      className: 'x'.repeat(256),
+    }).expect(400);
     expect(registration.register).not.toHaveBeenCalled();
   });
   it('provides public school/class selectors and validates school ID', async () => {
@@ -235,6 +270,7 @@ describe('Student registration persistence', () => {
     query: jest.fn(),
     getRepository: jest.fn(() => ({ createQueryBuilder: () => query })),
     findOneBy: jest.fn(),
+    findBy: jest.fn(),
     create: jest.fn((_entity: unknown, values: object) => values),
     save: jest.fn(),
   };
@@ -264,6 +300,7 @@ describe('Student registration persistence', () => {
         .toBuffer(),
     };
     query.getOne.mockResolvedValue(null);
+    manager.query.mockResolvedValue([{ lastNumber: '0' }]);
     manager.findOneBy
       .mockResolvedValueOnce({ id: dto.schoolId, name: 'School' })
       .mockResolvedValueOnce({
@@ -304,7 +341,7 @@ describe('Student registration persistence', () => {
       StudentEntity,
       expect.objectContaining({
         id: 'saved-id',
-        code: dto.userName,
+        code: 'S5A001',
         schoolId: dto.schoolId,
         studentGroupId: dto.classId,
       }),
@@ -338,13 +375,198 @@ describe('Student registration persistence', () => {
       ).format,
     ).toBe('jpeg');
   });
-  it('rejects duplicate IDs without writes', async () => {
-    query.getOne.mockResolvedValue({ id: 'existing' });
+  it('continues the existing sequence and ignores a supplied login ID', async () => {
+    manager.query.mockResolvedValue([{ lastNumber: '12' }]);
+    const result = await service.register(
+      { ...dto, userName: 'arbitrary' },
+      photo,
+    );
+    expect(result.userName).toBe('S5A013');
+    expect(manager.query).toHaveBeenCalledWith(
+      'SELECT pg_advisory_xact_lock(hashtext($1))',
+      ['student-register:username-allocation'],
+    );
+  });
+  it('removes Vietnamese accents and preserves class digits in the login ID', async () => {
+    manager.findOneBy
+      .mockReset()
+      .mockResolvedValueOnce({ id: dto.schoolId, name: 'Nguyễn Đình Chiểu' })
+      .mockResolvedValueOnce({
+        id: dto.classId,
+        name: 'Lớp 5A',
+        schoolId: dto.schoolId,
+      });
+    const result = await service.register(dto, photo);
+    expect(result.userName).toBe('NDC5A001');
+  });
+  it.each([
+    ['Trường Tiểu học Nguyễn Du', 'Lớp 5 A1', 'THND5A1001'],
+    ['Trường TH Nguyễn Du', '5A1', 'THND5A1001'],
+    ['Trường Trung học cơ sở Đặng Văn Ngữ', '6A', 'THCSDVN6A001'],
+    ['Trường THCS Đặng Văn Ngữ', '6A', 'THCSDVN6A001'],
+    ['  trường   mầm non Hoa Sen ', 'Chồi 1', 'MNHSC1001'],
+    ['Nguyễn-Du', '5A', 'ND5A001'],
+  ])(
+    'generates a canonical ID for %s / %s',
+    async (school, className, expected) => {
+      manager.findOneBy
+        .mockReset()
+        .mockResolvedValueOnce({ id: dto.schoolId, name: school })
+        .mockResolvedValueOnce({
+          id: dto.classId,
+          name: className,
+          schoolId: dto.schoolId,
+        });
+      const result = await service.register(dto, photo);
+      expect(result.userName).toBe(expected);
+    },
+  );
+  it('continues beyond 999 without truncating or resetting the sequence', async () => {
+    manager.query.mockResolvedValue([{ lastNumber: '999' }]);
+    expect((await service.register(dto, photo)).userName).toBe('S5A1000');
+  });
+  it('rejects names without a usable school/class code before writing files', async () => {
+    manager.findOneBy
+      .mockReset()
+      .mockResolvedValueOnce({ id: dto.schoolId, name: '---' })
+      .mockResolvedValueOnce({
+        id: dto.classId,
+        name: 'Lớp',
+        schoolId: dto.schoolId,
+      });
     await expect(service.register(dto, photo)).rejects.toBeInstanceOf(
-      ConflictException,
+      BadRequestException,
     );
     expect(manager.save).not.toHaveBeenCalled();
     expect(await readdir(directory)).toEqual([]);
+  });
+  it('reuses normalized school and class names and links their existing IDs', async () => {
+    manager.findOneBy.mockReset().mockResolvedValue({ id: 'hcm-zone' });
+    manager.findBy.mockImplementation((entity: unknown) =>
+      Promise.resolve(
+        entity === SchoolEntity
+          ? [{ id: dto.schoolId, name: 'School   Name', zoneId: 'hcm-zone' }]
+          : [{ id: dto.classId, name: '5A', code: 4, schoolId: dto.schoolId }],
+      ),
+    );
+    const result = await service.register(
+      {
+        ...dto,
+        schoolId: undefined,
+        classId: undefined,
+        schoolName: ' school name ',
+        className: ' 5a ',
+      },
+      photo,
+    );
+    expect(result).toMatchObject({
+      schoolId: dto.schoolId,
+      classId: dto.classId,
+    });
+    expect(manager.findBy).toHaveBeenCalledWith(SchoolEntity, {
+      zoneId: 'hcm-zone',
+    });
+    expect(manager.findBy).toHaveBeenCalledWith(StudentGroupEntity, {
+      schoolId: dto.schoolId,
+    });
+    expect(
+      manager.save.mock.calls.some(
+        ([entity]) => entity === SchoolEntity || entity === StudentGroupEntity,
+      ),
+    ).toBe(false);
+  });
+  it('creates a new school in HCM and a class in the same registration transaction', async () => {
+    manager.findOneBy.mockReset().mockResolvedValue({ id: 'hcm-zone' });
+    manager.findBy.mockResolvedValue([]);
+    manager.save.mockImplementation((entity: unknown, value: object) =>
+      Promise.resolve({
+        ...value,
+        id:
+          entity === SchoolEntity
+            ? 'new-school'
+            : entity === StudentGroupEntity
+              ? 'new-class'
+              : 'saved-id',
+      }),
+    );
+    const result = await service.register(
+      {
+        ...dto,
+        schoolId: undefined,
+        classId: undefined,
+        schoolName: ' New   School ',
+        className: ' 5A ',
+      },
+      photo,
+    );
+    expect(manager.save).toHaveBeenCalledWith(
+      SchoolEntity,
+      expect.objectContaining({
+        name: 'New School',
+        zoneId: 'hcm-zone',
+      }),
+    );
+    expect(manager.save).toHaveBeenCalledWith(
+      StudentGroupEntity,
+      expect.objectContaining({ name: '5A', schoolId: 'new-school', code: 1 }),
+    );
+    expect(manager.save).toHaveBeenCalledWith(
+      StudentEntity,
+      expect.objectContaining({
+        schoolId: 'new-school',
+        studentGroupId: 'new-class',
+      }),
+    );
+    expect(manager.query).toHaveBeenCalledWith(
+      'SELECT pg_advisory_xact_lock(hashtext($1))',
+      ['student-register:school:hcm-zone:new school'],
+    );
+    expect(manager.query).toHaveBeenCalledWith(
+      'SELECT pg_advisory_xact_lock(hashtext($1))',
+      ['student-register:classes:new-school'],
+    );
+    expect(result).toMatchObject({
+      schoolId: 'new-school',
+      classId: 'new-class',
+    });
+    expect(source.transaction).toHaveBeenCalledTimes(1);
+  });
+  it('creates a class with the next code only inside the selected school', async () => {
+    manager.findBy.mockResolvedValue([
+      { id: 'other-class', name: '4A', code: 7 },
+    ]);
+    await service.register(
+      { ...dto, classId: undefined, className: '5A' },
+      photo,
+    );
+    expect(manager.save).toHaveBeenCalledWith(
+      StudentGroupEntity,
+      expect.objectContaining({ schoolId: dto.schoolId, name: '5A', code: 8 }),
+    );
+  });
+  it('reports an absent HCM zone before creating a school', async () => {
+    manager.findOneBy.mockReset().mockResolvedValue(null);
+    await expect(
+      service.register(
+        { ...dto, schoolId: undefined, schoolName: 'School' },
+        photo,
+      ),
+    ).rejects.toBeInstanceOf(NotFoundException);
+    expect(manager.save).not.toHaveBeenCalled();
+  });
+  it('reports ambiguous existing names instead of creating or choosing an arbitrary school', async () => {
+    manager.findOneBy.mockReset().mockResolvedValue({ id: 'hcm-zone' });
+    manager.findBy.mockResolvedValue([
+      { id: 'one', name: 'School' },
+      { id: 'two', name: ' school ' },
+    ]);
+    await expect(
+      service.register(
+        { ...dto, schoolId: undefined, schoolName: 'School' },
+        photo,
+      ),
+    ).rejects.toBeInstanceOf(ConflictException);
+    expect(manager.save).not.toHaveBeenCalled();
   });
   it('rejects a class outside the selected school without writes', async () => {
     manager.findOneBy

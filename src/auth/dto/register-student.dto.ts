@@ -8,20 +8,20 @@ import {
   Matches,
   MaxLength,
   MinLength,
+  ValidateIf,
 } from 'class-validator';
 
 const trim = ({ value }: { value: unknown }) =>
   typeof value === 'string' ? value.trim() : value;
 
 export class RegisterStudentDto {
-  @ApiProperty()
-  @Transform(trim)
-  @IsString()
-  @Matches(/^[a-zA-Z0-9_.-]{3,50}$/, {
-    message:
-      'ID phải có 3–50 ký tự, chỉ gồm chữ, số, dấu chấm, gạch dưới hoặc gạch ngang.',
+  @ApiPropertyOptional({
+    description: 'Legacy input; ignored. BE generates the login ID.',
   })
-  userName!: string;
+  @IsOptional()
+  @IsString()
+  @MaxLength(50)
+  userName?: string;
 
   @ApiProperty({ minLength: 6, maxLength: 72 })
   @IsString()
@@ -36,13 +36,39 @@ export class RegisterStudentDto {
   @MaxLength(150)
   fullName!: string;
 
-  @ApiProperty()
+  @ApiPropertyOptional({ description: 'Chọn ID trường hoặc nhập schoolName' })
+  @ValidateIf(
+    (dto: RegisterStudentDto) => dto.schoolId !== undefined || !dto.schoolName,
+  )
   @IsUUID()
-  schoolId!: string;
+  schoolId?: string;
 
-  @ApiProperty()
+  @ApiPropertyOptional({ description: 'Chọn ID lớp hoặc nhập className' })
+  @ValidateIf(
+    (dto: RegisterStudentDto) => dto.classId !== undefined || !dto.className,
+  )
   @IsUUID()
-  classId!: string;
+  classId?: string;
+
+  @ApiPropertyOptional({ maxLength: 255 })
+  @Transform(trim)
+  @ValidateIf(
+    (dto: RegisterStudentDto) => dto.schoolName !== undefined || !dto.schoolId,
+  )
+  @IsString()
+  @IsNotEmpty()
+  @MaxLength(255)
+  schoolName?: string;
+
+  @ApiPropertyOptional({ maxLength: 255 })
+  @Transform(trim)
+  @ValidateIf(
+    (dto: RegisterStudentDto) => dto.className !== undefined || !dto.classId,
+  )
+  @IsString()
+  @IsNotEmpty()
+  @MaxLength(255)
+  className?: string;
 
   @ApiPropertyOptional()
   @Transform(({ value }: { value: unknown }) =>

@@ -59,20 +59,28 @@ export class StudentRegistrationController {
   @ApiBody({
     schema: {
       type: 'object',
-      required: [
-        'userName',
-        'password',
-        'fullName',
-        'schoolId',
-        'classId',
-        'photo',
+      required: ['password', 'fullName', 'photo'],
+      allOf: [
+        { anyOf: [{ required: ['schoolId'] }, { required: ['schoolName'] }] },
+        { anyOf: [{ required: ['classId'] }, { required: ['className'] }] },
       ],
       properties: {
-        userName: { type: 'string' },
         password: { type: 'string', minLength: 6, maxLength: 72 },
         fullName: { type: 'string' },
         schoolId: { type: 'string', format: 'uuid' },
         classId: { type: 'string', format: 'uuid' },
+        schoolName: {
+          type: 'string',
+          maxLength: 255,
+          description:
+            'Tìm hoặc tạo trường trong khu vực HCM nếu không gửi schoolId',
+        },
+        className: {
+          type: 'string',
+          maxLength: 255,
+          description:
+            'Tìm hoặc tạo lớp thuộc trường đã xác định nếu không gửi classId',
+        },
         phoneNumber: { type: 'string' },
         photo: { type: 'string', format: 'binary' },
       },
@@ -84,7 +92,7 @@ export class StudentRegistrationController {
       limits: {
         fileSize: 5 * 1024 * 1024,
         files: 1,
-        fields: 6,
+        fields: 8,
         fieldSize: 1024,
       },
     }),
