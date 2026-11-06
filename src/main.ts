@@ -49,6 +49,7 @@ async function bootstrap() {
       'http://localhost:5171',
       'https://fe.parent.kidocanteen.kidoedu.vn',
       'https://localhost:5174',
+      'https://fe.ichiteacher.ichiskill.com',
     ],
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
