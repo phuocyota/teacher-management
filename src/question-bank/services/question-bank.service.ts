@@ -342,6 +342,15 @@ export class QuestionBankService {
     );
   }
 
+  async getStructure(id: string): Promise<{ sectionCount: number }> {
+    await this.findOne(id);
+    const sectionCount = await this.entityManager
+      .getRepository(QuestionBankSectionEntity)
+      .count({ where: { questionBankId: id } });
+
+    return { sectionCount };
+  }
+
   async findOne(id: string): Promise<QuestionBankEntity> {
     const record = await this.questionBankRepo.findOne({
       where: { id },

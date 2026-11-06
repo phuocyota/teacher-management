@@ -126,6 +126,20 @@ export class QuestionBankController {
     );
   }
 
+  @Get(':id/structure')
+  @Public()
+  @ApiOperation({ summary: 'Get section count before starting an attempt' })
+  @ApiOkResponse({
+    schema: {
+      type: 'object',
+      properties: { sectionCount: { type: 'integer', minimum: 0 } },
+      required: ['sectionCount'],
+    },
+  })
+  getStructure(@Param('id', ParseUUIDPipe) id: string) {
+    return this.questionBankService.getStructure(id);
+  }
+
   @Get(':id/questions')
   @Public()
   @ApiOperation({ summary: 'Lay danh sach cau hoi cua mot de thi' })

@@ -6,7 +6,7 @@ export interface QuestionStartPatternDefinition {
 }
 
 export const SECTION_START_PATTERN =
-  /^(?:(?:PART|PH(?:\u1ea6|\u00c2)N)\s+([IVXLCDM]+|\d+))\s*[:.\-\u2013\u2014]?\s*(.*)$/iu;
+  /^(?:(?:PART|PH(?:\u1ea6|\u00c2)N)\s+([IVXLCDM]+|\d+))(?=$|[\s:.\-\u2013\u2014])\s*[:.\-\u2013\u2014]?\s*(.*)$/iu;
 
 export const QUESTION_START_PATTERNS: QuestionStartPatternDefinition[] = [
   {
