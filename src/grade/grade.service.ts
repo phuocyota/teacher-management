@@ -33,6 +33,10 @@ export class GradeService {
     isGetAllDetail?: boolean | string,
   ): Promise<PaginationResponseDto<GradeResponseDto | GradeDetailResponseDto>> {
     const skip = (page - 1) * size;
+    const shouldGetAllDetail =
+      isGetAllDetail === true ||
+      isGetAllDetail === 'true' ||
+      isGetAllDetail === '1';
     const gradeOrder = `CASE
       WHEN g.code ~ '^K[0-9]+$' THEN substring(g.code from 2)::integer
       WHEN g.code = 'KM' THEN 13
@@ -40,6 +44,13 @@ export class GradeService {
       WHEN g.code = 'KL' THEN 15
       ELSE 16 END`;
     const qb = this.gradeRepo.createQueryBuilder('g');
+    if (shouldGetAllDetail) {
+      qb.andWhere(`EXISTS (
+        SELECT 1 FROM class c
+        INNER JOIN subject s ON s.id = c.subject_id
+        WHERE c.grade_id = g.id
+      )`);
+    }
     if (search) {
       qb.andWhere('(g.name ILIKE :search OR g.code ILIKE :search)', {
         search: `%${search}%`,
@@ -48,10 +59,6 @@ export class GradeService {
     qb.orderBy(gradeOrder, 'ASC').addOrderBy('g.code', 'ASC');
     qb.skip(skip).take(size);
     const [grades, total] = await qb.getManyAndCount();
-    const shouldGetAllDetail =
-      isGetAllDetail === true ||
-      isGetAllDetail === 'true' ||
-      isGetAllDetail === '1';
 
     if (shouldGetAllDetail) {
       if (grades.length === 0) {
