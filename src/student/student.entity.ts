@@ -7,6 +7,15 @@ import { SchoolEntity } from 'src/school/school.entity';
 @Entity('student')
 @Index('idx_student_code', ['code'])
 export class StudentEntity extends BaseEntity {
+  @Column({ name: 'full_name', type: 'varchar', length: 255, nullable: true })
+  fullName!: string | null;
+
+  @Column({ type: 'varchar', length: 2048, nullable: true })
+  image!: string | null;
+
+  @Column({ type: 'varchar', length: 24, nullable: true })
+  phone!: string | null;
+
   @Column({ name: 'student_group_id', type: 'uuid', nullable: true })
   studentGroupId!: string | null; // ID của nhóm học sinh
 

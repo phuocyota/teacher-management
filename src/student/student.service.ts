@@ -6,6 +6,7 @@ import {
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
+import { randomUUID } from 'node:crypto';
 import { StudentEntity } from './student.entity';
 import { CreateStudentDto, UpdateStudentDto } from './dto/create-student.dto';
 import { StudentGroupService } from 'src/student-group/student-group.service';
@@ -16,7 +17,9 @@ import {
 } from 'src/common/constant/error-messages.constant';
 import { PaginationResponseDto } from 'src/common/dto/pagination.dto';
 import { StudentResponseDto } from './dto/student.dto';
-import { autoMapListToDto } from 'src/common/utils/auto-map.util';
+import { CreateStudentProfileDto } from './dto/create-student-profile.dto';
+import { SchoolEntity } from 'src/school/school.entity';
+import { StudentGroupEntity } from 'src/student-group/student-group.entity';
 
 @Injectable()
 export class StudentService {
@@ -26,6 +29,37 @@ export class StudentService {
     private readonly studentGroupService: StudentGroupService,
     private readonly schoolService: SchoolService,
   ) {}
+
+  async createProfile(dto: CreateStudentProfileDto): Promise<StudentEntity> {
+    return this.studentRepo.manager.transaction(async (manager) => {
+      const school = await manager.findOne(SchoolEntity, {
+        where: { id: dto.schoolId },
+      });
+      if (!school) {
+        throw new NotFoundException('Khong tim thay truong hoc theo schoolId');
+      }
+      const studentGroup = await manager.findOne(StudentGroupEntity, {
+        where: { id: dto.classId },
+      });
+      if (!studentGroup) {
+        throw new NotFoundException('Khong tim thay lop hoc theo classId');
+      }
+      if (studentGroup.schoolId !== school.id) {
+        throw new BadRequestException('classId khong thuoc schoolId da chon');
+      }
+      const record = manager.create(StudentEntity, {
+        code: `HS-${randomUUID()}`,
+        fullName: dto.fullName,
+        image: dto.image,
+        phone: dto.phone,
+        schoolId: school.id,
+        studentGroupId: studentGroup.id,
+        school,
+        studentGroup,
+      });
+      return manager.save(record);
+    });
+  }
 
   async create(dto: CreateStudentDto): Promise<StudentEntity> {
     const studentGroup = dto.studentGroupId
@@ -92,7 +126,7 @@ export class StudentService {
     const [data, total] = await qb.getManyAndCount();
 
     return {
-      data: autoMapListToDto(StudentResponseDto, data),
+      data: data.map((record) => StudentResponseDto.fromEntity(record)),
       page,
       size,
       total,

@@ -8,6 +8,7 @@ import {
   Delete,
   Query,
   ParseUUIDPipe,
+  ValidationPipe,
 } from '@nestjs/common';
 import {
   ApiTags,
@@ -16,17 +17,44 @@ import {
   ApiOkResponse,
   ApiCreatedResponse,
   ApiOperation,
+  ApiNotFoundResponse,
+  ApiBadRequestResponse,
 } from '@nestjs/swagger';
 import { StudentService } from './student.service';
 import { CreateStudentDto, UpdateStudentDto } from './dto/create-student.dto';
 import { StudentResponseDto, StudentListResponseDto } from './dto/student.dto';
 import { PaginationResponseDto } from 'src/common/dto/pagination.dto';
+import { CreateStudentProfileDto } from './dto/create-student-profile.dto';
 
 @ApiTags('Student')
 @ApiBearerAuth('access-token')
 @Controller('student')
 export class StudentController {
   constructor(private readonly studentService: StudentService) {}
+
+  @Post('profile')
+  @ApiOperation({
+    summary: 'Tạo học sinh từ ảnh, họ tên, schoolId, classId và số điện thoại',
+  })
+  @ApiCreatedResponse({ type: StudentResponseDto })
+  @ApiBadRequestResponse({
+    description: 'Du lieu ho so khong hop le hoac lop khong thuoc truong',
+  })
+  @ApiNotFoundResponse({ description: 'Khong tim thay truong hoac lop' })
+  async createProfile(
+    @Body(
+      new ValidationPipe({
+        transform: true,
+        whitelist: true,
+        forbidNonWhitelisted: true,
+      }),
+    )
+    dto: CreateStudentProfileDto,
+  ) {
+    return StudentResponseDto.fromEntity(
+      await this.studentService.createProfile(dto),
+    );
+  }
 
   @Post()
   @ApiOperation({ summary: 'Tạo mới học sinh' })
@@ -64,8 +92,8 @@ export class StudentController {
   @Get(':id')
   @ApiOperation({ summary: 'Lấy thông tin học sinh theo ID' })
   @ApiOkResponse({ type: StudentResponseDto })
-  findOne(@Param('id', ParseUUIDPipe) id: string) {
-    return this.studentService.findOne(id);
+  async findOne(@Param('id', ParseUUIDPipe) id: string) {
+    return StudentResponseDto.fromEntity(await this.studentService.findOne(id));
   }
 
   @Patch(':id')

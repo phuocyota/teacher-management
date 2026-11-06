@@ -12,7 +12,7 @@ import { UserEntity } from 'src/user/user.entity';
 import { isAdminUserType, UserType } from 'src/common/enum/user-type.enum';
 import { ERROR_MESSAGES } from 'src/common/constant/error-messages.constant';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { EntityManager, Repository } from 'typeorm';
 import { TokenEntity } from './token.entity';
 
 @Injectable()
@@ -62,6 +62,25 @@ export class AuthService {
       expiredAt,
     });
     await this.tokenRepo.save(record);
+  }
+
+  async createStudentRegistrationSession(
+    user: UserEntity,
+    manager: EntityManager,
+  ) {
+    const deviceId = 'web-browser';
+    const accessToken = this.generateToken(user, deviceId);
+    await manager.save(
+      TokenEntity,
+      manager.create(TokenEntity, {
+        userId: user.id,
+        token: accessToken,
+        expiredAt: new Date(
+          Date.now() + AuthService.TOKEN_EXPIRES_IN_SECONDS * 1000,
+        ),
+      }),
+    );
+    return { accessToken, userId: user.id, userType: user.userType, deviceId };
   }
 
   async isTokenAlive(
