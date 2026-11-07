@@ -32,10 +32,6 @@ export class ExamSetService {
     private readonly examSetRepo: Repository<ExamSetEntity>,
     @InjectRepository(ExamSetQuestionBankEntity)
     private readonly examSetQuestionBankRepo: Repository<ExamSetQuestionBankEntity>,
-    @InjectRepository(QuestionBankQuestionEntity)
-    private readonly questionBankQuestionRepo: Repository<QuestionBankQuestionEntity>,
-    @InjectRepository(QuestionBankSectionEntity)
-    private readonly questionBankSectionRepo: Repository<QuestionBankSectionEntity>,
     @InjectRepository(ExamSetClassEntity)
     private readonly examSetClassRepo: Repository<ExamSetClassEntity>,
     private readonly classService: ClassService,
@@ -172,24 +168,34 @@ export class ExamSetService {
     const classLinks = await this.getClassLinks(id, record.classId);
     const classIds = classLinks.map((item) => item.id);
 
-    const links = await this.examSetQuestionBankRepo.find({
-      where: { examSetId: id },
-      relations: ['questionBank'],
-      order: { order: 'ASC' },
-    });
-    const questionBankIds = links
-      .map((item) => item.questionBank?.id)
-      .filter((questionBankId): questionBankId is string =>
-        Boolean(questionBankId),
-      );
-    const questionCounts =
-      questionBankIds.length > 0
-        ? await this.getQuestionCountsByBankIds(questionBankIds)
-        : new Map<string, number>();
-    const sectionCounts =
-      questionBankIds.length > 0
-        ? await this.getSectionCountsByBankIds(questionBankIds)
-        : new Map<string, number>();
+    const { entities: links, raw } = await this.examSetQuestionBankRepo
+      .createQueryBuilder('link')
+      .innerJoinAndSelect('link.questionBank', 'bank')
+      .addSelect('link.id', 'countLinkId')
+      .addSelect(
+        (query) =>
+          query
+            .select('COUNT(*)')
+            .from(QuestionBankQuestionEntity, 'questionLink')
+            .where('questionLink.questionBankId = bank.id'),
+        'questionCount',
+      )
+      .addSelect(
+        (query) =>
+          query
+            .select('COUNT(*)')
+            .from(QuestionBankSectionEntity, 'section')
+            .where('section.questionBankId = bank.id'),
+        'sectionCount',
+      )
+      .where('link.examSetId = :id', { id })
+      .orderBy('link.order', 'ASC')
+      .getRawAndEntities<{
+        countLinkId: string;
+        questionCount: string;
+        sectionCount: string;
+      }>();
+    const countsByLinkId = new Map(raw.map((row) => [row.countLinkId, row]));
 
     const questionBanks = links
       .filter((item) => Boolean(item.questionBank))
@@ -203,8 +209,9 @@ export class ExamSetService {
               ? qb.timeLimit * 60
               : null,
           totalQuestions:
-            qb.totalQuestions ?? questionCounts.get(qb.id) ?? null,
-          sectionCount: sectionCounts.get(qb.id) ?? 0,
+            qb.totalQuestions ??
+            Number(countsByLinkId.get(item.id)?.questionCount ?? 0),
+          sectionCount: Number(countsByLinkId.get(item.id)?.sectionCount ?? 0),
           maxAttempts: qb.maxAttempts ?? null,
           totalPoints: qb.totalMarks ?? null,
           difficulty: null,
@@ -297,46 +304,6 @@ export class ExamSetService {
     await this.examSetRepo.remove(record);
   }
 
-  private async getQuestionCountsByBankIds(
-    questionBankIds: string[],
-  ): Promise<Map<string, number>> {
-    const rows = await this.questionBankQuestionRepo
-      .createQueryBuilder('qbq')
-      .select('qbq.questionBankId', 'questionBankId')
-      .addSelect('COUNT(*)', 'totalQuestions')
-      .where('qbq.questionBankId IN (:...questionBankIds)', { questionBankIds })
-      .groupBy('qbq.questionBankId')
-      .getRawMany<{ questionBankId: string; totalQuestions: string }>();
-
-    return new Map(
-      rows.map((row) => [
-        row.questionBankId,
-        Number.parseInt(row.totalQuestions, 10) || 0,
-      ]),
-    );
-  }
-
-  private async getSectionCountsByBankIds(
-    questionBankIds: string[],
-  ): Promise<Map<string, number>> {
-    const rows = await this.questionBankSectionRepo
-      .createQueryBuilder('section')
-      .select('section.questionBankId', 'questionBankId')
-      .addSelect('COUNT(*)', 'sectionCount')
-      .where('section.questionBankId IN (:...questionBankIds)', {
-        questionBankIds,
-      })
-      .groupBy('section.questionBankId')
-      .getRawMany<{ questionBankId: string; sectionCount: string }>();
-
-    return new Map(
-      rows.map((row) => [
-        row.questionBankId,
-        Number.parseInt(row.sectionCount, 10) || 0,
-      ]),
-    );
-  }
-
   private async resolveValidatedClassIds(
     dto: Pick<CreateExamSetDto, 'classId' | 'classIds'>,
   ): Promise<string[]> {
@@ -387,10 +354,7 @@ export class ExamSetService {
     });
 
     for (const examSet of examSets) {
-      classIdMap.set(
-        examSet.id,
-        examSet.classId ? [examSet.classId] : [],
-      );
+      classIdMap.set(examSet.id, examSet.classId ? [examSet.classId] : []);
     }
 
     for (const link of links) {

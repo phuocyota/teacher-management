@@ -49,6 +49,19 @@ export class AnswerService {
     const qb = this.answerRepo
       .createQueryBuilder('answer')
       .leftJoinAndSelect('answer.question', 'question');
+    qb.leftJoinAndMapOne(
+      'answer.nextContentDetails',
+      AnswerEntity,
+      'nextContentDetails',
+      'nextContentDetails.id = answer.nextContent',
+    ).select([
+      'answer',
+      'question',
+      'nextContentDetails.id',
+      'nextContentDetails.content',
+      'nextContentDetails.contentType',
+      'nextContentDetails.meta',
+    ]);
 
     if (questionId) {
       qb.andWhere('answer.questionId = :questionId', { questionId });
@@ -64,26 +77,13 @@ export class AnswerService {
     const [data, total] = await qb.getManyAndCount();
 
     // Load nextContentDetails for all answers that have nextContent
-    const answersWithDetails = await Promise.all(
-      data.map(async (answer) => {
-        if (answer.nextContent) {
-          const nextContentEntity = await this.answerRepo.findOne({
-            where: { id: answer.nextContent },
-            select: ['id', 'content', 'contentType', 'meta'],
-          });
-
-          if (nextContentEntity) {
-            (answer as any).nextContentDetails = {
-              id: nextContentEntity.id,
-              content: nextContentEntity.content,
-              contentType: nextContentEntity.contentType,
-              meta: nextContentEntity.meta,
-            };
-          }
-        }
-        return answer;
-      }),
-    );
+    const answersWithDetails = data.map((item) => {
+      // Keep the existing response shape when the optional content is missing.
+      if ((item as any).nextContentDetails === null) {
+        delete (item as any).nextContentDetails;
+      }
+      return item;
+    });
 
     return {
       data: autoMapListToDto(AnswerResponseDto, answersWithDetails),
@@ -194,7 +194,9 @@ export class AnswerService {
       content: root.content,
       meta: root.meta,
       nextContent: root.nextContent ?? chain[1]?.id ?? null,
-      chain: chain.map((answer, index) => this.toChainNode(answer, chain[index + 1])),
+      chain: chain.map((answer, index) =>
+        this.toChainNode(answer, chain[index + 1]),
+      ),
     };
   }
 

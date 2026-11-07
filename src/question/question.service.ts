@@ -98,6 +98,19 @@ export class QuestionService {
     const skip = (page - 1) * size;
 
     const qb = this.questionRepo.createQueryBuilder('question');
+    qb.leftJoinAndMapOne(
+      'question.nextContentDetails',
+      QuestionEntity,
+      'nextContentDetails',
+      'nextContentDetails.id = question.nextContent',
+    ).select([
+      'question',
+      'nextContentDetails.id',
+      'nextContentDetails.type',
+      'nextContentDetails.content',
+      'nextContentDetails.contentType',
+      'nextContentDetails.meta',
+    ]);
 
     if (questionBankId) {
       qb.innerJoin(
@@ -129,31 +142,14 @@ export class QuestionService {
 
     const [entities, total] = await qb.getManyAndCount();
 
-    const questionsWithDetails = await Promise.all(
-      entities.map(async (question) => {
-        if (questionBankId) {
-          (question as any).questionBankId = questionBankId;
-        }
-
-        if (question.nextContent) {
-          const nextContentEntity = await this.questionRepo.findOne({
-            where: { id: question.nextContent },
-            select: ['id', 'type', 'content', 'contentType', 'meta'],
-          });
-
-          if (nextContentEntity) {
-            (question as any).nextContentDetails = {
-              id: nextContentEntity.id,
-              type: nextContentEntity.type,
-              content: nextContentEntity.content,
-              contentType: nextContentEntity.contentType,
-              meta: nextContentEntity.meta,
-            };
-          }
-        }
-        return question;
-      }),
-    );
+    const questionsWithDetails = entities.map((item) => {
+      // Keep the existing response shape when the optional content is missing.
+      if ((item as any).nextContentDetails === null) {
+        delete (item as any).nextContentDetails;
+      }
+      if (questionBankId) (item as any).questionBankId = questionBankId;
+      return item;
+    });
 
     return {
       data: autoMapListToDto(QuestionResponseDto, questionsWithDetails),
@@ -312,7 +308,9 @@ export class QuestionService {
     return this.buildChainResponse(chain);
   }
 
-  private buildChainResponse(chain: QuestionEntity[]): QuestionChainResponseDto {
+  private buildChainResponse(
+    chain: QuestionEntity[],
+  ): QuestionChainResponseDto {
     const root = chain[0];
 
     return {
@@ -322,7 +320,9 @@ export class QuestionService {
       content: root.content,
       meta: root.meta,
       nextContent: root.nextContent ?? chain[1]?.id ?? null,
-      chain: chain.map((question, index) => this.toChainNode(question, chain[index + 1])),
+      chain: chain.map((question, index) =>
+        this.toChainNode(question, chain[index + 1]),
+      ),
     };
   }
 
@@ -339,7 +339,9 @@ export class QuestionService {
     };
   }
 
-  private async getQuestionChainEntities(id: string): Promise<QuestionEntity[]> {
+  private async getQuestionChainEntities(
+    id: string,
+  ): Promise<QuestionEntity[]> {
     const chain: QuestionEntity[] = [];
     let currentId: string | undefined = id;
     const visited = new Set<string>();
@@ -386,7 +388,9 @@ export class QuestionService {
         .map((answer) => answer.nextContent)
         .filter((nextContent): nextContent is string => !!nextContent),
     );
-    const rootAnswers = answers.filter((answer) => !nextContentTargets.has(answer.id));
+    const rootAnswers = answers.filter(
+      (answer) => !nextContentTargets.has(answer.id),
+    );
 
     return rootAnswers.map((rootAnswer) => {
       const chain: AnswerEntity[] = [];
@@ -413,7 +417,9 @@ export class QuestionService {
     }
   }
 
-  private async deleteImagesFromAnswers(answers: AnswerEntity[]): Promise<void> {
+  private async deleteImagesFromAnswers(
+    answers: AnswerEntity[],
+  ): Promise<void> {
     for (const answer of answers) {
       await this.deleteImageIfNeeded(answer.contentType, answer.content);
     }

@@ -343,12 +343,26 @@ export class QuestionBankService {
   }
 
   async getStructure(id: string): Promise<{ sectionCount: number }> {
-    await this.findOne(id);
-    const sectionCount = await this.entityManager
-      .getRepository(QuestionBankSectionEntity)
-      .count({ where: { questionBankId: id } });
+    const structure = await this.questionBankRepo
+      .createQueryBuilder('bank')
+      .leftJoin(
+        QuestionBankSectionEntity,
+        'section',
+        'section.questionBankId = bank.id',
+      )
+      .select('bank.id', 'id')
+      .addSelect('COUNT(section.id)', 'sectionCount')
+      .where('bank.id = :id', { id })
+      .groupBy('bank.id')
+      .getRawOne<{ id: string; sectionCount: string }>();
 
-    return { sectionCount };
+    if (!structure) {
+      throw new NotFoundException(
+        ERROR_MESSAGES.NOT_FOUND_WITH_ID(ENTITY_NAMES.QUESTION_BANK, id),
+      );
+    }
+
+    return { sectionCount: Number(structure.sectionCount) };
   }
 
   async findOne(id: string): Promise<QuestionBankEntity> {

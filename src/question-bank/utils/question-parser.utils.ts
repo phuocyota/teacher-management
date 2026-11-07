@@ -49,7 +49,7 @@ export function isAnswerKeyStart(line: string): boolean {
 }
 
 export function extractSectionStart(line: string): SectionStartMatch | null {
-  const normalizedLine = normalizeImportText(line);
+  const normalizedLine = normalizeImportText(line.normalize('NFC'));
   const match = normalizedLine.match(SECTION_START_PATTERN);
 
   if (!match) {
@@ -70,7 +70,7 @@ export function extractSectionStart(line: string): SectionStartMatch | null {
 function parseSectionOrder(value: string): number | null {
   if (/^\d+$/.test(value)) {
     const orderNo = Number.parseInt(value, 10);
-    return orderNo > 0 ? orderNo : null;
+    return Number.isSafeInteger(orderNo) && orderNo > 0 ? orderNo : null;
   }
 
   const romanValues: Record<string, number> = {
@@ -83,6 +83,15 @@ function parseSectionOrder(value: string): number | null {
     M: 1000,
   };
   const roman = value.toUpperCase();
+  // Accept canonical Roman numerals only; arbitrary I/V/X/L/C/D/M words
+  // must remain question/answer text.
+  if (
+    !/^(?=.+)M{0,3}(CM|CD|D?C{0,3})(XC|XL|L?X{0,3})(IX|IV|V?I{0,3})$/.test(
+      roman,
+    )
+  ) {
+    return null;
+  }
   let result = 0;
 
   for (let index = 0; index < roman.length; index++) {

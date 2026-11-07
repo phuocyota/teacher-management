@@ -66,7 +66,12 @@ describe('QuestionParserService', () => {
           createTextLine(1, 2, 30, 'B. Đáp án B'),
           createTextLine(1, 3, 40, 'C. Giữ vệ sinh và'),
           createTextLine(1, 4, 50, 'phân loại rác thải đúng nơi quy định.'),
-          createTextLine(1, 5, 60, 'D. Lấy nước suối đó về dùng trực tiếp cho sinh hoạt gia'),
+          createTextLine(
+            1,
+            5,
+            60,
+            'D. Lấy nước suối đó về dùng trực tiếp cho sinh hoạt gia',
+          ),
           createTextLine(1, 6, 70, 'đình.'),
           createTextLine(1, 7, 80, 'Câu 5. Cảm xúc của con người?'),
           createTextLine(1, 8, 90, 'A. Vui B. Buồn C. Giận D. Sợ'),
@@ -76,22 +81,66 @@ describe('QuestionParserService', () => {
 
     expect(result.sections).toEqual([]);
     expect(result.questions).toHaveLength(2);
-    expect(result.questions.every((question) => !question.sectionOrderNo)).toBe(true);
+    expect(result.questions.every((question) => !question.sectionOrderNo)).toBe(
+      true,
+    );
     expect(result.questions[0].answers).toHaveLength(4);
     expect(result.questions[0].answers[2]).toMatchObject({
       label: 'C',
-      parts: [{
-        content: 'Giữ vệ sinh và phân loại rác thải đúng nơi quy định.',
-        contentType: ContentTypes.TEXT,
-      }],
+      parts: [
+        {
+          content: 'Giữ vệ sinh và phân loại rác thải đúng nơi quy định.',
+          contentType: ContentTypes.TEXT,
+        },
+      ],
     });
     expect(result.questions[0].answers[3]).toMatchObject({
       label: 'D',
-      parts: [{
-        content: 'Lấy nước suối đó về dùng trực tiếp cho sinh hoạt gia đình.',
-        contentType: ContentTypes.TEXT,
-      }],
+      parts: [
+        {
+          content: 'Lấy nước suối đó về dùng trực tiếp cho sinh hoạt gia đình.',
+          contentType: ContentTypes.TEXT,
+        },
+      ],
     });
+  });
+
+  it('keeps ambiguous PHAN and invalid Roman labels inside answers before a real section', async () => {
+    const result = await service.parsePages([
+      {
+        pageNumber: 1,
+        lines: [
+          createTextLine(1, 0, 10, 'Câu 1. Chọn đáp án đúng'),
+          createTextLine(1, 1, 20, 'A. Nội dung A'),
+          createTextLine(1, 2, 30, 'phân I: loại rác đúng nơi quy định.'),
+          createTextLine(1, 3, 40, 'B. Nội dung B'),
+          createTextLine(1, 4, 50, 'PHẦN CIVIL: văn bản của đáp án.'),
+          createTextLine(1, 5, 60, 'C. Nội dung C D. Nội dung D'),
+          createTextLine(1, 6, 70, 'PHẦN II: Vận dụng'.normalize('NFD')),
+          createTextLine(1, 7, 80, 'Câu 2. Câu hỏi tiếp theo'),
+          createTextLine(1, 8, 90, 'A. Một B. Hai C. Ba D. Bốn'),
+        ],
+      },
+    ]);
+
+    expect(result.sections).toEqual([
+      { orderNo: 2, title: 'PHẦN II: Vận dụng' },
+    ]);
+    expect(result.questions.map((question) => question.sectionOrderNo)).toEqual(
+      [undefined, 2],
+    );
+    expect(result.questions[0].answers[0].parts).toEqual([
+      {
+        content: 'Nội dung A phân I: loại rác đúng nơi quy định.',
+        contentType: ContentTypes.TEXT,
+      },
+    ]);
+    expect(result.questions[0].answers[1].parts).toEqual([
+      {
+        content: 'Nội dung B PHẦN CIVIL: văn bản của đáp án.',
+        contentType: ContentTypes.TEXT,
+      },
+    ]);
   });
 
   it('parses answer key sections after questions', async () => {
