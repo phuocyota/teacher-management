@@ -29,7 +29,7 @@ export type GoldenBellRoom = {
   createdAt?: string;
   expiresAt?: string;
   endedAt?: string | null;
-  podiumSelections?: Record<string, string>;
+  podiumSelections?: Record<string, string | null>;
 };
 
 export type GoldenBellCreateRoomPayload = {

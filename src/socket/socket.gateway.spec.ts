@@ -177,6 +177,75 @@ describe('Golden Bell revival', () => {
     },
   );
 
+  it('relays frontend rankings only to the matching room without writing the database', async () => {
+    room.status = 'FINISHED';
+    room.endedAt = new Date().toISOString();
+    const response = await gateway.handleGoldenBellPodiumResult(client(), {
+      roomId: '123456',
+      endedAt: room.endedAt,
+      selections: { 1: 'out', 2: 'other', 3: null },
+    });
+    expect(response.ok).toBe(true);
+    expect(gateway.server.to).toHaveBeenCalledWith('golden-bell:123456');
+    expect(emit).toHaveBeenCalledWith(
+      'golden-bell:podium-result',
+      expect.objectContaining({
+        roomId: '123456',
+        room: expect.objectContaining({
+          podiumSelections: { 1: 'out', 2: 'other', 3: null },
+        }),
+      }),
+    );
+    expect(save).not.toHaveBeenCalled();
+    const rejoined = await gateway.handleGoldenBellJoin(client(), {
+      roomId: '123456',
+    });
+    expect(rejoined.room?.podiumSelections?.[1]).toBe('out');
+  });
+
+  it('does not calculate ranks or impose the frontend edit timer on relayed results', async () => {
+    room.status = 'FINISHED';
+    room.endedAt = new Date(Date.now() - 120_000).toISOString();
+    expect(
+      (
+        await gateway.handleGoldenBellPodiumResult(client(), {
+          roomId: '123456',
+          endedAt: room.endedAt,
+          selections: { 1: 'out' },
+        })
+      ).ok,
+    ).toBe(true);
+    expect(save).not.toHaveBeenCalled();
+  });
+
+  it('rejects result messages from students, outside the room or for a different match', async () => {
+    room.status = 'FINISHED';
+    room.endedAt = new Date().toISOString();
+    const payload = {
+      roomId: '123456',
+      endedAt: room.endedAt,
+      selections: { 1: 'out' },
+    };
+    expect(
+      (await gateway.handleGoldenBellPodiumResult(client('STUDENT'), payload))
+        .ok,
+    ).toBe(false);
+    const outsider = client();
+    outsider.rooms.clear();
+    expect(
+      (await gateway.handleGoldenBellPodiumResult(outsider, payload)).ok,
+    ).toBe(false);
+    expect(
+      (
+        await gateway.handleGoldenBellPodiumResult(client(), {
+          ...payload,
+          endedAt: 'old-match',
+        })
+      ).ok,
+    ).toBe(false);
+    expect(emit).not.toHaveBeenCalled();
+  });
+
   it('does not broadcast success if persistence fails', async () => {
     save.mockRejectedValueOnce(new Error('database unavailable'));
     await expect(revive()).rejects.toThrow('database unavailable');

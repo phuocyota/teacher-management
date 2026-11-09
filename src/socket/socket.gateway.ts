@@ -54,6 +54,7 @@ export class SocketGateway
   server: Server;
 
   private readonly goldenBellRooms = new Map<string, GoldenBellRoom>();
+  private readonly goldenBellPodiumResults = new Map<string, GoldenBellRoom>();
   private readonly questionTimers = new Map<
     string,
     { questionKey: string; timer: ReturnType<typeof setTimeout> }
@@ -171,10 +172,20 @@ export class SocketGateway
         return { ok: false, message: 'Room expired' };
       }
 
-      if (
-        currentRoom.status === 'FINISHED' ||
-        currentRoom.status === 'EXPIRED'
-      ) {
+      if (currentRoom.status === 'FINISHED') {
+        await client.join(roomName);
+        const result = this.goldenBellPodiumResults.get(roomId);
+        this.scheduleRoomExpiry(roomId, currentRoom);
+        const hasPodiumResult = Boolean(
+          result && result.endedAt === currentRoom.endedAt,
+        );
+        return {
+          ok: true,
+          room: hasPodiumResult ? result! : currentRoom,
+          hasPodiumResult,
+        };
+      }
+      if (currentRoom.status === 'EXPIRED') {
         return { ok: false, message: 'Room has ended' };
       }
 
@@ -309,6 +320,84 @@ export class SocketGateway
     });
   }
 
+  // Rankings and the edit window are handled by the teacher frontend.
+  // This event only relays the finished result and keeps it for reconnecting viewers.
+  @SubscribeMessage('golden-bell:podium-result')
+  async handleGoldenBellPodiumResult(
+    @ConnectedSocket() client: Socket,
+    @MessageBody()
+    payload: {
+      roomId?: string;
+      endedAt?: string;
+      selections?: Record<string, string | null>;
+    },
+  ) {
+    try {
+      const claims = jwt.verify(
+        client.handshake.auth?.token,
+        process.env.JWT_SECRET || 'secretKey',
+        { algorithms: ['HS256'] },
+      );
+      if (typeof claims === 'string' || claims.userType !== 'TEACHER') {
+        return { ok: false, message: 'Chỉ giáo viên được gửi kết quả.' };
+      }
+    } catch {
+      return { ok: false, message: 'Phiên đăng nhập giáo viên không hợp lệ.' };
+    }
+    if (
+      typeof payload?.roomId !== 'string' ||
+      !payload.roomId.trim() ||
+      !payload.selections ||
+      typeof payload.selections !== 'object' ||
+      Array.isArray(payload.selections)
+    ) {
+      return { ok: false, message: 'Kết quả không hợp lệ.' };
+    }
+    const roomId = this.normalizeRoomId(payload.roomId);
+    if (!client.rooms.has(this.getGoldenBellRoomName(roomId))) {
+      return { ok: false, message: 'Cần kết nối phòng để gửi kết quả.' };
+    }
+    return this.roomStateService.runExclusive(roomId, async () => {
+      const room =
+        this.goldenBellRooms.get(roomId) ||
+        (await this.roomStateService.find(roomId));
+      if (
+        !room ||
+        room.status !== 'FINISHED' ||
+        !room.endedAt ||
+        payload.endedAt !== room.endedAt ||
+        this.isRoomExpired(room)
+      ) {
+        return {
+          ok: false,
+          message:
+            'Sàn đấu chưa kết thúc hoặc kết quả không thuộc phiên thi này.',
+        };
+      }
+      const selections: Record<string, string | null> = {};
+      const used = new Set<string>();
+      for (const [rank, id] of Object.entries(payload.selections!)) {
+        if (
+          !['1', '2', '3'].includes(rank) ||
+          (id !== null &&
+            (typeof id !== 'string' ||
+              used.has(id) ||
+              !room.students?.some((s) => s.id === id)))
+        ) {
+          return { ok: false, message: 'Kết quả không hợp lệ.' };
+        }
+        selections[rank] = id;
+        if (id) used.add(id);
+      }
+      const result = { ...room, podiumSelections: selections };
+      this.goldenBellPodiumResults.set(roomId, result);
+      this.server
+        .to(this.getGoldenBellRoomName(roomId))
+        .emit('golden-bell:podium-result', { roomId, room: result });
+      return { ok: true, room: result };
+    });
+  }
+
   @SubscribeMessage('golden-bell:revive-student')
   async handleGoldenBellReviveStudent(
     @ConnectedSocket() client: Socket,
@@ -418,6 +507,12 @@ export class SocketGateway
       }
 
       const currentRoom = this.ensureRoomLifecycle(storedRoom);
+      if (currentRoom.status === 'FINISHED') {
+        return {
+          ok: true,
+          room: this.goldenBellPodiumResults.get(roomId) || currentRoom,
+        };
+      }
       const nextRoom: GoldenBellRoom = {
         ...currentRoom,
         status: 'FINISHED',
@@ -591,6 +686,7 @@ export class SocketGateway
       .emit('golden-bell:room-closed', { roomId, reason: 'EXPIRED' });
     this.server.in(roomName).socketsLeave(roomName);
     this.goldenBellRooms.delete(roomId);
+    this.goldenBellPodiumResults.delete(roomId);
     this.clearQuestionTimer(roomId);
     this.clearRoomExpiryTimer(roomId);
     await this.roomStateService.remove(roomId);
