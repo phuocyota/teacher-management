@@ -6,7 +6,12 @@ export type GoldenBellStudent = {
   lastQuestionNo?: number;
   correctCount?: number;
   wrongCount?: number;
-  eliminatedReason?: 'wrong-answer' | 'timeout';
+  eliminatedReason?: 'wrong-answer' | 'timeout' | null;
+  eliminatedAt?: string | null;
+  eliminatedQuestionNo?: number | null;
+  resumeFromQuestionNo?: number;
+  revivedAt?: string;
+  revivalCount?: number;
 };
 
 export type GoldenBellRoom = {
@@ -24,6 +29,7 @@ export type GoldenBellRoom = {
   createdAt?: string;
   expiresAt?: string;
   endedAt?: string | null;
+  podiumSelections?: Record<string, string>;
 };
 
 export type GoldenBellCreateRoomPayload = {
@@ -43,4 +49,9 @@ export type GoldenBellSyncPayload = {
 
 export type GoldenBellEndRoomPayload = {
   roomId?: string;
+};
+
+export type GoldenBellReviveStudentPayload = {
+  roomId?: string;
+  studentId?: string;
 };

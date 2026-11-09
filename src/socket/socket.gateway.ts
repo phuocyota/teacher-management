@@ -1,5 +1,6 @@
 import 'dotenv/config';
 import { randomInt } from 'node:crypto';
+import * as jwt from 'jsonwebtoken';
 import {
   ConnectedSocket,
   MessageBody,
@@ -17,6 +18,7 @@ import type {
   GoldenBellEndRoomPayload,
   GoldenBellJoinPayload,
   GoldenBellRoom,
+  GoldenBellReviveStudentPayload,
   GoldenBellStudent,
   GoldenBellSyncPayload,
 } from './golden-bell.types';
@@ -235,6 +237,18 @@ export class SocketGateway
           (item) => item.id === student.id,
         );
 
+        // Revival belongs to the server. Ignore snapshots sent before it was committed,
+        // and do not accept answers for the round the revived student must skip.
+        if (
+          !isRoomReset &&
+          currentStudent &&
+          ((student.revivalCount || 0) !== (currentStudent.revivalCount || 0) ||
+            (currentStudent.resumeFromQuestionNo || 0) >
+              (payload.room!.questionNo || 0))
+        ) {
+          return currentStudent;
+        }
+
         if (
           !isRoomReset &&
           isSameQuestion &&
@@ -250,7 +264,19 @@ export class SocketGateway
           };
         }
 
-        return student;
+        return isRoomReset
+          ? {
+              ...student,
+              resumeFromQuestionNo: 0,
+              revivalCount: 0,
+              revivedAt: undefined,
+            }
+          : {
+              ...student,
+              resumeFromQuestionNo: currentStudent?.resumeFromQuestionNo,
+              revivalCount: currentStudent?.revivalCount,
+              revivedAt: currentStudent?.revivedAt,
+            };
       });
 
       const nextRoom = this.ensureQuestionTiming({
@@ -279,6 +305,90 @@ export class SocketGateway
         .to(this.getGoldenBellRoomName(roomId))
         .emit('golden-bell:room-state', nextRoom);
 
+      return { ok: true, room: nextRoom };
+    });
+  }
+
+  @SubscribeMessage('golden-bell:revive-student')
+  async handleGoldenBellReviveStudent(
+    @ConnectedSocket() client: Socket,
+    @MessageBody() payload: GoldenBellReviveStudentPayload,
+  ) {
+    if (
+      typeof payload?.roomId !== 'string' ||
+      !payload.roomId.trim() ||
+      typeof payload?.studentId !== 'string' ||
+      !payload.studentId.trim()
+    ) {
+      return { ok: false, message: 'roomId and studentId are required' };
+    }
+    try {
+      const claims = jwt.verify(
+        client.handshake.auth?.token,
+        process.env.JWT_SECRET || 'secretKey',
+        { algorithms: ['HS256'] },
+      );
+      if (typeof claims === 'string' || claims.userType !== 'TEACHER') {
+        return { ok: false, message: 'Teacher authentication is required' };
+      }
+    } catch {
+      return { ok: false, message: 'Teacher authentication is required' };
+    }
+
+    const roomId = this.normalizeRoomId(payload.roomId);
+    if (!client.rooms.has(this.getGoldenBellRoomName(roomId))) {
+      return { ok: false, message: 'Join the room before reviving a student' };
+    }
+    return this.roomStateService.runExclusive(roomId, async () => {
+      const storedRoom =
+        this.goldenBellRooms.get(roomId) ||
+        (await this.roomStateService.find(roomId));
+      if (!storedRoom) return { ok: false, message: 'Room not found' };
+      const room = this.ensureRoomLifecycle(storedRoom);
+      if (this.isRoomExpired(room)) {
+        await this.expireRoom(roomId);
+        return { ok: false, message: 'Room expired' };
+      }
+      if (room.status === 'FINISHED' || room.status === 'EXPIRED') {
+        return { ok: false, message: 'Room has ended' };
+      }
+      const student = room.students?.find(
+        (item) => item.id === payload.studentId,
+      );
+      if (!student) return { ok: false, message: 'Student not found' };
+      if (student.status !== 'eliminated') {
+        return {
+          ok: false,
+          message: 'Only eliminated students can be revived',
+        };
+      }
+      const questionNo = room.questionNo || 0;
+      const nextRoom: GoldenBellRoom = {
+        ...room,
+        podiumSelections: {},
+        students: room.students!.map((item) =>
+          item.id !== student.id
+            ? item
+            : {
+                ...item,
+                status: 'active',
+                lastQuestionNo: questionNo,
+                resumeFromQuestionNo: questionNo + 1,
+                eliminatedAt: null,
+                eliminatedQuestionNo: null,
+                eliminatedReason: null,
+                revivedAt: new Date().toISOString(),
+                revivalCount: (item.revivalCount || 0) + 1,
+              },
+        ),
+      };
+      await this.roomStateService.save(roomId, nextRoom);
+      this.goldenBellRooms.set(roomId, nextRoom);
+      this.scheduleQuestionTimeout(roomId, nextRoom);
+      this.scheduleRoomExpiry(roomId, nextRoom);
+      this.server
+        .to(this.getGoldenBellRoomName(roomId))
+        .emit('golden-bell:room-state', nextRoom);
       return { ok: true, room: nextRoom };
     });
   }
@@ -400,7 +510,11 @@ export class SocketGateway
     return {
       ...room,
       students: existingStudent
-        ? students.map((item) => (item.id === student.id ? nextStudent : item))
+        ? students.map((item) =>
+            item.id === student.id
+              ? { ...nextStudent, ...existingStudent }
+              : item,
+          )
         : [...students, nextStudent],
     };
   }
@@ -555,6 +669,7 @@ export class SocketGateway
         const students = (currentRoom.students || []).map((student) => {
           if (
             student.status === 'active' &&
+            (student.resumeFromQuestionNo || 0) <= questionNo &&
             student.lastQuestionNo !== questionNo
           ) {
             return {
