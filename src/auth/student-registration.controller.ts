@@ -38,6 +38,20 @@ export class StudentRegistrationController {
     return this.registration.hcmSchoolsAndClasses();
   }
 
+  @Get('zones')
+  @ApiOperation({
+    summary: 'Danh sách khu vực cho đăng ký học sinh, không cần đăng nhập',
+  })
+  zones() {
+    return this.registration.zones();
+  }
+
+  @Get('zones/:zoneId/schools')
+  @ApiOkResponse({ type: RegistrationSchoolsDto })
+  zoneSchoolsAndClasses(@Param('zoneId', ParseUUIDPipe) zoneId: string) {
+    return this.registration.zoneSchoolsAndClasses(zoneId);
+  }
+
   @Get('schools')
   @ApiOperation({
     summary: 'Danh sách trường cho đăng ký học sinh (chỉ ID và tên)',
@@ -67,6 +81,7 @@ export class StudentRegistrationController {
       properties: {
         password: { type: 'string', minLength: 6, maxLength: 72 },
         fullName: { type: 'string' },
+        zoneId: { type: 'string', format: 'uuid' },
         schoolId: { type: 'string', format: 'uuid' },
         classId: { type: 'string', format: 'uuid' },
         schoolName: {

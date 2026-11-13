@@ -36,6 +36,11 @@ export class RegisterStudentDto {
   @MaxLength(150)
   fullName!: string;
 
+  @ApiPropertyOptional({ description: 'Khu vực đã chọn khi đăng ký' })
+  @IsOptional()
+  @IsUUID()
+  zoneId?: string;
+
   @ApiPropertyOptional({ description: 'Chọn ID trường hoặc nhập schoolName' })
   @ValidateIf(
     (dto: RegisterStudentDto) => dto.schoolId !== undefined || !dto.schoolName,

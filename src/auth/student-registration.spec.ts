@@ -43,6 +43,8 @@ describe('Public student registration HTTP', () => {
     schools: jest.fn(),
     classes: jest.fn(),
     hcmSchoolsAndClasses: jest.fn(),
+    zones: jest.fn(),
+    zoneSchoolsAndClasses: jest.fn(),
   };
   beforeAll(async () => {
     const module = await Test.createTestingModule({
@@ -161,6 +163,35 @@ describe('Public student registration HTTP', () => {
       .expect(400);
     expect(registration.classes).toHaveBeenCalledTimes(1);
   });
+  it('provides public zones and scopes school lookup by a validated zone ID', async () => {
+    const zoneId = '1122abe3-1961-4af5-a482-542f1227d833';
+    const zones = [{ id: zoneId, code: 'DL', name: 'Đà Lạt' }];
+    const payload = { zone: zones[0], schools: [] };
+    registration.zones.mockResolvedValue(zones);
+    registration.zoneSchoolsAndClasses.mockResolvedValue(payload);
+    await request(app.getHttpServer())
+      .get('/auth/register/student/zones')
+      .expect(200, zones);
+    await request(app.getHttpServer())
+      .get('/auth/register/student/zones/' + zoneId + '/schools')
+      .expect(200, payload);
+    await request(app.getHttpServer())
+      .get('/auth/register/student/zones/invalid/schools')
+      .expect(400);
+    expect(registration.zoneSchoolsAndClasses).toHaveBeenCalledTimes(1);
+    expect(registration.zoneSchoolsAndClasses).toHaveBeenCalledWith(zoneId);
+  });
+  it('accepts a selected zone and rejects malformed zone IDs', async () => {
+    const zoneId = '1122abe3-1961-4af5-a482-542f1227d833';
+    await submit({ ...dto, zoneId }).expect(201);
+    expect(registration.register).toHaveBeenCalledWith(
+      expect.objectContaining({ zoneId }),
+      expect.anything(),
+    );
+    registration.register.mockClear();
+    await submit({ ...dto, zoneId: 'invalid' }).expect(400);
+    expect(registration.register).not.toHaveBeenCalled();
+  });
   it('returns HCM schools and classes in one public request', async () => {
     const payload = {
       zone: { id: 'hcm', code: 'HCM', name: 'Hồ Chí Minh' },
@@ -182,7 +213,7 @@ describe('Public student registration HTTP', () => {
 
 describe('HCM registration school/class lookup', () => {
   const zone = { id: 'hcm-id', code: 'HCM', name: 'Hồ Chí Minh' };
-  const zones = { findOne: jest.fn() };
+  const zones = { findOne: jest.fn(), find: jest.fn() };
   const schools = { find: jest.fn() };
   const groups = { find: jest.fn() };
   const source = {
@@ -245,6 +276,31 @@ describe('HCM registration school/class lookup', () => {
         { id: 'school-2', name: 'Trường 2', classes: [] },
       ],
     });
+  });
+  it('lists public zones and loads schools in a selected non-HCM zone', async () => {
+    const selected = { id: 'other-zone', code: 'DL', name: 'Đà Lạt' };
+    zones.find.mockResolvedValue([selected]);
+    expect(await service.zones()).toEqual([selected]);
+    expect(zones.find).toHaveBeenCalledWith({
+      select: { id: true, code: true, name: true },
+      order: { name: 'ASC' },
+    });
+    zones.findOne.mockResolvedValue(selected);
+    const result = await service.zoneSchoolsAndClasses(selected.id);
+    expect(zones.findOne).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { id: selected.id } }),
+    );
+    expect(schools.find).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { zoneId: selected.id } }),
+    );
+    expect(result.zone).toEqual(selected);
+  });
+  it('rejects an unknown selected zone without querying all schools', async () => {
+    zones.findOne.mockResolvedValue(null);
+    await expect(
+      service.zoneSchoolsAndClasses('missing'),
+    ).rejects.toBeInstanceOf(NotFoundException);
+    expect(schools.find).not.toHaveBeenCalled();
   });
   it('reports a missing HCM zone instead of falling back to all schools', async () => {
     zones.findOne.mockResolvedValue(null);
@@ -567,6 +623,33 @@ describe('Student registration persistence', () => {
       ),
     ).rejects.toBeInstanceOf(ConflictException);
     expect(manager.save).not.toHaveBeenCalled();
+  });
+  it('rejects a school outside the selected zone before saving records', async () => {
+    manager.findOneBy
+      .mockReset()
+      .mockResolvedValueOnce({ id: dto.schoolId, zoneId: 'other-zone' });
+    await expect(
+      service.register({ ...dto, zoneId: 'selected-zone' }, photo),
+    ).rejects.toBeInstanceOf(BadRequestException);
+    expect(manager.save).not.toHaveBeenCalled();
+    expect(auth.createStudentRegistrationSession).not.toHaveBeenCalled();
+    expect(await readdir(directory)).toEqual([]);
+  });
+  it('accepts a school belonging to the selected zone', async () => {
+    manager.findOneBy
+      .mockReset()
+      .mockResolvedValueOnce({
+        id: dto.schoolId,
+        name: 'School',
+        zoneId: 'selected-zone',
+      })
+      .mockResolvedValueOnce({
+        id: dto.classId,
+        schoolId: dto.schoolId,
+        name: '5A',
+      });
+    await service.register({ ...dto, zoneId: 'selected-zone' }, photo);
+    expect(auth.createStudentRegistrationSession).toHaveBeenCalled();
   });
   it('rejects a class outside the selected school without writes', async () => {
     manager.findOneBy

@@ -7,6 +7,7 @@ import {
 import {
   DataSource,
   EntityManager,
+  FindOptionsWhere,
   ILike,
   In,
   QueryFailedError,
@@ -124,12 +125,20 @@ export class StudentRegistrationService {
         id: dto.schoolId,
       });
       if (!school) throw new NotFoundException('Trường học không tồn tại.');
+      if (dto.zoneId && school.zoneId !== dto.zoneId) {
+        throw new BadRequestException(
+          'Trường học không thuộc khu vực đã chọn.',
+        );
+      }
       return school;
     }
     const name = this.normalizeName(dto.schoolName || '');
     if (!name) throw new BadRequestException('Vui lòng chọn hoặc nhập trường.');
-    const zone = await manager.findOneBy(ZoneEntity, { code: ILike('HCM') });
-    if (!zone) throw new NotFoundException('Không tìm thấy khu vực có mã HCM.');
+    const zone = await manager.findOneBy(
+      ZoneEntity,
+      dto.zoneId ? { id: dto.zoneId } : { code: ILike('HCM') },
+    );
+    if (!zone) throw new NotFoundException('Không tìm thấy khu vực đăng ký.');
     await manager.query('SELECT pg_advisory_xact_lock(hashtext($1))', [
       `student-register:school:${zone.id}:${name.toLowerCase()}`,
     ]);
@@ -200,12 +209,27 @@ export class StudentRegistrationService {
       .find({ select: { id: true, name: true }, order: { name: 'ASC' } });
   }
 
-  async hcmSchoolsAndClasses() {
+  zones() {
+    return this.dataSource.getRepository(ZoneEntity).find({
+      select: { id: true, code: true, name: true },
+      order: { name: 'ASC' },
+    });
+  }
+
+  hcmSchoolsAndClasses() {
+    return this.schoolsAndClassesForZone({ code: ILike('HCM') });
+  }
+
+  zoneSchoolsAndClasses(zoneId: string) {
+    return this.schoolsAndClassesForZone({ id: zoneId });
+  }
+
+  private async schoolsAndClassesForZone(where: FindOptionsWhere<ZoneEntity>) {
     const zone = await this.dataSource.getRepository(ZoneEntity).findOne({
-      where: { code: ILike('HCM') },
+      where,
       select: { id: true, code: true, name: true },
     });
-    if (!zone) throw new NotFoundException('Không tìm thấy khu vực có mã HCM.');
+    if (!zone) throw new NotFoundException('Không tìm thấy khu vực đăng ký.');
     const schools = await this.dataSource.getRepository(SchoolEntity).find({
       where: { zoneId: zone.id },
       select: { id: true, name: true },
